@@ -1,0 +1,29 @@
+# Dependencies and build output
+node_modules/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+src/generated/prisma/
+
+# Local runtime data
+.cache/
+.tmp/
+*.log
+*.tsbuildinfo
+
+# Environment and provider secrets
+.env
+.env.*
+!.env.example
+!.env.test.example
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Vercel
+.vercel/

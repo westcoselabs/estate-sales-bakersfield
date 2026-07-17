@@ -1,0 +1,8 @@
+.next
+coverage
+docs/phase-1/frozen-roadmap.md
+node_modules
+playwright-report
+pnpm-lock.yaml
+src/generated/prisma
+test-results

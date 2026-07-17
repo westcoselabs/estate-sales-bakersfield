@@ -1,0 +1,145 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  USER
+  ADMIN
+
+  @@map("user_role")
+}
+
+enum AccountStatus {
+  ACTIVE
+  RESTRICTED
+  DISABLED
+
+  @@map("account_status")
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  FAILED
+  SUCCEEDED
+  DEAD
+
+  @@map("job_status")
+}
+
+model User {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email             String        @db.VarChar(320)
+  normalizedEmail   String        @unique @map("normalized_email") @db.VarChar(320)
+  passwordHash      String        @map("password_hash") @db.VarChar(255)
+  emailVerifiedAt   DateTime?     @map("email_verified_at") @db.Timestamptz(3)
+  role              UserRole      @default(USER)
+  status            AccountStatus @default(ACTIVE)
+  restrictionReason String?       @map("restriction_reason") @db.VarChar(500)
+  restrictedAt      DateTime?     @map("restricted_at") @db.Timestamptz(3)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions               Session[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  auditEntries             AuditEntry[] @relation("AuditActor")
+
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model Session {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  tokenHash   String   @unique @map("token_hash") @db.Char(64)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
+  userAgent   String?  @map("user_agent") @db.VarChar(512)
+  deviceLabel String?  @map("device_label") @db.VarChar(100)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model EmailVerificationToken {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash") @db.Char(64)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt  DateTime? @map("consumed_at") @db.Timestamptz(3)
+  resendCount Int       @default(0) @map("resend_count")
+  attemptCount Int      @default(0) @map("attempt_count")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  tokenHash    String    @unique @map("token_hash") @db.Char(64)
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt   DateTime? @map("consumed_at") @db.Timestamptz(3)
+  attemptCount Int       @default(0) @map("attempt_count")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model AuditEntry {
+  id          BigInt   @id @default(autoincrement())
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String   @db.VarChar(100)
+  targetType  String   @map("target_type") @db.VarChar(100)
+  targetId    String?  @map("target_id") @db.VarChar(100)
+  requestId   String?  @map("request_id") @db.VarChar(100)
+  metadata    Json     @default("{}")
+  occurredAt  DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, occurredAt])
+  @@index([targetType, targetId, occurredAt])
+  @@map("audit_entries")
+}
+
+model DurableJob {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  queue            String    @db.VarChar(50)
+  type             String    @db.VarChar(100)
+  payload          Json
+  status           JobStatus @default(PENDING)
+  deduplicationKey String?   @map("deduplication_key") @db.VarChar(200)
+  runAt            DateTime  @default(now()) @map("run_at") @db.Timestamptz(3)
+  attempts         Int       @default(0)
+  maxAttempts      Int       @default(10) @map("max_attempts")
+  lockedAt         DateTime? @map("locked_at") @db.Timestamptz(3)
+  lockedBy         String?   @map("locked_by") @db.VarChar(100)
+  lastErrorCode    String?   @map("last_error_code") @db.VarChar(100)
+  lastErrorMessage String?   @map("last_error_message") @db.VarChar(1000)
+  completedAt      DateTime? @map("completed_at") @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([queue, type, deduplicationKey])
+  @@index([status, runAt])
+  @@index([lockedAt])
+  @@map("durable_jobs")
+}
