@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.2
@@ -34,7 +34,7 @@ jobs:
       TEST_NEON_ENDPOINT_ID: ${{ secrets.TEST_NEON_ENDPOINT_ID }}
       TEST_DATABASE_CONFIRMATION: estate-sales-bakersfield-isolated-test-neon
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.2
