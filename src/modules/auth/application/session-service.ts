@@ -12,7 +12,9 @@ import { SESSION_TTL_MS } from "./session-cookie";
 
 export type Clock = () => Date;
 
-function boundMetadata(metadata: SessionMetadata): SessionMetadata {
+export function boundSessionMetadata(
+  metadata: SessionMetadata,
+): SessionMetadata {
   return {
     ...(metadata.userAgent
       ? { userAgent: metadata.userAgent.slice(0, 512) }
@@ -41,7 +43,7 @@ export class SessionService {
       userId,
       tokenHash: this.tokens.hash(token),
       expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
-      metadata: boundMetadata(metadata),
+      metadata: boundSessionMetadata(metadata),
       audit,
     });
 
@@ -67,7 +69,7 @@ export class SessionService {
       currentTokenHash: this.tokens.hash(currentToken),
       replacementTokenHash: this.tokens.hash(replacementToken),
       replacementExpiresAt: new Date(now.getTime() + SESSION_TTL_MS),
-      metadata: boundMetadata(metadata),
+      metadata: boundSessionMetadata(metadata),
       now,
       audit,
     });

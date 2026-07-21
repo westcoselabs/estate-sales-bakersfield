@@ -1,8 +1,8 @@
 # Estate & Yard Sale Directory
 
-Phase 1 greenfield foundation for the Bakersfield estate and yard sale directory. This repository is a strict-TypeScript Next.js App Router modular monolith backed by PostgreSQL/PostGIS and Prisma migrations.
+Phase 2 account and organizer foundation for the Bakersfield estate and yard sale directory. This repository is a strict-TypeScript Next.js App Router modular monolith backed by PostgreSQL/PostGIS and Prisma migrations.
 
-Phase 1 intentionally contains no signup/login routes, organizer workflow, event tables, media records, payment logic, search, or production UI. It establishes the production-directed boundaries those later phases will use.
+The current scope includes custom email/password authentication, opaque database sessions, verification and reset workflows, distributed authentication rate limits, and user-owned organizer onboarding. It intentionally contains no event tables, media records, payment logic, search, maps, imported inventory, or public directory pages.
 
 ## Local prerequisites
 
@@ -17,11 +17,13 @@ pnpm install --frozen-lockfile
 pnpm verify
 ```
 
-`pnpm verify` runs formatting, linting, module-boundary checks, strict type checking, Prisma validation, a production dependency audit, unit tests, credential-free Blob contracts, Testcontainers/PostGIS integration tests, a production build, and Playwright smoke tests.
+`pnpm verify` runs formatting, linting, module-boundary checks, strict type checking, Prisma validation, a production dependency audit, unit tests, credential-free Blob and email contracts, Testcontainers/PostGIS integration tests, a production build, and Playwright tests.
+
+Phase 2 uses Resend and Upstash Redis through application-owned ports. Their credentials are required for deployed authentication workflows, but never for unit or contract tests. See [Phase 2 testing](./docs/phase-2/testing.md) for environment placeholders and blocked-result semantics.
 
 ## Live provider verification
 
-`pnpm verify:live` is separate and must target isolated non-production resources. It runs migrations and a rollback check on Neon, an Argon2 benchmark on a non-production Vercel deployment when configured, and the complete Vercel Private Blob lifecycle. Missing credentials are reported as `BLOCKED` with exit code 2; they are never reported as passing.
+`pnpm verify:live` is separate and must target isolated non-production resources. It runs migrations and a rollback/schema check on Neon, an Argon2 benchmark on a non-production Vercel deployment when configured, and the complete Vercel Private Blob lifecycle. Phase 2 Resend and Upstash runtime checks require their own Preview credentials. Missing credentials are reported as `BLOCKED`; they are never reported as passing.
 
 See `docs/operations/live-verification.md` for safety and credential requirements.
 

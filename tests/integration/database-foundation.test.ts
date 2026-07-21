@@ -39,6 +39,7 @@ describe("fresh PostgreSQL/PostGIS foundation", () => {
       prisma.$transaction(async (transaction) => {
         await transaction.user.create({
           data: {
+            displayName: "Database fixture",
             email: normalizedEmail,
             normalizedEmail,
             passwordHash: "$argon2id$fixture",

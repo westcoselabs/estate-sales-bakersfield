@@ -36,12 +36,34 @@ const securityHeaders = [
     : []),
 ];
 
+const sensitivePagePaths = [
+  "/signup",
+  "/login",
+  "/verify-email",
+  "/forgot-password",
+  "/reset-password",
+  "/dashboard/:path*",
+  "/admin/:path*",
+];
+
+const tokenPagePaths = ["/verify-email", "/reset-password"];
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   turbopack: { root: process.cwd() },
   async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    return [
+      { source: "/(.*)", headers: securityHeaders },
+      ...sensitivePagePaths.map((source) => ({
+        source,
+        headers: [{ key: "Cache-Control", value: "private, no-store" }],
+      })),
+      ...tokenPagePaths.map((source) => ({
+        source,
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      })),
+    ];
   },
 };
 

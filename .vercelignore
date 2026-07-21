@@ -1,0 +1,12 @@
+# Local environment files must never enter a Vercel source bundle.
+.env
+.env.*
+
+# Local-only analysis and verification artifacts.
+.tmp/
+graphify-out/
+coverage/
+playwright-report/
+test-results/
+*.log
+*.tsbuildinfo

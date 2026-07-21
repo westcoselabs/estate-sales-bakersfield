@@ -13,7 +13,11 @@ export class PrismaSingleUseTokenRepository implements SingleUseTokenRepository 
     await this.prisma.$transaction(async (transaction) => {
       if (input.kind === "EMAIL_VERIFICATION") {
         await transaction.emailVerificationToken.deleteMany({
-          where: { userId: input.userId, consumedAt: null },
+          where: {
+            userId: input.userId,
+            consumedAt: null,
+            invalidatedAt: null,
+          },
         });
         await transaction.emailVerificationToken.create({
           data: {
@@ -26,7 +30,11 @@ export class PrismaSingleUseTokenRepository implements SingleUseTokenRepository 
       }
 
       await transaction.passwordResetToken.deleteMany({
-        where: { userId: input.userId, consumedAt: null },
+        where: {
+          userId: input.userId,
+          consumedAt: null,
+          invalidatedAt: null,
+        },
       });
       await transaction.passwordResetToken.create({
         data: {
@@ -50,6 +58,7 @@ export class PrismaSingleUseTokenRepository implements SingleUseTokenRepository 
       SET "consumed_at" = ${input.now}, "attempt_count" = "attempt_count" + 1
       WHERE "token_hash" = ${input.tokenHash}
         AND "consumed_at" IS NULL
+        AND "invalidated_at" IS NULL
         AND "expires_at" > ${input.now}
       RETURNING "user_id"
     `);

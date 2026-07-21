@@ -1,5 +1,7 @@
 import type {
+  AuthenticationAccount,
   CurrentSession,
+  EmailDeliveryRecord,
   SessionMetadata,
   SessionSummary,
 } from "../domain/types";
@@ -69,4 +71,121 @@ export interface PasswordHasher {
   hash(password: string): Promise<string>;
   verify(encodedHash: string, password: string): Promise<boolean>;
   needsRehash(encodedHash: string): boolean;
+}
+
+export type AuthenticationEmailKind = "EMAIL_VERIFICATION" | "PASSWORD_RESET";
+
+export interface AuthenticationEmailMessage {
+  readonly kind: AuthenticationEmailKind;
+  readonly to: string;
+  readonly displayName: string;
+  readonly actionUrl: string;
+  readonly idempotencyKey: string;
+}
+
+export interface EmailService {
+  send(
+    message: AuthenticationEmailMessage,
+  ): Promise<{ readonly providerMessageId: string }>;
+}
+
+export interface AccountRepository {
+  createWithVerification(input: {
+    readonly displayName: string;
+    readonly email: string;
+    readonly normalizedEmail: string;
+    readonly passwordHash: string;
+    readonly verificationTokenHash: string;
+    readonly verificationExpiresAt: Date;
+    readonly recipientHash: string;
+    readonly audit: AuditContext;
+  }): Promise<
+    | {
+        readonly status: "CREATED";
+        readonly account: AuthenticationAccount;
+        readonly delivery: EmailDeliveryRecord;
+      }
+    | { readonly status: "CONFLICT" }
+  >;
+  findByNormalizedEmail(
+    normalizedEmail: string,
+  ): Promise<AuthenticationAccount | null>;
+  updatePasswordHash(userId: string, passwordHash: string): Promise<void>;
+  recordLogin(userId: string, audit: AuditContext): Promise<void>;
+  issueVerification(input: {
+    readonly normalizedEmail: string;
+    readonly tokenHash: string;
+    readonly expiresAt: Date;
+    readonly recipientHash: string;
+    readonly now: Date;
+    readonly audit: AuditContext;
+  }): Promise<{
+    readonly account: AuthenticationAccount;
+    readonly delivery: EmailDeliveryRecord;
+  } | null>;
+  verifyEmail(input: {
+    readonly tokenHash: string;
+    readonly now: Date;
+    readonly audit: AuditContext;
+    readonly sessionRotation?: {
+      readonly currentTokenHash: string;
+      readonly replacementTokenHash: string;
+      readonly replacementExpiresAt: Date;
+      readonly metadata: SessionMetadata;
+    };
+  }): Promise<{
+    readonly account: AuthenticationAccount;
+    readonly rotatedSession: CurrentSession | null;
+  } | null>;
+  issuePasswordReset(input: {
+    readonly normalizedEmail: string;
+    readonly tokenHash: string;
+    readonly expiresAt: Date;
+    readonly recipientHash: string;
+    readonly now: Date;
+    readonly audit: AuditContext;
+  }): Promise<{
+    readonly account: AuthenticationAccount;
+    readonly delivery: EmailDeliveryRecord;
+  } | null>;
+  resetPassword(input: {
+    readonly tokenHash: string;
+    readonly passwordHash: string;
+    readonly now: Date;
+    readonly audit: AuditContext;
+  }): Promise<{
+    readonly userId: string;
+    readonly revokedSessionCount: number;
+  } | null>;
+  markDeliverySent(
+    deliveryId: string,
+    providerMessageId: string,
+    now: Date,
+  ): Promise<void>;
+  markDeliveryFailed(
+    deliveryId: string,
+    errorCode: string,
+    now: Date,
+  ): Promise<void>;
+}
+
+export interface RateLimitInput {
+  readonly namespace: string;
+  readonly identifier: string;
+  readonly limit: number;
+  readonly windowSeconds: number;
+}
+
+export interface RateLimitDecision {
+  readonly allowed: boolean;
+  readonly remaining: number;
+  readonly retryAfterSeconds: number;
+}
+
+export interface RateLimiter {
+  consume(input: RateLimitInput): Promise<RateLimitDecision>;
+}
+
+export interface PrivacyFingerprint {
+  create(value: string): string;
 }

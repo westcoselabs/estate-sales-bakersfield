@@ -6,7 +6,7 @@ test("serves the Phase 1 shell with baseline security headers", async ({
   const response = await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { name: "Phase 1 foundation is running." }),
+    page.getByRole("heading", { name: "Organizer accounts are ready." }),
   ).toBeVisible();
   expect(response?.headers()["x-content-type-options"]).toBe("nosniff");
   expect(response?.headers()["x-frame-options"]).toBe("DENY");

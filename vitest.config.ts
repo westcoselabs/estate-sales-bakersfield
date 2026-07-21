@@ -51,6 +51,14 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: "email-contract",
+          environment: "node",
+          include: ["tests/contract/email/**/*.test.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: "blob-live",
           environment: "node",
           include: ["tests/live/blob/**/*.test.ts"],

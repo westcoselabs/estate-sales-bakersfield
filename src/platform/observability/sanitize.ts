@@ -1,6 +1,17 @@
-const SECRET_KEY_PATTERN = /(authorization|cookie|password|secret|token)/i;
+const SECRET_KEY_PATTERN =
+  /(authorization|cookie|email|password|recipient|secret|token)/i;
+const OPAQUE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+const SENSITIVE_QUERY_VALUE_PATTERN =
+  /([?&#](?:authorization|code|credential|password|secret|token)=)[^&#\s]*/gi;
+
+function sanitizeString(value: string): string {
+  if (OPAQUE_TOKEN_PATTERN.test(value)) return "[REDACTED]";
+  return value.replace(SENSITIVE_QUERY_VALUE_PATTERN, "$1[REDACTED]");
+}
 
 function sanitizeValue(value: unknown): unknown {
+  if (typeof value === "string") return sanitizeString(value);
+
   if (Array.isArray(value)) {
     return value.map(sanitizeValue);
   }

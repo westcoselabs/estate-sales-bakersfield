@@ -18,6 +18,7 @@ function sessionFixture(id = "session-1"): CurrentSession {
     metadata: {},
     principal: {
       id: "user-1",
+      displayName: "Test user",
       email: "person@example.test",
       emailVerifiedAt: null,
       role: "USER",

@@ -12,6 +12,7 @@ import type { CurrentSession, SessionSummary } from "../domain/types";
 
 const principalSelection = {
   id: true,
+  displayName: true,
   normalizedEmail: true,
   emailVerifiedAt: true,
   role: true,
@@ -23,6 +24,7 @@ type StoredSession = Awaited<
 > & {
   user: {
     id: string;
+    displayName: string;
     normalizedEmail: string;
     emailVerifiedAt: Date | null;
     role: "USER" | "ADMIN";
@@ -42,6 +44,7 @@ function mapSession(session: StoredSession): CurrentSession {
     },
     principal: {
       id: session.user.id,
+      displayName: session.user.displayName,
       email: session.user.normalizedEmail,
       emailVerifiedAt: session.user.emailVerifiedAt,
       role: session.user.role,

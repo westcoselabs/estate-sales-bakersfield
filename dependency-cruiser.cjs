@@ -33,6 +33,18 @@ module.exports = {
       from: { pathNot: "^src/modules/media/infrastructure" },
       to: { dependencyTypes: ["npm"], path: "^@vercel/blob$" },
     },
+    {
+      name: "resend-is-auth-infrastructure-only",
+      severity: "error",
+      from: { pathNot: "^src/modules/auth/infrastructure" },
+      to: { dependencyTypes: ["npm"], path: "^resend$" },
+    },
+    {
+      name: "upstash-is-auth-infrastructure-only",
+      severity: "error",
+      from: { pathNot: "^src/modules/auth/infrastructure" },
+      to: { dependencyTypes: ["npm"], path: "^@upstash/redis$" },
+    },
   ],
   options: {
     doNotFollow: { path: "node_modules" },

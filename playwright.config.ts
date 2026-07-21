@@ -15,15 +15,9 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `pnpm exec next start -p ${String(port)}`,
+    command: "pnpm exec tsx scripts/start-e2e-server.ts",
     url: `${baseURL}/api/health`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    env: {
-      APP_ENV: "test",
-      APP_URL: baseURL,
-      DATABASE_DRIVER: "pg",
-      LOG_LEVEL: "silent",
-    },
   },
 });

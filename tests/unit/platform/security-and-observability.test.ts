@@ -28,12 +28,19 @@ describe("security and observability boundaries", () => {
   });
 
   it("removes credentials and direct user identifiers from error events", () => {
+    const opaqueToken = "abcdefghijklmnopqrstuvwxyzABCDEFGH123456789";
     const sanitized = sanitizeSentryEvent({
       request: {
         headers: { authorization: "Bearer raw", cookie: "session=raw" },
+        url: `https://example.test/reset-password?token=${opaqueToken}`,
       },
       password: "not-for-logs",
-      nested: { resetToken: "raw-token", safe: "value" },
+      nested: {
+        resetToken: "raw-token",
+        safe: "value",
+        href: `/verify-email?token=${opaqueToken}`,
+        opaqueCredential: opaqueToken,
+      },
       user: {
         id: "user-1",
         email: "person@example.test",
@@ -44,9 +51,15 @@ describe("security and observability boundaries", () => {
     expect(sanitized).toEqual({
       request: {
         headers: { authorization: "[REDACTED]", cookie: "[REDACTED]" },
+        url: "https://example.test/reset-password?token=[REDACTED]",
       },
       password: "[REDACTED]",
-      nested: { resetToken: "[REDACTED]", safe: "value" },
+      nested: {
+        resetToken: "[REDACTED]",
+        safe: "value",
+        href: "/verify-email?token=[REDACTED]",
+        opaqueCredential: "[REDACTED]",
+      },
       user: { id: "user-1" },
     });
   });

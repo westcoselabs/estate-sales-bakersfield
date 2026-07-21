@@ -26,6 +26,7 @@ if (mode === "offline") {
     "audit:prod",
     "test:unit",
     "test:contract:blob",
+    "test:contract:email",
     "test:integration",
     "build",
     "test:e2e",

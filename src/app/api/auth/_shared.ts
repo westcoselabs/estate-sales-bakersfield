@@ -1,0 +1,158 @@
+import { NextResponse } from "next/server";
+import { ZodError } from "zod";
+
+import {
+  AuthenticationError,
+  AuthenticationServiceUnavailableError,
+  AuthorizationError,
+  InvalidCredentialsError,
+  InvalidPasswordError,
+  InvalidTokenError,
+  MalformedPasswordHashError,
+  RateLimitExceededError,
+} from "@/modules/auth";
+import { getServerApplicationUrl } from "@/platform/config/application-url";
+import { logger } from "@/platform/observability/logger";
+import { requestIdFrom } from "@/platform/http/request-context";
+import {
+  assertTrustedOrigin,
+  TrustedOriginError,
+} from "@/platform/security/trusted-origin";
+
+const noStoreHeaders = {
+  "Cache-Control": "no-store",
+  "Content-Type": "application/json",
+} as const;
+
+export function assertAuthenticationOrigin(request: Request): void {
+  assertTrustedOrigin(request, getServerApplicationUrl());
+}
+
+export async function readJson(request: Request): Promise<unknown> {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new ZodError([]);
+  }
+  return request.json();
+}
+
+export async function waitForMinimumDuration(
+  startedAt: number,
+  minimumMilliseconds: number,
+): Promise<void> {
+  const remaining = minimumMilliseconds - (performance.now() - startedAt);
+  if (remaining > 0) {
+    await new Promise((resolve) => setTimeout(resolve, remaining));
+  }
+}
+
+export function authJson(
+  body: unknown,
+  input: {
+    readonly status?: number;
+    readonly requestId: string;
+    readonly headers?: Readonly<Record<string, string>>;
+  },
+): NextResponse {
+  return NextResponse.json(body, {
+    status: input.status ?? 200,
+    headers: {
+      ...noStoreHeaders,
+      "X-Request-ID": input.requestId,
+      ...input.headers,
+    },
+  });
+}
+
+export function authenticationApiError(
+  error: unknown,
+  request: Request,
+  operation: string,
+): NextResponse {
+  const requestId = requestIdFrom(request);
+  if (
+    error instanceof ZodError ||
+    error instanceof SyntaxError ||
+    error instanceof InvalidPasswordError
+  ) {
+    return authJson(
+      { error: "Please check the submitted information.", requestId },
+      { status: 400, requestId },
+    );
+  }
+  if (error instanceof InvalidTokenError) {
+    return authJson(
+      { error: "This link is invalid or expired.", requestId },
+      { status: 400, requestId },
+    );
+  }
+  if (error instanceof MalformedPasswordHashError) {
+    logger.error(
+      { requestId, operation, errorType: error.name },
+      "Stored authentication credential failed validation",
+    );
+    return authJson(
+      { error: "The request could not be authenticated.", requestId },
+      { status: 401, requestId },
+    );
+  }
+  if (
+    error instanceof InvalidCredentialsError ||
+    error instanceof AuthenticationError
+  ) {
+    return authJson(
+      { error: "The request could not be authenticated.", requestId },
+      { status: 401, requestId },
+    );
+  }
+  if (error instanceof AuthorizationError) {
+    return authJson(
+      { error: "You do not have access to this action.", requestId },
+      { status: 403, requestId },
+    );
+  }
+  if (error instanceof TrustedOriginError) {
+    return authJson(
+      { error: "The request origin was rejected.", requestId },
+      { status: 403, requestId },
+    );
+  }
+  if (error instanceof RateLimitExceededError) {
+    logger.warn(
+      { requestId, operation, retryAfterSeconds: error.retryAfterSeconds },
+      "Authentication request rate limited",
+    );
+    return authJson(
+      { error: "Please wait before trying again.", requestId },
+      {
+        status: 429,
+        requestId,
+        headers: {
+          "Retry-After": String(error.retryAfterSeconds),
+        },
+      },
+    );
+  }
+  if (error instanceof AuthenticationServiceUnavailableError) {
+    return authJson(
+      { error: "Authentication is temporarily unavailable.", requestId },
+      { status: 503, requestId },
+    );
+  }
+
+  logger.error(
+    {
+      requestId,
+      operation,
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    },
+    "Unexpected authentication request failure",
+  );
+  return authJson(
+    {
+      error: "An unexpected error occurred.",
+      requestId,
+    },
+    { status: 500, requestId },
+  );
+}

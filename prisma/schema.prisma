@@ -33,8 +33,31 @@ enum JobStatus {
   @@map("job_status")
 }
 
+enum OrganizerStatus {
+  INCOMPLETE
+  COMPLETE
+
+  @@map("organizer_status")
+}
+
+enum EmailDeliveryKind {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+
+  @@map("email_delivery_kind")
+}
+
+enum EmailDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+
+  @@map("email_delivery_status")
+}
+
 model User {
   id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  displayName       String        @map("display_name") @db.VarChar(100)
   email             String        @db.VarChar(320)
   normalizedEmail   String        @unique @map("normalized_email") @db.VarChar(320)
   passwordHash      String        @map("password_hash") @db.VarChar(255)
@@ -46,10 +69,12 @@ model User {
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  sessions               Session[]
+  sessions                Session[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
-  auditEntries             AuditEntry[] @relation("AuditActor")
+  emailDeliveries         EmailDelivery[]
+  organizerProfile        OrganizerProfile?
+  auditEntries            AuditEntry[]             @relation("AuditActor")
 
   @@index([role])
   @@index([status])
@@ -73,14 +98,15 @@ model Session {
 }
 
 model EmailVerificationToken {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  tokenHash   String    @unique @map("token_hash") @db.Char(64)
-  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
-  consumedAt  DateTime? @map("consumed_at") @db.Timestamptz(3)
-  resendCount Int       @default(0) @map("resend_count")
-  attemptCount Int      @default(0) @map("attempt_count")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  tokenHash     String    @unique @map("token_hash") @db.Char(64)
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt    DateTime? @map("consumed_at") @db.Timestamptz(3)
+  invalidatedAt DateTime? @map("invalidated_at") @db.Timestamptz(3)
+  resendCount   Int       @default(0) @map("resend_count")
+  attemptCount  Int       @default(0) @map("attempt_count")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -89,18 +115,60 @@ model EmailVerificationToken {
 }
 
 model PasswordResetToken {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId       String    @map("user_id") @db.Uuid
-  tokenHash    String    @unique @map("token_hash") @db.Char(64)
-  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(3)
-  consumedAt   DateTime? @map("consumed_at") @db.Timestamptz(3)
-  attemptCount Int       @default(0) @map("attempt_count")
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  tokenHash     String    @unique @map("token_hash") @db.Char(64)
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt    DateTime? @map("consumed_at") @db.Timestamptz(3)
+  invalidatedAt DateTime? @map("invalidated_at") @db.Timestamptz(3)
+  attemptCount  Int       @default(0) @map("attempt_count")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
   @@map("password_reset_tokens")
+}
+
+model OrganizerProfile {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String          @unique @map("user_id") @db.Uuid
+  displayName  String?         @map("display_name") @db.VarChar(100)
+  contactName  String?         @map("contact_name") @db.VarChar(100)
+  contactEmail String?         @map("contact_email") @db.VarChar(320)
+  contactPhone String?         @map("contact_phone") @db.VarChar(32)
+  websiteUrl   String?         @map("website_url") @db.VarChar(2048)
+  status       OrganizerStatus @default(INCOMPLETE)
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("organizer_profiles")
+}
+
+model EmailDelivery {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String              @map("user_id") @db.Uuid
+  kind              EmailDeliveryKind
+  status            EmailDeliveryStatus @default(PENDING)
+  provider          String              @default("resend") @db.VarChar(50)
+  providerMessageId String?             @map("provider_message_id") @db.VarChar(255)
+  recipientHash     String              @map("recipient_hash") @db.Char(64)
+  attempts          Int                 @default(0)
+  lastErrorCode     String?             @map("last_error_code") @db.VarChar(100)
+  sentAt            DateTime?           @map("sent_at") @db.Timestamptz(3)
+  failedAt          DateTime?           @map("failed_at") @db.Timestamptz(3)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerMessageId])
+  @@index([userId, kind, createdAt])
+  @@index([status, createdAt])
+  @@map("email_deliveries")
 }
 
 model AuditEntry {

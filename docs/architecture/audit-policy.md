@@ -1,6 +1,6 @@
 # Authentication Audit and Telemetry Policy
 
-The PostgreSQL `audit_entries` table is append-only and reserved for meaningful account, session, security, and administrator state changes. Phase 1 session repository transactions currently persist session creation, rotation, logout, individual revocation, and global revocation. Later commands must add records for account creation, email verification, password reset/change, email/role changes, restrictions, administrator actions, TOTP lifecycle changes, and security-sensitive authorization failures when operationally meaningful.
+The PostgreSQL `audit_entries` table is append-only and reserved for meaningful account, session, security, and administrator state changes. Phase 2 repository transactions persist account creation, email verification and known-token rejection, password-reset requests and completion, login success, session creation/rotation/logout/revocation, organizer creation/update, and global session revocation. Later commands must add records for email/role changes, restrictions, administrator actions, TOTP lifecycle changes, and security-sensitive authorization failures when operationally meaningful.
 
 Routine incorrect-password attempts, unknown-account attempts, ordinary rate-limit rejections, and automated credential-stuffing noise do not create one immutable row per attempt. They belong in bounded structured logs, metrics, and rate-limit telemetry, with Sentry/alerts only for anomalous patterns.
 

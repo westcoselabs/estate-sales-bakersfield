@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { InvalidPasswordError } from "@/modules/auth/domain/errors";
+import {
+  InvalidPasswordError,
+  MalformedPasswordHashError,
+} from "@/modules/auth/domain/errors";
 import {
   ARGON2_PARAMETERS,
   Argon2PasswordHasher,
@@ -34,5 +37,14 @@ describe("Argon2PasswordHasher", () => {
     expect(hasher.needsRehash("$argon2id$v=19$m=65536,t=1,p=1$abc$xyz")).toBe(
       true,
     );
+    expect(hasher.needsRehash("$argon2id$v=19$m=65536,t=2,p=1$abc$xyz")).toBe(
+      true,
+    );
+  });
+
+  it("surfaces malformed stored hashes as operational failures", async () => {
+    await expect(
+      hasher.verify("not-a-hash", "a-valid-password-value"),
+    ).rejects.toBeInstanceOf(MalformedPasswordHashError);
   });
 });

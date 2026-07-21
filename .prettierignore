@@ -1,6 +1,7 @@
 .next
 coverage
 docs/phase-1/frozen-roadmap.md
+graphify-out
 node_modules
 playwright-report
 pnpm-lock.yaml

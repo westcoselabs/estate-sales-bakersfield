@@ -23,6 +23,7 @@ async function createUser() {
   const normalizedEmail = `phase1-${crypto.randomUUID()}@example.test`;
   return prisma.user.create({
     data: {
+      displayName: "Phase 1 fixture",
       email: normalizedEmail,
       normalizedEmail,
       passwordHash: "$argon2id$fixture",

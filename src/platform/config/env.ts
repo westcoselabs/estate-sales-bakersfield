@@ -13,11 +13,33 @@ const optionalUrl = z.preprocess(
   z.url().optional(),
 );
 
+const applicationUrl = z.url().superRefine((value, context) => {
+  const url = new URL(value);
+  if (!["http:", "https:"].includes(url.protocol)) {
+    context.addIssue({
+      code: "custom",
+      message: "APP_URL must use HTTP or HTTPS",
+    });
+  }
+  if (
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "APP_URL must contain only an application origin",
+    });
+  }
+});
+
 export const serverEnvironmentSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]),
     APP_ENV: appEnvironmentSchema,
-    APP_URL: z.url(),
+    APP_URL: applicationUrl,
     LOG_LEVEL: z.enum([
       "silent",
       "fatal",
@@ -38,10 +60,38 @@ export const serverEnvironmentSchema = z
       (value) => (value === "" ? undefined : value),
       z.string().min(1).optional(),
     ),
+    AUTH_FINGERPRINT_SECRET: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(32).optional(),
+    ),
+    UPSTASH_REDIS_REST_URL: optionalUrl,
+    UPSTASH_REDIS_REST_TOKEN: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(1).optional(),
+    ),
+    RESEND_API_KEY: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(1).optional(),
+    ),
+    RESEND_FROM: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(3).max(320).optional(),
+    ),
+    AUTH_EMAIL_CAPTURE_PATH: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(1).optional(),
+    ),
     SENTRY_DSN: optionalUrl,
   })
   .superRefine((environment, context) => {
     if (["preview", "staging", "production"].includes(environment.APP_ENV)) {
+      if (new URL(environment.APP_URL).protocol !== "https:") {
+        context.addIssue({
+          code: "custom",
+          message: `APP_URL must use HTTPS in ${environment.APP_ENV}`,
+          path: ["APP_URL"],
+        });
+      }
       if (environment.DATABASE_DRIVER !== "neon") {
         context.addIssue({
           code: "custom",
@@ -64,6 +114,31 @@ export const serverEnvironmentSchema = z
           });
         }
       }
+    }
+
+    for (const [left, right] of [
+      ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"],
+      ["RESEND_API_KEY", "RESEND_FROM"],
+    ] as const) {
+      if (Boolean(environment[left]) !== Boolean(environment[right])) {
+        context.addIssue({
+          code: "custom",
+          message: `${left} and ${right} must be configured together`,
+          path: [left],
+        });
+      }
+    }
+
+    if (
+      environment.AUTH_EMAIL_CAPTURE_PATH &&
+      !["local", "test"].includes(environment.APP_ENV)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "AUTH_EMAIL_CAPTURE_PATH is permitted only in local or test environments",
+        path: ["AUTH_EMAIL_CAPTURE_PATH"],
+      });
     }
   });
 
