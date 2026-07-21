@@ -8,9 +8,9 @@ function configurePreviewEnvironment() {
   vi.stubEnv("APP_ENV", "preview");
   vi.stubEnv("APP_URL", "https://canonical.example.test");
   vi.stubEnv("LOG_LEVEL", "silent");
-  vi.stubEnv("DATABASE_DRIVER", "neon");
   vi.stubEnv("DATABASE_URL", "postgresql://example.test/database");
   vi.stubEnv("DIRECT_URL", "postgresql://example.test/database");
+  vi.stubEnv("DATABASE_RESOURCE_ENV", "preview");
   vi.stubEnv("CRON_SECRET", "x".repeat(32));
   resetEnvironmentCacheForTests();
 }

@@ -4,12 +4,13 @@ import { runJobBatch } from "@/modules/jobs/application/runner";
 import { PrismaDurableJobRepository } from "@/modules/jobs/infrastructure/prisma-job-repository";
 
 import { createIntegrationClient } from "./support/database";
+import { testQueue } from "./support/test-run";
 
 const prisma = createIntegrationClient();
 const repository = new PrismaDurableJobRepository(prisma);
 
 function uniqueQueue(prefix: string): string {
-  return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
+  return testQueue(prefix);
 }
 
 afterAll(async () => {

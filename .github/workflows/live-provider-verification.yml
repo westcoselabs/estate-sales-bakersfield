@@ -10,7 +10,7 @@ jobs:
   verify-live:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: phase-1-live
+    environment: preview
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -23,10 +23,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify:live
         env:
-          APP_ENV: staging
-          DATABASE_DRIVER: neon
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          VERCEL_BENCHMARK_URL: ${{ vars.VERCEL_BENCHMARK_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_ENV: preview
+          DATABASE_RESOURCE_ENV: preview
+          DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PREVIEW_DIRECT_URL }}
+          BLOB_RESOURCE_ENV: preview
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.PREVIEW_BLOB_READ_WRITE_TOKEN }}
+          VERCEL_BENCHMARK_URL: ${{ vars.PREVIEW_VERCEL_BENCHMARK_URL }}
+          CRON_SECRET: ${{ secrets.PREVIEW_CRON_SECRET }}

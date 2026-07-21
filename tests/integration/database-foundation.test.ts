@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 
 import { createIntegrationClient } from "./support/database";
+import { testEmail } from "./support/test-run";
 
 const prisma = createIntegrationClient();
 
@@ -34,7 +35,7 @@ describe("fresh PostgreSQL/PostGIS foundation", () => {
   });
 
   it("rolls back failed transactions", async () => {
-    const normalizedEmail = `rollback-${crypto.randomUUID()}@example.test`;
+    const normalizedEmail = testEmail("rollback");
     await expect(
       prisma.$transaction(async (transaction) => {
         await transaction.user.create({

@@ -1,7 +1,6 @@
 import "server-only";
 
 import { PrismaNeon } from "@prisma/adapter-neon";
-import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "@/generated/prisma/client";
 import { getServerEnvironment } from "@/platform/config/env";
@@ -16,14 +15,8 @@ function buildPrismaClient(): PrismaClient {
     throw new Error("DATABASE_URL is required to create the database client");
   }
 
-  if (environment.DATABASE_DRIVER === "neon") {
-    return new PrismaClient({
-      adapter: new PrismaNeon({ connectionString: environment.DATABASE_URL }),
-    });
-  }
-
   return new PrismaClient({
-    adapter: new PrismaPg({ connectionString: environment.DATABASE_URL }),
+    adapter: new PrismaNeon({ connectionString: environment.DATABASE_URL }),
   });
 }
 

@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Estate Sales Bakersfield",
-  description: "Estate and yard sale directory foundation",
+  description: "Build and preview Bakersfield estate and yard sale listings",
 };
 
 export default function RootLayout({

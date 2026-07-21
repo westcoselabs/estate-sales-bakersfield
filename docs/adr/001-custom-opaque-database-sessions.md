@@ -16,6 +16,6 @@ This adapts the proven opaque-token shape inspected in `txlocallist` while closi
 
 ## Phase 2 implementation
 
-Phase 2 composes the Phase 1 primitives into signup, login, verification/resend, password reset, current logout, session management, distributed abuse controls, and narrow authorization projections. Preview, staging, and Production use a Secure `__Host-estate_session` cookie; local and test use the non-Secure `estate_session` cookie so loopback tests remain possible. All sessions retain a seven-day absolute expiry with no sliding renewal.
+Phase 2 composes the Phase 1 primitives into signup, login, verification/resend, password reset, current logout, session management, distributed abuse controls, and narrow authorization projections. Preview and Production use a Secure `__Host-estate_session` cookie; local and test use the non-Secure `estate_session` cookie so loopback tests remain possible. All sessions retain a seven-day absolute expiry with no sliding renewal.
 
 Routine failed-login and rate-limit noise remains bounded telemetry, not immutable audit history. Verification rotates a matching authenticated session, password reset revokes every session, and restricted accounts cannot authenticate or pass user/admin guards.

@@ -1,32 +1,34 @@
-# Current Architecture Through Phase 2
+# Current Architecture Through Phase 3
 
 ## Shape
 
-The application is a greenfield modular monolith using Next.js App Router and strict TypeScript. Feature modules own their domain, application ports/policies, and infrastructure adapters. Routes remain composition and transport layers. Cross-cutting configuration, database, logging, error reporting, and request security live under `src/platform`.
+The application is a modular monolith using Next.js App Router and strict TypeScript. Feature modules own domain rules, application ports/services, and infrastructure adapters. Routes are transport/composition layers. Configuration, database creation, logging, error reporting, and trusted-origin enforcement live under `src/platform`.
 
 ```text
-src/app                 HTTP and Next.js composition
-src/modules/auth        Account workflows, opaque sessions, email, rate limits, and guards
-src/modules/organizers  User-owned organizer onboarding
-src/modules/jobs        Minimal PostgreSQL-backed durable work foundation
-src/modules/media       Provider-neutral MediaStore plus one Vercel Blob adapter
-src/platform            Environment, database, observability, and security plumbing
-prisma                  Schema and immutable real migrations
-tests                   Unit, integration, offline contract, live contract, and E2E
+src/app                  Pages, route handlers, and HTTP composition
+src/modules/auth         Accounts, opaque sessions, email, limits, and guards
+src/modules/organizers   User-owned organizer onboarding
+src/modules/events       Draft state, ownership, projections, and approval
+src/modules/locations    Provider-neutral address validation
+src/modules/media        Provider-neutral private objects and image processing
+src/modules/jobs         PostgreSQL durable work foundation
+src/platform             Configuration, database, observability, and security
+prisma                   Immutable migrations and schema
+tests                    Unit, Test Neon integration, contracts, live, and E2E
 ```
 
-Dependency Cruiser enforces no circular dependencies, infrastructure-free domain/application layers, no module-to-App imports, and Vercel Blob SDK isolation. Prisma-generated code is excluded from source control and regenerated from the pinned schema/toolchain.
+Dependency Cruiser enforces circular-dependency, layer, App-import, and provider-SDK boundaries. Prisma-generated code is not committed and is regenerated from the pinned toolchain.
 
 ## Persistence
 
-Phase 1 owns users, sessions, hashed verification/reset tokens, immutable audit entries, and durable jobs. Phase 2 adds organizer profiles, delivery tracking, account display names, and token invalidation state. There are still no event, event-photo, upload-reservation, payment, or search models. Preview/staging/production use Neon through the Prisma Neon adapter; local and Testcontainers use the Prisma PostgreSQL adapter.
+Phase 1 owns users, sessions, hashed verification/reset tokens, append-only audit entries, durable jobs, and PostGIS. Phase 2 adds organizer profiles, delivery tracking, account display names, and token invalidation. Phase 3 adds organizer-owned events, separate private locations, event photos and upload reservations, approval history, and current approval proof.
 
-Credential-free database integration uses `postgis/postgis:16-3.5-alpine`, whose upstream image matrix provides PostgreSQL 16 with PostGIS 3.5 and initializes PostGIS in the requested database. See the [docker-postgis project](https://github.com/postgis/docker-postgis).
+Local manual development and Vercel Preview use Preview Neon where appropriate. Automated database and browser tests use only the persistent isolated Test Neon branch. Test runs use unique identifiers and delete only their own users/jobs; broad reset is a separate explicitly confirmed Test-only command.
 
 ## Security baseline
 
-The baseline includes validated environment configuration, CSP and standard security headers, trusted-origin and constant-time bearer-secret helpers, Pino redaction, Sentry event sanitization, narrow auth principals, Argon2id, hashed opaque tokens, database expiry, revocation and rotation, enumeration-safe transport responses, Resend behind an email port, Upstash behind a rate-limit port, and append-only meaningful audit records.
+The baseline includes validated environment configuration, CSP and standard security headers, trusted-origin checks, Pino/Sentry redaction, narrow principals, Argon2id, hashed opaque tokens, transactional expiry/revocation/rotation, enumeration-safe responses, provider-neutral email/rate-limit/media/location ports, private address projections, owner/admin draft-media authorization, immutable processed media keys, optimistic event versions, append-only audit history, and deterministic revision approval digests.
 
-## Hard stop
+## Scope boundary
 
-The repository stops after account and organizer onboarding. Paid publication remains the product priority, but event drafting, real upload ownership, Stripe, publication, and public event pages begin only in their frozen later phases.
+The application stops after an organizer approves an exact pre-payment event revision. Stripe, checkout, webhooks, payment fulfillment, publication transitions, and automatic public visibility are not implemented.

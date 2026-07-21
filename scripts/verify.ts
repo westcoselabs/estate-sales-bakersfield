@@ -1,5 +1,10 @@
 import { spawnSync } from "node:child_process";
 
+import {
+  loadDedicatedTestEnvironment,
+  requireSafeTestDatabase,
+} from "./test-database-safety";
+
 const mode = process.argv[2];
 const isWindows = process.platform === "win32";
 
@@ -16,28 +21,62 @@ function run(command: string): number {
   return result.status ?? 1;
 }
 
-if (mode === "offline") {
-  for (const command of [
-    "format:check",
-    "lint",
-    "arch:check",
-    "typecheck",
-    "prisma:validate",
-    "audit:prod",
-    "test:unit",
-    "test:contract:blob",
-    "test:contract:email",
-    "test:integration",
-    "build",
-    "test:e2e",
-  ]) {
+const credentialFreeCommands = [
+  "format:check",
+  "lint",
+  "arch:check",
+  "build",
+  "typecheck",
+  "prisma:validate",
+  "audit:prod",
+  "test:unit",
+  "test:contract:blob",
+  "test:contract:email",
+  "test:contract:location",
+  "test:contract:image",
+] as const;
+
+function runCredentialFreeChecks(): boolean {
+  let failed = false;
+  for (const command of credentialFreeCommands) {
     const status = run(command);
-    if (status !== 0) process.exit(status);
+    if (status !== 0) failed = true;
   }
-} else if (mode === "live") {
-  if (process.env.APP_ENV === "production") {
+  return failed;
+}
+
+if (mode === "credential-free") {
+  process.exitCode = runCredentialFreeChecks() ? 1 : 0;
+} else if (mode === "offline") {
+  let failed = runCredentialFreeChecks();
+  loadDedicatedTestEnvironment();
+  let testDatabaseReady = false;
+  try {
+    requireSafeTestDatabase();
+    testDatabaseReady = true;
+  } catch (error) {
     process.stderr.write(
-      "BLOCKED: verify:live may not target APP_ENV=production.\n",
+      `BLOCKED: ${error instanceof Error ? error.message : "Test Neon is unavailable"}\n`,
+    );
+  }
+  const blocked = !testDatabaseReady;
+  if (testDatabaseReady) {
+    for (const command of ["test:integration", "test:e2e"]) {
+      if (run(command) !== 0) failed = true;
+    }
+  } else {
+    process.stderr.write(
+      "BLOCKED: integration and Playwright checks require the isolated Test Neon configuration.\n",
+    );
+  }
+  process.exitCode = failed ? 1 : blocked ? 2 : 0;
+} else if (mode === "live") {
+  if (
+    process.env.APP_ENV !== "preview" ||
+    process.env.DATABASE_RESOURCE_ENV !== "preview"
+  ) {
+    process.stderr.write(
+      "BLOCKED: verify:live requires APP_ENV=preview and DATABASE_RESOURCE_ENV=preview.\n",
     );
     process.exitCode = 2;
   } else {
@@ -79,6 +118,8 @@ if (mode === "offline") {
     process.exitCode = failed ? 1 : blocked ? 2 : 0;
   }
 } else {
-  process.stderr.write("Usage: tsx scripts/verify.ts <offline|live>\n");
+  process.stderr.write(
+    "Usage: tsx scripts/verify.ts <credential-free|offline|live>\n",
+  );
   process.exitCode = 1;
 }

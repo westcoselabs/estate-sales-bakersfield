@@ -7,7 +7,6 @@ const base = {
   APP_ENV: "test",
   APP_URL: "http://127.0.0.1:3417",
   LOG_LEVEL: "silent",
-  DATABASE_DRIVER: "pg",
 };
 
 describe("server environment validation", () => {
@@ -20,21 +19,21 @@ describe("server environment validation", () => {
       parseServerEnvironment({
         ...base,
         NODE_ENV: "production",
-        APP_ENV: "staging",
+        APP_ENV: "production",
       }),
     ).toThrow();
     expect(
       parseServerEnvironment({
         ...base,
         NODE_ENV: "production",
-        APP_ENV: "staging",
-        APP_URL: "https://staging.example.test",
-        DATABASE_DRIVER: "neon",
+        APP_ENV: "production",
+        APP_URL: "https://production.example.test",
         DATABASE_URL: "postgresql://example.test/database",
         DIRECT_URL: "postgresql://example.test/database",
+        DATABASE_RESOURCE_ENV: "production",
         CRON_SECRET: "a".repeat(32),
       }),
-    ).toMatchObject({ APP_ENV: "staging", DATABASE_DRIVER: "neon" });
+    ).toMatchObject({ APP_ENV: "production" });
   });
 
   it("requires provider credential pairs and confines capture to local/test", () => {
@@ -44,7 +43,6 @@ describe("server environment validation", () => {
         APP_ENV: "preview",
         APP_URL: "https://preview.example.test",
         LOG_LEVEL: "info",
-        DATABASE_DRIVER: "neon",
         DATABASE_URL: "postgresql://example.test/database",
         DIRECT_URL: "postgresql://example.test/database",
         CRON_SECRET: "x".repeat(32),
@@ -58,7 +56,6 @@ describe("server environment validation", () => {
         APP_ENV: "preview",
         APP_URL: "https://preview.example.test",
         LOG_LEVEL: "info",
-        DATABASE_DRIVER: "neon",
         DATABASE_URL: "postgresql://example.test/database",
         DIRECT_URL: "postgresql://example.test/database",
         CRON_SECRET: "x".repeat(32),
@@ -78,9 +75,8 @@ describe("server environment validation", () => {
       parseServerEnvironment({
         ...base,
         NODE_ENV: "production",
-        APP_ENV: "staging",
-        APP_URL: "http://staging.example.test",
-        DATABASE_DRIVER: "neon",
+        APP_ENV: "production",
+        APP_URL: "http://production.example.test",
         DATABASE_URL: "postgresql://example.test/database",
         DIRECT_URL: "postgresql://example.test/database",
         CRON_SECRET: "x".repeat(32),
@@ -97,5 +93,60 @@ describe("server environment validation", () => {
         AUTH_EMAIL_CAPTURE_PATH: ".tmp/local-emails.jsonl",
       }),
     ).toMatchObject({ APP_ENV: "local" });
+  });
+
+  it("allows exactly four application environments and requires provider scope markers", () => {
+    expect(() =>
+      parseServerEnvironment({ ...base, APP_ENV: "staging" }),
+    ).toThrow();
+    const preview = {
+      ...base,
+      NODE_ENV: "production",
+      APP_ENV: "preview",
+      APP_URL: "https://preview.example.test",
+      DATABASE_URL: "postgresql://example.test/database",
+      DIRECT_URL: "postgresql://example.test/database",
+      DATABASE_RESOURCE_ENV: "preview",
+      CRON_SECRET: "x".repeat(32),
+      RESEND_API_KEY: "preview-key",
+      RESEND_FROM: "Preview <preview@example.test>",
+    };
+    expect(() => parseServerEnvironment(preview)).toThrow(
+      /RESEND_RESOURCE_ENV/,
+    );
+    expect(() =>
+      parseServerEnvironment({
+        ...preview,
+        DATABASE_RESOURCE_ENV: "preview",
+        RESEND_RESOURCE_ENV: "production",
+      }),
+    ).toThrow(/RESEND_RESOURCE_ENV/);
+    expect(
+      parseServerEnvironment({
+        ...preview,
+        DATABASE_RESOURCE_ENV: "preview",
+        RESEND_RESOURCE_ENV: "preview",
+      }).RESEND_RESOURCE_ENV,
+    ).toBe("preview");
+
+    expect(() =>
+      parseServerEnvironment({
+        ...preview,
+        DATABASE_RESOURCE_ENV: "production",
+        RESEND_RESOURCE_ENV: "preview",
+      }),
+    ).toThrow(/DATABASE_RESOURCE_ENV/);
+  });
+
+  it("rejects test-media seams outside APP_ENV=test", () => {
+    expect(() =>
+      parseServerEnvironment({
+        ...base,
+        APP_ENV: "local",
+        NODE_ENV: "development",
+        TEST_MEDIA_ROOT: ".tmp/test-media",
+        TEST_MEDIA_SIGNING_SECRET: "x".repeat(32),
+      }),
+    ).toThrow(/Test media configuration/);
   });
 });

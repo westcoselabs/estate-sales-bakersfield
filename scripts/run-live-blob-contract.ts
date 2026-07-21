@@ -1,13 +1,18 @@
 import { spawnSync } from "node:child_process";
 
-if (!process.env.BLOB_READ_WRITE_TOKEN) {
+if (process.env.APP_ENV !== "preview") {
   process.stderr.write(
-    "BLOCKED: BLOB_READ_WRITE_TOKEN is required for the live Blob contract.\n",
+    "BLOCKED: live Blob contracts require APP_ENV=preview.\n",
   );
   process.exitCode = 2;
-} else if (process.env.APP_ENV === "production") {
+} else if (process.env.BLOB_RESOURCE_ENV !== "preview") {
   process.stderr.write(
-    "BLOCKED: live Blob contracts may not run with APP_ENV=production.\n",
+    "BLOCKED: live Blob contracts require BLOB_RESOURCE_ENV=preview.\n",
+  );
+  process.exitCode = 2;
+} else if (!process.env.BLOB_READ_WRITE_TOKEN) {
+  process.stderr.write(
+    "BLOCKED: BLOB_READ_WRITE_TOKEN is required for the live Blob contract.\n",
   );
   process.exitCode = 2;
 } else {
@@ -18,7 +23,7 @@ if (!process.env.BLOB_READ_WRITE_TOKEN) {
       ? ["/d", "/s", "/c", "pnpm exec vitest run --project blob-live"]
       : ["exec", "vitest", "run", "--project", "blob-live"],
     {
-      env: { ...process.env, APP_ENV: process.env.APP_ENV ?? "test" },
+      env: process.env,
       stdio: "inherit",
     },
   );

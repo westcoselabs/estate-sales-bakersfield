@@ -7,6 +7,7 @@ import { PrismaSessionRepository } from "@/modules/auth/infrastructure/prisma-se
 import { PrismaSingleUseTokenRepository } from "@/modules/auth/infrastructure/prisma-single-use-token-repository";
 
 import { createIntegrationClient } from "./support/database";
+import { testEmail } from "./support/test-run";
 
 const prisma = createIntegrationClient();
 const tokenProvider = new CryptoOpaqueTokenProvider();
@@ -20,7 +21,7 @@ const singleUseTokens = new SingleUseTokenService(
 );
 
 async function createUser() {
-  const normalizedEmail = `phase1-${crypto.randomUUID()}@example.test`;
+  const normalizedEmail = testEmail("phase1");
   return prisma.user.create({
     data: {
       displayName: "Phase 1 fixture",

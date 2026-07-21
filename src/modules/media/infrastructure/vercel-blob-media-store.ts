@@ -12,6 +12,7 @@ import {
   head,
   issueSignedToken,
   presignUrl,
+  put,
 } from "@vercel/blob";
 
 import type { MediaStore } from "../application/media-store";
@@ -182,6 +183,25 @@ export class VercelBlobMediaStore implements MediaStore {
         useCache: false,
       });
       return new URL(presignedUrl);
+    } catch (error) {
+      throw mapProviderError(error);
+    }
+  }
+
+  async putPrivate(
+    key: MediaObjectKey,
+    bytes: Uint8Array,
+    contentType: string,
+  ): Promise<void> {
+    try {
+      await put(key, Buffer.from(bytes), {
+        access: "private",
+        token: this.token,
+        contentType,
+        addRandomSuffix: false,
+        allowOverwrite: false,
+        cacheControlMaxAge: 31_536_000,
+      });
     } catch (error) {
       throw mapProviderError(error);
     }

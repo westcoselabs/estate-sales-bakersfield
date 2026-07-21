@@ -4,7 +4,7 @@ Status: accepted for Phase 2.
 
 ## Decision
 
-Use Upstash Redis as the distributed authority for authentication rate limits in Preview, staging, and Production. The application port receives only route namespace, HMAC-fingerprinted identifier, limit, and window. The adapter prefixes every key with the validated application environment and executes an atomic fixed-window increment with a bounded expiration.
+Use Upstash Redis as the distributed authority for authentication rate limits in Preview and Production. The application port receives only route namespace, HMAC-fingerprinted identifier, limit, and window. The adapter prefixes every key with the validated application environment and executes an atomic fixed-window increment with a bounded expiration.
 
 Limits apply independently to network and subject fingerprints:
 

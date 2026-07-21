@@ -1,10 +1,10 @@
 # Live Provider Verification
 
-Live verification is intentionally excluded from normal pull-request CI. It must use isolated non-production resources and `APP_ENV=preview` or `APP_ENV=staging`; the runner blocks `APP_ENV=production`.
+Live verification is intentionally excluded from normal pull-request CI. It must use isolated Preview resources and `APP_ENV=preview`; the runner refuses local, test, and Production.
 
 ## Neon
 
-Provide `DATABASE_URL` and `DIRECT_URL` for a disposable or dedicated isolated Neon branch. `pnpm verify:live` deploys real migrations, checks PostGIS, inserts a uniquely named transaction fixture, forces rollback, proves the row is absent, and performs best-effort cleanup. The operator is responsible for supplying a fresh/isolated branch because Phase 1 has no Neon management API credential or authority to create one.
+Provide `DATABASE_URL` and `DIRECT_URL` for the isolated Preview Neon branch and set `DATABASE_RESOURCE_ENV=preview`. `pnpm verify:live` deploys real migrations, checks PostGIS, inserts a uniquely named transaction fixture, forces rollback, proves the row is absent, and performs best-effort cleanup. The operator is responsible for confirming the branch identity because the repository has no Neon management authority and the scope marker is not cryptographic proof of a vendor resource.
 
 ## Vercel Argon2 runtime
 
@@ -12,7 +12,7 @@ Deploy the app to a non-production Vercel environment with a 32+ character `CRON
 
 ## Vercel Private Blob
 
-Provide `BLOB_READ_WRITE_TOKEN` for an isolated non-production private store. The test uses only generated `test/live-contract/...` keys and always attempts deletion in `finally`.
+Provide `BLOB_READ_WRITE_TOKEN` for an isolated Preview private store and set `BLOB_RESOURCE_ENV=preview`. The test uses only generated `test/live-contract/...` keys and always attempts deletion in `finally`.
 
 ## Phase 2 authentication providers
 

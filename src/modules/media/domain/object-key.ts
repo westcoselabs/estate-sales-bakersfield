@@ -26,3 +26,26 @@ export function createMediaObjectKey(scope: MediaScope): MediaObjectKey {
     scope.randomName,
   ].join("/") as MediaObjectKey;
 }
+
+export function parseMediaObjectKey(value: string): MediaObjectKey {
+  const segments = value.split("/");
+  if (segments.length !== 4) {
+    throw new MediaStoreError(
+      "INVALID_SCOPE",
+      "The media object key is invalid",
+    );
+  }
+  const [environment, resourceScope, reservationId, randomName] = segments;
+  if (!environment || !resourceScope || !reservationId || !randomName) {
+    throw new MediaStoreError(
+      "INVALID_SCOPE",
+      "The media object key is invalid",
+    );
+  }
+  return createMediaObjectKey({
+    environment: environment as MediaScope["environment"],
+    resourceScope,
+    reservationId,
+    randomName,
+  });
+}

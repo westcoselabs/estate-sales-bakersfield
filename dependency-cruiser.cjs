@@ -28,9 +28,24 @@ module.exports = {
       to: { path: "^src/app" },
     },
     {
+      name: "core-layers-have-no-framework-or-provider-sdks",
+      severity: "error",
+      from: { path: "^src/modules/[^/]+/(domain|application)" },
+      to: {
+        dependencyTypes: ["npm"],
+        path: "^(next($|/)|@prisma($|/)|resend$|@upstash/redis$|@vercel/blob$|sharp$)",
+      },
+    },
+    {
+      name: "prisma-generated-is-infrastructure-only",
+      severity: "error",
+      from: { path: "^src/(app|modules/[^/]+/(domain|application))" },
+      to: { path: "^src/generated/prisma" },
+    },
+    {
       name: "vercel-blob-is-media-infrastructure-only",
       severity: "error",
-      from: { pathNot: "^src/modules/media/infrastructure" },
+      from: { pathNot: "^(src/modules/media/infrastructure|tests|scripts)" },
       to: { dependencyTypes: ["npm"], path: "^@vercel/blob$" },
     },
     {
@@ -44,6 +59,12 @@ module.exports = {
       severity: "error",
       from: { pathNot: "^src/modules/auth/infrastructure" },
       to: { dependencyTypes: ["npm"], path: "^@upstash/redis$" },
+    },
+    {
+      name: "sharp-is-media-infrastructure-only",
+      severity: "error",
+      from: { pathNot: "^src/modules/media/infrastructure" },
+      to: { dependencyTypes: ["npm"], path: "^sharp$" },
     },
   ],
   options: {

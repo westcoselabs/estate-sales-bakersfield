@@ -58,6 +58,17 @@ export class InMemoryMediaStore implements MediaStore {
     );
   }
 
+  async putPrivate(
+    key: MediaObjectKey,
+    bytes: Uint8Array,
+    contentType: string,
+  ): Promise<void> {
+    if (this.objects.has(key)) {
+      throw new MediaStoreError("PROVIDER_ERROR", "Object already exists");
+    }
+    this.putFixture(key, bytes, contentType);
+  }
+
   async delete(key: MediaObjectKey): Promise<void> {
     this.objects.delete(key);
   }

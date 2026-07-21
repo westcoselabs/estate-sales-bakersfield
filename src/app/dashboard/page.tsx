@@ -2,12 +2,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { createConfiguredSessionService, getCurrentUser } from "@/modules/auth";
+import { createConfiguredEventService } from "@/modules/events";
+import { createConfiguredOrganizerService } from "@/modules/organizers";
 
 import {
   EmailRequestForm,
   LogoutButton,
   SessionManager,
 } from "../_components/auth-forms";
+import { CreateEventForm } from "../_components/event-builder";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +34,17 @@ export default async function DashboardPage() {
     );
   }
   const sessions = await createConfiguredSessionService().list(user.id);
+  const organizer = await createConfiguredOrganizerService().getForUser(
+    user.id,
+  );
+  const events =
+    organizer?.status === "COMPLETE"
+      ? await createConfiguredEventService().list(user)
+      : [];
 
   return (
-    <main>
-      <section>
+    <main className="dashboard-shell">
+      <section className="dashboard-panel">
         <p>Account</p>
         <h1>Welcome, {user.displayName}</h1>
         <p>
@@ -48,8 +58,65 @@ export default async function DashboardPage() {
           />
         ) : null}
         <p>
-          <Link href="/dashboard/organizer">Continue organizer onboarding</Link>
+          Organizer onboarding: {organizer?.status ?? "Not started"}.{" "}
+          <Link href="/dashboard/organizer">
+            {organizer?.status === "COMPLETE"
+              ? "Review organizer profile"
+              : "Continue onboarding"}
+          </Link>
         </p>
+        {organizer?.status === "COMPLETE" ? (
+          <>
+            <div className="dashboard-heading">
+              <div>
+                <p className="eyebrow">Organizer workspace</p>
+                <h2>Your event drafts</h2>
+              </div>
+              <CreateEventForm />
+            </div>
+            {events.length ? (
+              <div className="event-grid">
+                {events.map((event) => (
+                  <article className="event-card" key={event.id}>
+                    <p className="eyebrow">
+                      {event.eventType === "ESTATE_SALE"
+                        ? "Estate sale"
+                        : "Yard sale"}
+                    </p>
+                    <h3>{event.title ?? "Untitled event"}</h3>
+                    <p>State: {event.workflowState.replaceAll("_", " ")}</p>
+                    <p>
+                      Schedule:{" "}
+                      {event.startsAt
+                        ? new Date(event.startsAt).toLocaleString()
+                        : "Not set"}
+                    </p>
+                    <p>
+                      Photos: {event.readyPhotoCount} ready; cover{" "}
+                      {event.hasReadyCover ? "ready" : "needed"}
+                    </p>
+                    <p>
+                      Approval readiness:{" "}
+                      {event.approvalReady ? "Ready" : "Incomplete"}
+                    </p>
+                    <p>Updated {new Date(event.updatedAt).toLocaleString()}</p>
+                    <p>
+                      <Link href={`/dashboard/events/${event.id}/edit`}>
+                        Continue editing
+                      </Link>
+                      {" · "}
+                      <Link href={`/dashboard/events/${event.id}/preview`}>
+                        Preview
+                      </Link>
+                    </p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p>No event drafts yet.</p>
+            )}
+          </>
+        ) : null}
         <SessionManager
           initialSessions={sessions.map((session) => ({
             ...session,

@@ -17,6 +17,30 @@ const profile = {
 };
 
 describe("OrganizerService", () => {
+  it("accepts only safe HTTP(S) organizer website links", () => {
+    const base = {
+      displayName: "Organizer",
+      contactName: "Owner",
+      contactEmail: "owner@example.test",
+      contactPhone: null,
+    };
+    expect(
+      organizerProfileSchema.safeParse({
+        ...base,
+        websiteUrl: "https://organizer.example.test/about",
+      }).success,
+    ).toBe(true);
+    for (const websiteUrl of [
+      "javascript:alert(1)",
+      "data:text/html,unsafe",
+      "https://user:password@example.test/",
+    ]) {
+      expect(
+        organizerProfileSchema.safeParse({ ...base, websiteUrl }).success,
+      ).toBe(false);
+    }
+  });
+
   it("normalizes appropriate fields and marks complete onboarding", async () => {
     const repository = {
       findByUserId: vi.fn(async () => profile),

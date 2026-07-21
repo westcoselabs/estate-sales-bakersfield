@@ -1,8 +1,7 @@
 declare const mediaObjectKeyBrand: unique symbol;
 
 export type MediaObjectKey = string & { readonly [mediaObjectKeyBrand]: true };
-export type MediaEnvironment =
-  "local" | "test" | "preview" | "staging" | "production";
+export type MediaEnvironment = "local" | "test" | "preview" | "production";
 
 export interface MediaScope {
   readonly environment: MediaEnvironment;

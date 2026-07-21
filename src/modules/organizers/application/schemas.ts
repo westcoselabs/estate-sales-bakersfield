@@ -19,7 +19,20 @@ const optionalEmail = z.preprocess(
 
 const optionalWebsite = z.preprocess(
   (value) => (value === "" || value === undefined ? null : value),
-  z.url().max(2048).nullable(),
+  z
+    .string()
+    .trim()
+    .max(2048)
+    .url()
+    .refine((value) => {
+      const url = new URL(value);
+      return (
+        ["http:", "https:"].includes(url.protocol) &&
+        !url.username &&
+        !url.password
+      );
+    }, "Website URL must use HTTP or HTTPS without credentials")
+    .nullable(),
 );
 
 export const organizerProfileSchema = z.object({

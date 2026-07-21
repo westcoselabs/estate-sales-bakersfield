@@ -59,6 +59,22 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: "location-contract",
+          environment: "node",
+          include: ["tests/contract/location/**/*.test.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "image-contract",
+          environment: "node",
+          include: ["tests/contract/image/**/*.test.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: "blob-live",
           environment: "node",
           include: ["tests/live/blob/**/*.test.ts"],

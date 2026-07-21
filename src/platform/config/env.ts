@@ -1,10 +1,11 @@
 import { z } from "zod";
 
-const appEnvironmentSchema = z.enum([
+const appEnvironmentSchema = z.enum(["local", "test", "preview", "production"]);
+
+const providerEnvironmentSchema = z.enum([
   "local",
   "test",
   "preview",
-  "staging",
   "production",
 ]);
 
@@ -49,9 +50,29 @@ export const serverEnvironmentSchema = z
       "debug",
       "trace",
     ]),
-    DATABASE_DRIVER: z.enum(["pg", "neon"]).default("pg"),
     DATABASE_URL: optionalUrl,
     DIRECT_URL: optionalUrl,
+    DATABASE_RESOURCE_ENV: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      providerEnvironmentSchema.optional(),
+    ),
+    TEST_DATABASE_URL: optionalUrl,
+    TEST_DIRECT_URL: optionalUrl,
+    TEST_NEON_ENDPOINT_ID: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z
+        .string()
+        .regex(/^ep-[a-z0-9-]{6,80}$/)
+        .optional(),
+    ),
+    TEST_DATABASE_CONFIRMATION: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().max(100).optional(),
+    ),
+    TEST_DATABASE_RESET_CONFIRMATION: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().max(100).optional(),
+    ),
     CRON_SECRET: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z.string().min(32).optional(),
@@ -59,6 +80,10 @@ export const serverEnvironmentSchema = z
     BLOB_READ_WRITE_TOKEN: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z.string().min(1).optional(),
+    ),
+    BLOB_RESOURCE_ENV: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      providerEnvironmentSchema.optional(),
     ),
     AUTH_FINGERPRINT_SECRET: z.preprocess(
       (value) => (value === "" ? undefined : value),
@@ -69,6 +94,10 @@ export const serverEnvironmentSchema = z
       (value) => (value === "" ? undefined : value),
       z.string().min(1).optional(),
     ),
+    UPSTASH_RESOURCE_ENV: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      providerEnvironmentSchema.optional(),
+    ),
     RESEND_API_KEY: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z.string().min(1).optional(),
@@ -77,14 +106,38 @@ export const serverEnvironmentSchema = z
       (value) => (value === "" ? undefined : value),
       z.string().min(3).max(320).optional(),
     ),
+    RESEND_RESOURCE_ENV: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      providerEnvironmentSchema.optional(),
+    ),
     AUTH_EMAIL_CAPTURE_PATH: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z.string().min(1).optional(),
     ),
+    TEST_MEDIA_ROOT: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(1).optional(),
+    ),
+    TEST_MEDIA_SIGNING_SECRET: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(32).optional(),
+    ),
+    TEST_LOCATION_FIXTURES: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(1).max(100).optional(),
+    ),
+    MAPBOX_ACCESS_TOKEN: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(1).optional(),
+    ),
+    MAPBOX_RESOURCE_ENV: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      providerEnvironmentSchema.optional(),
+    ),
     SENTRY_DSN: optionalUrl,
   })
   .superRefine((environment, context) => {
-    if (["preview", "staging", "production"].includes(environment.APP_ENV)) {
+    if (["preview", "production"].includes(environment.APP_ENV)) {
       if (new URL(environment.APP_URL).protocol !== "https:") {
         context.addIssue({
           code: "custom",
@@ -92,15 +145,6 @@ export const serverEnvironmentSchema = z
           path: ["APP_URL"],
         });
       }
-      if (environment.DATABASE_DRIVER !== "neon") {
-        context.addIssue({
-          code: "custom",
-          message:
-            "DATABASE_DRIVER must be neon outside local and test environments",
-          path: ["DATABASE_DRIVER"],
-        });
-      }
-
       for (const key of [
         "DATABASE_URL",
         "DIRECT_URL",
@@ -129,6 +173,28 @@ export const serverEnvironmentSchema = z
       }
     }
 
+    if (["preview", "production"].includes(environment.APP_ENV)) {
+      const configuredProviders = [
+        ["DATABASE_URL", "DATABASE_RESOURCE_ENV"],
+        ["BLOB_READ_WRITE_TOKEN", "BLOB_RESOURCE_ENV"],
+        ["UPSTASH_REDIS_REST_URL", "UPSTASH_RESOURCE_ENV"],
+        ["RESEND_API_KEY", "RESEND_RESOURCE_ENV"],
+        ["MAPBOX_ACCESS_TOKEN", "MAPBOX_RESOURCE_ENV"],
+      ] as const;
+      for (const [credential, marker] of configuredProviders) {
+        if (
+          environment[credential] &&
+          environment[marker] !== environment.APP_ENV
+        ) {
+          context.addIssue({
+            code: "custom",
+            message: `${marker} must match APP_ENV when ${credential} is configured`,
+            path: [marker],
+          });
+        }
+      }
+    }
+
     if (
       environment.AUTH_EMAIL_CAPTURE_PATH &&
       !["local", "test"].includes(environment.APP_ENV)
@@ -138,6 +204,17 @@ export const serverEnvironmentSchema = z
         message:
           "AUTH_EMAIL_CAPTURE_PATH is permitted only in local or test environments",
         path: ["AUTH_EMAIL_CAPTURE_PATH"],
+      });
+    }
+
+    if (
+      environment.APP_ENV !== "test" &&
+      (environment.TEST_MEDIA_ROOT || environment.TEST_MEDIA_SIGNING_SECRET)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Test media configuration is permitted only in APP_ENV=test",
+        path: ["TEST_MEDIA_ROOT"],
       });
     }
   });

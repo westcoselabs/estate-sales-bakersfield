@@ -1,6 +1,6 @@
 # Phase 2 Testing and Migration
 
-## Local commands
+## Commands
 
 ```text
 pnpm format:check
@@ -18,33 +18,14 @@ pnpm test:e2e
 pnpm verify
 ```
 
-Unit and contract tests require no provider credentials. Integration and Playwright tests start disposable `postgis/postgis:16-3.5-alpine` databases and therefore require a Docker-compatible runtime. If that prerequisite is absent, the result is `BLOCKED`, not `PASS`.
+Unit and provider-contract tests require no external credentials. Integration and Playwright tests use only the persistent isolated Test Neon branch. They require the guards in `.env.test.local`; absent Test credentials are `BLOCKED`, not `PASS`.
 
-Playwright runs the production build with `APP_ENV=test`, a test-only rate limiter, and a file capture email adapter under `.tmp/`. The captured links are available only to the test runner; no test endpoint exposes tokens.
+Playwright starts the production build with `APP_ENV=test`, a capture email adapter, deterministic rate limiter, filesystem media confined to `.tmp`, deterministic Bakersfield location fixtures, and unique run-owned users. Test-only seams hard-fail outside `APP_ENV=test`. No provider email is sent.
 
-## Migration
+## Migrations
 
-Phase 2 adds `20260717000000_phase2_auth_and_organizers`. Apply migrations with:
+Phase 2 adds `20260717000000_phase2_auth_and_organizers`. Apply migrations with `pnpm db:migrate:deploy`; never use `prisma db push`. The Test Neon runner applies committed migrations in order. A clean destructive replay requires the explicit reset confirmation documented in [Test Neon operations](../operations/test-neon.md).
 
-```text
-pnpm db:migrate:deploy
-```
+## Provider configuration
 
-Never use `prisma db push`. Migration replay is exercised by the disposable integration database. Preview migrations must use only the isolated Preview Neon connection and the existing production hard-fail guards.
-
-## Environment placeholders
-
-```text
-AUTH_FINGERPRINT_SECRET=<environment-specific 32+ character secret>
-UPSTASH_REDIS_REST_URL=<isolated environment REST URL>
-UPSTASH_REDIS_REST_TOKEN=<isolated environment token>
-RESEND_API_KEY=<environment-specific API key>
-RESEND_FROM=<verified sender identity>
-AUTH_EMAIL_CAPTURE_PATH=<local/test only, inside .tmp; unset when deployed>
-```
-
-`UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` and `RESEND_API_KEY`/`RESEND_FROM` must be configured as pairs. Local/test authentication uses only the file capture adapter; Resend is selected only in Preview, staging, or Production. Preview email links require the validated active Vercel Preview host and fail closed without it. Production credentials must never be loaded for Preview verification.
-
-## Preview checks
-
-Before any live command, confirm `APP_ENV=preview` without printing secret values. Use only Preview Neon, Upstash, Resend, Blob, and Vercel resources. A live email test requires an explicitly approved recipient or provider test mode. Missing Preview provider credentials are recorded as `BLOCKED`; credential-free results remain valid.
+Upstash and Resend credential pairs are selected only for deployed environments. Preview credentials require matching `UPSTASH_RESOURCE_ENV=preview` and `RESEND_RESOURCE_ENV=preview` markers. Local/test email remains capture-only. Preview email links require the validated active Vercel Preview host. Production credentials must never be loaded into Preview or Test verification.

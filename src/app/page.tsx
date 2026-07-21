@@ -5,10 +5,10 @@ export default function HomePage() {
     <main>
       <section aria-labelledby="foundation-title">
         <p>Estate &amp; Yard Sale Directory</p>
-        <h1 id="foundation-title">Organizer accounts are ready.</h1>
+        <h1 id="foundation-title">Build your Bakersfield sale listing.</h1>
         <p>
-          Create an account and complete your organizer profile. Event
-          publishing begins in the next product phase.
+          Create an account, verify your email, complete your organizer profile,
+          and prepare an exact event draft for future payment.
         </p>
         <p>
           <Link href="/signup">Create an account</Link> or{" "}

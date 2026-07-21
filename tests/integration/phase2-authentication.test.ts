@@ -21,6 +21,7 @@ import { organizerProfileSchema } from "@/modules/organizers/application/schemas
 import { PrismaOrganizerProfileRepository } from "@/modules/organizers/infrastructure/prisma-organizer-profile-repository";
 
 import { createIntegrationClient } from "./support/database";
+import { testEmail } from "./support/test-run";
 
 const prisma = createIntegrationClient();
 const tokenProvider = new CryptoOpaqueTokenProvider();
@@ -69,7 +70,7 @@ afterAll(async () => {
 describe("Phase 2 authentication persistence", () => {
   it("registers transactionally, stores token hashes, and resists a duplicate race", async () => {
     const { email, workflow } = fixture();
-    const normalizedEmail = `registration-${crypto.randomUUID()}@example.test`;
+    const normalizedEmail = testEmail("registration");
     const input = {
       displayName: "Registration fixture",
       email: normalizedEmail,
@@ -120,7 +121,7 @@ describe("Phase 2 authentication persistence", () => {
       new HmacPrivacyFingerprint("phase-two-integration-fingerprint-secret"),
       new URL("https://integration.example.test"),
     );
-    const normalizedEmail = `delivery-failure-${crypto.randomUUID()}@example.test`;
+    const normalizedEmail = testEmail("delivery-failure");
 
     await expect(
       failingWorkflow.register({
@@ -166,7 +167,7 @@ describe("Phase 2 authentication persistence", () => {
 
   it("verifies once, rotates a matching session, and audits a repeated rejection", async () => {
     const { email, workflow } = fixture();
-    const normalizedEmail = `verification-${crypto.randomUUID()}@example.test`;
+    const normalizedEmail = testEmail("verification");
     const password = "phase-two-verification-password";
     await workflow.register({
       displayName: "Verification fixture",
@@ -205,7 +206,7 @@ describe("Phase 2 authentication persistence", () => {
 
   it("allows only one concurrent verification-token consumer", async () => {
     const { accounts, email, workflow } = fixture();
-    const normalizedEmail = `verify-race-${crypto.randomUUID()}@example.test`;
+    const normalizedEmail = testEmail("verify-race");
     await workflow.register({
       displayName: "Verification race",
       email: normalizedEmail,
@@ -223,7 +224,7 @@ describe("Phase 2 authentication persistence", () => {
 
   it("keeps verification and reset issuance races generic with one active token", async () => {
     const { accounts, workflow } = fixture();
-    const normalizedEmail = `issue-race-${crypto.randomUUID()}@example.test`;
+    const normalizedEmail = testEmail("issue-race");
     await workflow.register({
       displayName: "Issue race",
       email: normalizedEmail,
@@ -294,7 +295,7 @@ describe("Phase 2 authentication persistence", () => {
 
   it("rolls verification back when atomic session replacement fails", async () => {
     const { accounts, email, workflow } = fixture();
-    const normalizedEmail = `verify-rollback-${crypto.randomUUID()}@example.test`;
+    const normalizedEmail = testEmail("verify-rollback");
     const password = "phase-two-verification-rollback-password";
     await workflow.register({
       displayName: "Verification rollback",
@@ -333,7 +334,7 @@ describe("Phase 2 authentication persistence", () => {
 
   it("invalidates replaced verification tokens and does not issue for a verified account", async () => {
     const { email, workflow } = fixture();
-    const normalizedEmail = `resend-${crypto.randomUUID()}@example.test`;
+    const normalizedEmail = testEmail("resend");
     await workflow.register({
       displayName: "Resend fixture",
       email: normalizedEmail,
@@ -380,7 +381,7 @@ describe("Phase 2 authentication persistence", () => {
 
   it("rejects an expired reset token and preserves its single-use state", async () => {
     const { email, workflow } = fixture();
-    const normalizedEmail = `expired-reset-${crypto.randomUUID()}@example.test`;
+    const normalizedEmail = testEmail("expired-reset");
     await workflow.register({
       displayName: "Expired reset fixture",
       email: normalizedEmail,
@@ -411,7 +412,7 @@ describe("Phase 2 authentication persistence", () => {
 
   it("consumes one reset token and revokes every existing session transactionally", async () => {
     const { email, workflow } = fixture();
-    const normalizedEmail = `reset-${crypto.randomUUID()}@example.test`;
+    const normalizedEmail = testEmail("reset");
     const password = "phase-two-before-reset-password";
     await workflow.register({
       displayName: "Reset fixture",
@@ -453,7 +454,7 @@ describe("Phase 2 authentication persistence", () => {
 
   it("keeps restricted account login generic", async () => {
     const { workflow } = fixture();
-    const normalizedEmail = `restricted-${crypto.randomUUID()}@example.test`;
+    const normalizedEmail = testEmail("restricted");
     const password = "phase-two-restricted-password";
     await workflow.register({
       displayName: "Restricted fixture",
@@ -473,8 +474,8 @@ describe("Phase 2 authentication persistence", () => {
 
 describe("Phase 2 organizer ownership", () => {
   it("enforces one user-owned profile and cannot mutate another user's profile", async () => {
-    const firstEmail = `first-${crypto.randomUUID()}@example.test`;
-    const secondEmail = `second-${crypto.randomUUID()}@example.test`;
+    const firstEmail = testEmail("first-owner");
+    const secondEmail = testEmail("second-owner");
     const first = await prisma.user.create({
       data: {
         displayName: "First owner",

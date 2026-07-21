@@ -117,6 +117,22 @@ describe("MediaStore credential-free contract", () => {
     });
   });
 
+  it("stores immutable private processed variants through the neutral boundary", async () => {
+    const store = new InMemoryMediaStore();
+    const key = createMediaObjectKey({
+      ...fixtureScope,
+      randomName: "variant.webp",
+    });
+    await store.putPrivate(key, Uint8Array.of(7, 8, 9), "image/webp");
+    await expect(store.inspect(key)).resolves.toMatchObject({
+      size: 3,
+      contentType: "image/webp",
+    });
+    await expect(
+      store.putPrivate(key, Uint8Array.of(1), "image/webp"),
+    ).rejects.toMatchObject({ code: "PROVIDER_ERROR" });
+  });
+
   it("isolates Vercel SDK types and imports to the single infrastructure adapter", async () => {
     const root = path.resolve(process.cwd(), "src");
     const files = (await sourceFiles(root)).filter((file) =>

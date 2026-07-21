@@ -5,21 +5,26 @@ import { PrismaNeon } from "@prisma/adapter-neon";
 import { PrismaClient } from "../src/generated/prisma/client";
 
 const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl || !process.env.DIRECT_URL) {
+if (process.env.APP_ENV !== "preview") {
   process.stderr.write(
-    "BLOCKED: DATABASE_URL and DIRECT_URL are required for live Neon verification.\n",
+    "BLOCKED: live Neon verification requires APP_ENV=preview.\n",
   );
   process.exitCode = 2;
-} else if (process.env.APP_ENV === "production") {
+} else if (process.env.DATABASE_RESOURCE_ENV !== "preview") {
   process.stderr.write(
-    "BLOCKED: live Neon verification may not target APP_ENV=production.\n",
+    "BLOCKED: live Neon verification requires DATABASE_RESOURCE_ENV=preview.\n",
+  );
+  process.exitCode = 2;
+} else if (!databaseUrl || !process.env.DIRECT_URL) {
+  process.stderr.write(
+    "BLOCKED: DATABASE_URL and DIRECT_URL are required for live Neon verification.\n",
   );
   process.exitCode = 2;
 } else {
   const prisma = new PrismaClient({
     adapter: new PrismaNeon({ connectionString: databaseUrl }),
   });
-  const marker = `phase2-live-${crypto.randomUUID()}@example.test`;
+  const marker = `preview-live-${crypto.randomUUID()}@example.test`;
   const fixtureHash = (purpose: string) =>
     createHash("sha256").update(`${marker}:${purpose}`).digest("hex");
   try {

@@ -1,0 +1,124 @@
+import { ZodError } from "zod";
+
+import { AuthenticationError, AuthorizationError } from "@/modules/auth";
+import {
+  EventConflictError,
+  EventNotFoundError,
+  EventStateError,
+  EventValidationError,
+  OrganizerOnboardingRequiredError,
+  PhotoProcessingError,
+} from "@/modules/events";
+import {
+  LocationNotFoundError,
+  LocationProviderError,
+} from "@/modules/locations";
+import { MediaStoreError } from "@/modules/media";
+import { requestIdFrom } from "@/platform/http/request-context";
+import { logger } from "@/platform/observability/logger";
+import { TrustedOriginError } from "@/platform/security/trusted-origin";
+
+import { authJson } from "../auth/_shared";
+
+export function eventApiError(
+  error: unknown,
+  request: Request,
+  operation: string,
+) {
+  const requestId = requestIdFrom(request);
+  if (
+    error instanceof ZodError ||
+    error instanceof SyntaxError ||
+    error instanceof EventValidationError
+  ) {
+    return authJson(
+      {
+        error:
+          error instanceof EventValidationError
+            ? error.message
+            : "Please check the submitted event information.",
+        requestId,
+      },
+      { status: 400, requestId },
+    );
+  }
+  if (error instanceof AuthenticationError) {
+    return authJson(
+      { error: "Authentication is required.", requestId },
+      { status: 401, requestId },
+    );
+  }
+  if (error instanceof AuthorizationError) {
+    return authJson(
+      { error: "You do not have access to this action.", requestId },
+      { status: 403, requestId },
+    );
+  }
+  if (error instanceof OrganizerOnboardingRequiredError) {
+    return authJson(
+      { error: error.message, requestId },
+      { status: 409, requestId },
+    );
+  }
+  if (error instanceof EventNotFoundError) {
+    return authJson(
+      { error: "The event draft was not found.", requestId },
+      { status: 404, requestId },
+    );
+  }
+  if (error instanceof EventConflictError) {
+    return authJson(
+      { error: error.message, code: "STALE_VERSION", requestId },
+      { status: 409, requestId },
+    );
+  }
+  if (error instanceof EventStateError) {
+    return authJson(
+      { error: error.message, requestId },
+      { status: 422, requestId },
+    );
+  }
+  if (
+    error instanceof PhotoProcessingError ||
+    error instanceof LocationNotFoundError
+  ) {
+    return authJson(
+      { error: error.message, requestId },
+      { status: 422, requestId },
+    );
+  }
+  if (
+    error instanceof LocationProviderError ||
+    error instanceof MediaStoreError
+  ) {
+    logger.warn(
+      { requestId, operation, errorType: error.name },
+      "Event provider operation failed",
+    );
+    return authJson(
+      {
+        error: "This provider operation is temporarily unavailable.",
+        requestId,
+      },
+      { status: 503, requestId },
+    );
+  }
+  if (error instanceof TrustedOriginError) {
+    return authJson(
+      { error: "The request origin was rejected.", requestId },
+      { status: 403, requestId },
+    );
+  }
+  logger.error(
+    {
+      requestId,
+      operation,
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    },
+    "Unexpected event request failure",
+  );
+  return authJson(
+    { error: "An unexpected error occurred.", requestId },
+    { status: 500, requestId },
+  );
+}

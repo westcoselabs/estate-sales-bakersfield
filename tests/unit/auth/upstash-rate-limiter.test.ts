@@ -38,7 +38,7 @@ describe("UpstashRateLimiter", () => {
 
   it("fails closed when the distributed provider is unavailable", async () => {
     const limiter = new UpstashRateLimiter({
-      environment: "staging",
+      environment: "preview",
       url: "https://example.test",
       token: "test-token",
       client: {
