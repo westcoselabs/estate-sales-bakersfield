@@ -49,6 +49,7 @@ function runProviderNeutralContract(
     const expectedKey =
       "test/contract-fixture/reservation-opaque-123/fixture-abc123.jpg";
     expect(authorization).toMatchObject({
+      transport: "test-direct",
       objectKey: expectedKey,
       method: "PUT",
       expiresAt,
@@ -133,19 +134,34 @@ describe("MediaStore credential-free contract", () => {
     ).rejects.toMatchObject({ code: "PROVIDER_ERROR" });
   });
 
-  it("isolates Vercel SDK types and imports to the single infrastructure adapter", async () => {
+  it("isolates Vercel SDK imports to the bounded media adapters", async () => {
     const root = path.resolve(process.cwd(), "src");
     const files = (await sourceFiles(root)).filter((file) =>
       /\.[cm]?[jt]sx?$/.test(file),
     );
+    const allowed = new Set([
+      path.join("src", "modules", "media", "client", "upload.ts"),
+      path.join(
+        "src",
+        "modules",
+        "media",
+        "infrastructure",
+        "vercel-blob-media-store.ts",
+      ),
+      path.join(
+        "src",
+        "modules",
+        "media",
+        "infrastructure",
+        "vercel-client-upload.ts",
+      ),
+    ]);
     const offenders: string[] = [];
     for (const file of files) {
       const source = await readFile(file, "utf8");
       if (
         source.includes("@vercel/blob") &&
-        !file.endsWith(
-          path.join("media", "infrastructure", "vercel-blob-media-store.ts"),
-        )
+        !allowed.has(path.relative(process.cwd(), file))
       ) {
         offenders.push(path.relative(process.cwd(), file));
       }

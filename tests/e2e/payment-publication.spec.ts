@@ -112,7 +112,6 @@ async function buildApprovedEvent(
     mimeType: "image/jpeg",
     buffer: image,
   });
-  await page.getByRole("button", { name: "Upload selected photos" }).click();
   await expect(page.getByText("Status: READY")).toBeVisible({
     timeout: 30_000,
   });

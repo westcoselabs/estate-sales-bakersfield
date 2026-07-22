@@ -188,9 +188,23 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       contentType: "image/jpeg",
     });
     event = reservation.event;
-    const objectKey = parseMediaObjectKey(
-      decodeURIComponent(new URL(reservation.uploadUrl).pathname.slice(1)),
-    );
+    const objectKey = parseMediaObjectKey(reservation.uploadPathname);
+    await expect(
+      service.authorizePhotoUpload(owner, event.id, {
+        expectedVersion: event.version,
+        reservationId: reservation.reservationId,
+        photoId: reservation.photoId,
+        pathname: reservation.uploadPathname,
+      }),
+    ).resolves.toMatchObject({ contentType: "image/jpeg" });
+    await expect(
+      service.authorizePhotoUpload(owner, event.id, {
+        expectedVersion: event.version,
+        reservationId: reservation.reservationId,
+        photoId: reservation.photoId,
+        pathname: `${reservation.uploadPathname}-different`,
+      }),
+    ).rejects.toThrow("invalid or expired");
     const source = await sharp({
       create: {
         width: 1000,
@@ -203,6 +217,13 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       .jpeg()
       .toBuffer();
     await media.putPrivate(objectKey, source, "image/jpeg");
+    await expect(
+      service.finalizePhoto(owner, event.id, reservation.photoId, {
+        expectedVersion: event.version,
+        reservationId: reservation.reservationId,
+        pathname: `${reservation.uploadPathname}-different`,
+      }),
+    ).rejects.toThrow("invalid or expired");
     event = await service.finalizePhoto(
       owner,
       event.id,
@@ -210,6 +231,7 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       {
         expectedVersion: event.version,
         reservationId: reservation.reservationId,
+        pathname: reservation.uploadPathname,
       },
       { requestId: "phase3-photo" },
     );
@@ -222,9 +244,7 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
     });
     event = secondReservation.event;
     const secondObjectKey = parseMediaObjectKey(
-      decodeURIComponent(
-        new URL(secondReservation.uploadUrl).pathname.slice(1),
-      ),
+      secondReservation.uploadPathname,
     );
     await media.putPrivate(secondObjectKey, source, "image/jpeg");
     event = await service.finalizePhoto(
@@ -234,6 +254,7 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       {
         expectedVersion: event.version,
         reservationId: secondReservation.reservationId,
+        pathname: secondReservation.uploadPathname,
       },
       { requestId: "phase3-photo-second" },
     );
@@ -247,9 +268,7 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
     });
     event = failedReservation.event;
     const failedObjectKey = parseMediaObjectKey(
-      decodeURIComponent(
-        new URL(failedReservation.uploadUrl).pathname.slice(1),
-      ),
+      failedReservation.uploadPathname,
     );
     await media.putPrivate(
       failedObjectKey,
@@ -260,6 +279,7 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       service.finalizePhoto(owner, event.id, failedReservation.photoId, {
         expectedVersion: event.version,
         reservationId: failedReservation.reservationId,
+        pathname: failedReservation.uploadPathname,
       }),
     ).rejects.toThrow("image could not be processed safely");
     event = await service.get(owner, event.id);

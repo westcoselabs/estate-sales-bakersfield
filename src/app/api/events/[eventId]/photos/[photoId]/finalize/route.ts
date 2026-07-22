@@ -4,6 +4,7 @@ import {
   photoFinalizationSchema,
 } from "@/modules/events";
 import { requestIdFrom } from "@/platform/http/request-context";
+import { logger } from "@/platform/observability/logger";
 
 import {
   assertAuthenticationOrigin,
@@ -28,6 +29,10 @@ export async function POST(request: Request, context: Context) {
       photoId,
       input,
       { requestId },
+    );
+    logger.info(
+      { requestId, operation: "events.finalize-photo" },
+      "Event photo finalized as READY",
     );
     return authJson({ event, requestId }, { requestId });
   } catch (error) {

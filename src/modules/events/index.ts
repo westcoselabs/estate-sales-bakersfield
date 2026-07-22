@@ -12,6 +12,7 @@ export {
   eventScheduleSchema,
   eventTypeSchema,
   photoFinalizationSchema,
+  photoUploadClientPayloadSchema,
   photoMutationSchema,
   photoOrderSchema,
   photoReservationSchema,

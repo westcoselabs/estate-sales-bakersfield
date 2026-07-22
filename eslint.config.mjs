@@ -55,6 +55,27 @@ export default defineConfig([
       "no-restricted-imports": "off",
     },
   },
+  {
+    files: ["src/app/_components/event-builder.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/modules/*/*", "!@/modules/media/client"],
+              message:
+                "Import another feature through its public module entry point.",
+            },
+            {
+              group: ["@/generated/prisma", "@/generated/prisma/*"],
+              message: "Generated database types are infrastructure-only.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   globalIgnores([
     ".next/**",
     "coverage/**",

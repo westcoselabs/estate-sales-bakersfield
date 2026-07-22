@@ -12,8 +12,6 @@ const provider = vi.hoisted(() => ({
   del: vi.fn(),
   get: vi.fn(),
   head: vi.fn(),
-  issueSignedToken: vi.fn(),
-  presignUrl: vi.fn(),
 }));
 
 vi.mock("@vercel/blob", async () => {
@@ -30,14 +28,7 @@ describe("VercelBlobMediaStore error and input mapping", () => {
     vi.clearAllMocks();
   });
 
-  it("maps application authorization input into a private provider request", async () => {
-    provider.issueSignedToken.mockResolvedValue({
-      clientSigningToken: "client-token",
-      delegationToken: "delegation-token",
-    });
-    provider.presignUrl.mockResolvedValue({
-      presignedUrl: "https://blob.example.test/private-upload",
-    });
+  it("allocates a bounded pathname for the supported client upload flow", async () => {
     const store = new VercelBlobMediaStore("non-production-test-token");
     const expiresAt = new Date("2026-07-16T12:10:00.000Z");
 
@@ -54,26 +45,12 @@ describe("VercelBlobMediaStore error and input mapping", () => {
         expiresAt,
       }),
     ).resolves.toMatchObject({
+      transport: "vercel-client",
       objectKey: "test/fixture-resource/opaque-reservation/random.jpg",
-      method: "PUT",
-      headers: {
-        "x-vercel-blob-access": "private",
-        "x-content-type": "image/jpeg",
-        "x-add-random-suffix": "0",
-        "x-allow-overwrite": "0",
-      },
+      expiresAt,
     });
-    expect(provider.issueSignedToken).toHaveBeenCalledWith(
-      expect.objectContaining({
-        pathname: "test/fixture-resource/opaque-reservation/random.jpg",
-        operations: ["put"],
-        maximumSizeInBytes: 1024,
-      }),
-    );
-    expect(provider.presignUrl).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ access: "private", addRandomSuffix: false }),
-    );
+    expect(provider.del).not.toHaveBeenCalled();
+    expect(provider.head).not.toHaveBeenCalled();
   });
 
   it("maps provider not-found responses to null metadata", async () => {

@@ -115,6 +115,7 @@ export class TestFileMediaStore implements MediaStore {
       signedValue(this.secret, objectKey, expires, maximumSize, contentTypes),
     );
     return {
+      transport: "test-direct",
       objectKey,
       uploadUrl,
       method: "PUT",

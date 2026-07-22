@@ -429,12 +429,34 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
       buffer: image,
     },
   ]);
-  await page.getByRole("button", { name: "Upload selected photos" }).click();
+  await expect(
+    page.getByRole("button", { name: "Upload selected photos" }),
+  ).toHaveCount(0);
   await expect(page.getByText("Status: READY")).toHaveCount(2, {
     timeout: 30_000,
   });
   await page.getByRole("button", { name: "Make photo 1 cover" }).click();
   await expect(page.getByText("Photo changes saved.")).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Review, approval and payment" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Photos" }).click();
+  await expect(page.getByText("Status: READY")).toHaveCount(2);
+  await page.getByLabel(/Event photos/).setInputFiles({
+    name: "not-an-image.gif",
+    mimeType: "image/gif",
+    buffer: Buffer.from("not-an-image"),
+  });
+  await expect(
+    page.getByText(
+      "The new upload failed. Your existing cover and ready photos are unchanged.",
+    ),
+  ).toBeVisible();
+  await expect(page.getByText("Status: READY")).toHaveCount(2);
+  await expect(
+    page.getByRole("button", { name: "Save and continue" }),
+  ).toBeEnabled();
   await page.getByRole("button", { name: "Save and continue" }).click();
 
   await page.getByRole("link", { name: "Open exact listing preview" }).click();

@@ -134,16 +134,28 @@ export interface EventPhotoDto {
   };
 }
 
-export interface EventPhotoReservationDto {
+interface EventPhotoReservationBaseDto {
   readonly event: EventEditorDto;
   readonly photoId: string;
   readonly reservationId: string;
-  readonly uploadUrl: string;
-  readonly method: "PUT";
-  readonly uploadHeaders: Readonly<Record<string, string>>;
+  readonly uploadPathname: string;
   readonly expiresAt: string;
   readonly maximumSizeInBytes: number;
 }
+
+export interface VercelClientPhotoReservationDto extends EventPhotoReservationBaseDto {
+  readonly transport: "vercel-client";
+}
+
+export interface TestDirectPhotoReservationDto extends EventPhotoReservationBaseDto {
+  readonly transport: "test-direct";
+  readonly uploadUrl: string;
+  readonly method: "PUT";
+  readonly uploadHeaders: Readonly<Record<string, string>>;
+}
+
+export type EventPhotoReservationDto =
+  VercelClientPhotoReservationDto | TestDirectPhotoReservationDto;
 
 export interface EventEditorDto {
   readonly id: string;

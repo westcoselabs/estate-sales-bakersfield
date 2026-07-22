@@ -61,6 +61,13 @@ export const photoReservationSchema = z.object({
 export const photoFinalizationSchema = z.object({
   expectedVersion: expectedVersionSchema,
   reservationId: z.uuid(),
+  pathname: z.string().min(1).max(500),
+});
+
+export const photoUploadClientPayloadSchema = z.object({
+  expectedVersion: expectedVersionSchema,
+  reservationId: z.uuid(),
+  photoId: z.uuid(),
 });
 
 export const photoOrderSchema = z.object({

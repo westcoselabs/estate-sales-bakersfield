@@ -22,6 +22,7 @@ export class InMemoryMediaStore implements MediaStore {
   ): Promise<UploadAuthorization> {
     const objectKey = createMediaObjectKey(input.scope);
     return {
+      transport: "test-direct",
       objectKey,
       uploadUrl: new URL(`https://upload.example.test/${objectKey}`),
       method: "PUT",

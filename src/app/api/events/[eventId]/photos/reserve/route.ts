@@ -4,6 +4,7 @@ import {
   photoReservationSchema,
 } from "@/modules/events";
 import { requestIdFrom } from "@/platform/http/request-context";
+import { logger } from "@/platform/observability/logger";
 
 import {
   assertAuthenticationOrigin,
@@ -27,6 +28,14 @@ export async function POST(request: Request, context: Context) {
       eventId,
       input,
       { requestId },
+    );
+    logger.info(
+      {
+        requestId,
+        operation: "events.reserve-photo",
+        transport: reservation.transport,
+      },
+      "Event photo reservation created",
     );
     return authJson({ reservation, requestId }, { status: 201, requestId });
   } catch (error) {

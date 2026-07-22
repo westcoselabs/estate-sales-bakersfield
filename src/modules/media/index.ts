@@ -9,6 +9,10 @@ export type {
 } from "./application/image-processor";
 export { VercelBlobMediaStore } from "./infrastructure/vercel-blob-media-store";
 export {
+  handleVercelClientUpload,
+  type VercelClientUploadAuthorization,
+} from "./infrastructure/vercel-client-upload";
+export {
   createConfiguredImageProcessor,
   createConfiguredMediaStore,
   createConfiguredTestMediaStore,

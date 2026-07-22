@@ -94,41 +94,11 @@ export class VercelBlobMediaStore implements MediaStore {
     input: UploadAuthorizationInput,
   ): Promise<UploadAuthorization> {
     const objectKey = createMediaObjectKey(input.scope);
-    try {
-      const signedToken = await issueSignedToken({
-        token: this.token,
-        pathname: objectKey,
-        operations: ["put"],
-        validUntil: input.expiresAt.getTime(),
-        allowedContentTypes: [...input.allowedContentTypes],
-        maximumSizeInBytes: input.maximumSizeInBytes,
-      });
-      const { presignedUrl } = await presignUrl(signedToken, {
-        access: "private",
-        operation: "put",
-        pathname: objectKey,
-        validUntil: input.expiresAt.getTime(),
-        allowedContentTypes: [...input.allowedContentTypes],
-        maximumSizeInBytes: input.maximumSizeInBytes,
-        addRandomSuffix: false,
-        allowOverwrite: false,
-      });
-      return {
-        objectKey,
-        uploadUrl: new URL(presignedUrl),
-        method: "PUT",
-        headers: {
-          "x-vercel-blob-access": "private",
-          "x-content-type":
-            input.allowedContentTypes[0] ?? "application/octet-stream",
-          "x-add-random-suffix": "0",
-          "x-allow-overwrite": "0",
-        },
-        expiresAt: input.expiresAt,
-      };
-    } catch (error) {
-      throw mapProviderError(error);
-    }
+    return {
+      transport: "vercel-client",
+      objectKey,
+      expiresAt: input.expiresAt,
+    };
   }
 
   async inspect(key: MediaObjectKey): Promise<MediaObjectMetadata | null> {

@@ -17,13 +17,24 @@ export interface UploadAuthorizationInput {
   readonly expiresAt: Date;
 }
 
-export interface UploadAuthorization {
+interface UploadAuthorizationBase {
   readonly objectKey: MediaObjectKey;
+  readonly expiresAt: Date;
+}
+
+export interface VercelClientUploadAuthorization extends UploadAuthorizationBase {
+  readonly transport: "vercel-client";
+}
+
+export interface TestDirectUploadAuthorization extends UploadAuthorizationBase {
+  readonly transport: "test-direct";
   readonly uploadUrl: URL;
   readonly method: "PUT";
   readonly headers: Readonly<Record<string, string>>;
-  readonly expiresAt: Date;
 }
+
+export type UploadAuthorization =
+  VercelClientUploadAuthorization | TestDirectUploadAuthorization;
 
 export interface MediaObjectMetadata {
   readonly objectKey: MediaObjectKey;

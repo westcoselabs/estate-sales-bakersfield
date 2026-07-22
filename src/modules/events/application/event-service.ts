@@ -333,18 +333,77 @@ export class EventService {
         audit,
       }),
     );
+    const upload =
+      authorization.transport === "vercel-client"
+        ? ({
+            transport: "vercel-client" as const,
+          } as const)
+        : ({
+            transport: "test-direct" as const,
+            uploadUrl: authorization.uploadUrl.toString(),
+            method: authorization.method,
+            uploadHeaders: {
+              ...authorization.headers,
+              "x-content-type": input.contentType,
+            },
+          } as const);
     return {
       event: toEventEditorDto(event),
       photoId,
       reservationId,
-      uploadUrl: authorization.uploadUrl.toString(),
-      method: authorization.method,
-      uploadHeaders: {
-        ...authorization.headers,
-        "x-content-type": input.contentType,
-      },
+      uploadPathname: authorization.objectKey,
       expiresAt: authorization.expiresAt.toISOString(),
       maximumSizeInBytes: MAXIMUM_EVENT_PHOTO_BYTES,
+      ...upload,
+    };
+  }
+
+  async authorizePhotoUpload(
+    principal: AuthPrincipal | null,
+    eventId: string,
+    input: {
+      readonly reservationId: string;
+      readonly photoId: string;
+      readonly expectedVersion: number;
+      readonly pathname: string;
+    },
+  ): Promise<{
+    readonly contentType: (typeof EVENT_PHOTO_CONTENT_TYPES)[number];
+    readonly maximumSizeInBytes: number;
+    readonly expiresAt: Date;
+  }> {
+    const user = requireVerifiedPublishingPrincipal(principal);
+    await this.requireOrganizer(user);
+    const current = await this.loadOwned(eventId, user.id);
+    this.assertEditable(current);
+    if (current.version !== input.expectedVersion)
+      throw new EventConflictError();
+    const reservation = await this.events.findPhotoReservation({
+      reservationId: input.reservationId,
+      photoId: input.photoId,
+      eventId,
+      userId: user.id,
+    });
+    if (
+      !reservation ||
+      reservation.consumedAt ||
+      reservation.expiresAt <= new Date() ||
+      !reservation.sourceContentType ||
+      reservation.stagingObjectKey !== input.pathname ||
+      !EVENT_PHOTO_CONTENT_TYPES.includes(
+        reservation.sourceContentType as (typeof EVENT_PHOTO_CONTENT_TYPES)[number],
+      )
+    ) {
+      throw new PhotoProcessingError(
+        "The upload reservation is invalid or expired.",
+      );
+    }
+    parseMediaObjectKey(input.pathname);
+    return {
+      contentType:
+        reservation.sourceContentType as (typeof EVENT_PHOTO_CONTENT_TYPES)[number],
+      maximumSizeInBytes: MAXIMUM_EVENT_PHOTO_BYTES,
+      expiresAt: reservation.expiresAt,
     };
   }
 
@@ -352,7 +411,11 @@ export class EventService {
     principal: AuthPrincipal | null,
     eventId: string,
     photoId: string,
-    input: { readonly reservationId: string; readonly expectedVersion: number },
+    input: {
+      readonly reservationId: string;
+      readonly expectedVersion: number;
+      readonly pathname: string;
+    },
     audit: EventAuditContext = {},
   ): Promise<EventEditorDto> {
     const user = requireVerifiedPublishingPrincipal(principal);
@@ -371,7 +434,8 @@ export class EventService {
       !reservation ||
       reservation.consumedAt ||
       reservation.expiresAt <= new Date() ||
-      !reservation.sourceContentType
+      !reservation.sourceContentType ||
+      reservation.stagingObjectKey !== input.pathname
     ) {
       throw new PhotoProcessingError(
         "The upload reservation is invalid or expired.",

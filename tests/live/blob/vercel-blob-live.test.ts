@@ -9,7 +9,7 @@ async function bytes(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
 }
 
 describe("Vercel Private Blob live contract", () => {
-  it("authorizes, uploads, inspects, reads, signs, deletes, and confirms absence", async () => {
+  it("allocates, uploads, inspects, reads, signs, deletes, and confirms absence", async () => {
     const token = process.env.BLOB_READ_WRITE_TOKEN;
     if (!token)
       throw new Error(
@@ -32,12 +32,8 @@ describe("Vercel Private Blob live contract", () => {
     });
 
     try {
-      const upload = await fetch(authorization.uploadUrl, {
-        method: authorization.method,
-        headers: { "content-type": "text/plain" },
-        body: fixture,
-      });
-      expect(upload.ok, await upload.text()).toBe(true);
+      expect(authorization.transport).toBe("vercel-client");
+      await store.putPrivate(authorization.objectKey, fixture, "text/plain");
 
       await expect(
         store.inspect(authorization.objectKey),

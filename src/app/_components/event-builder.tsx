@@ -15,6 +15,7 @@ import type {
   EventPhotoReservationDto,
   EventType,
 } from "@/modules/events";
+import { uploadPrivateMedia } from "@/modules/media/client";
 
 import {
   completedWizardSteps,
@@ -23,6 +24,7 @@ import {
   wizardStepAvailable,
   type EventWizardStep,
 } from "./event-wizard-state";
+import { photoBatchSummary } from "./photo-upload-state";
 
 interface EventResponse {
   readonly event: EventEditorDto;
@@ -67,6 +69,15 @@ const ACCEPTED_PHOTO_TYPES = new Set([
   "image/heif",
 ]);
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
+
+const UPLOAD_STATUS_LABELS: Readonly<Record<UploadStatus, string>> = {
+  selected: "Selected",
+  reserving: "Requesting upload permission",
+  uploading: "Uploading",
+  processing: "Processing",
+  ready: "Ready",
+  failed: "Failed",
+};
 
 function requestError(
   result: {
@@ -221,6 +232,7 @@ export function EventBuilder({
   );
   const [uploads, setUploads] = useState<readonly UploadItem[]>([]);
   const [uploadActive, setUploadActive] = useState(false);
+  const uploadActiveRef = useRef(false);
 
   useEffect(
     () => () => {
@@ -392,6 +404,7 @@ export function EventBuilder({
     });
     setUploads((current) => [...current, ...items]);
     event.currentTarget.value = "";
+    void uploadSelected(items);
   }
 
   function updateUpload(id: string, changes: Partial<UploadItem>) {
@@ -417,9 +430,17 @@ export function EventBuilder({
     acceptEvent(response.event);
   }
 
-  async function uploadOne(item: UploadItem) {
+  async function uploadOne(item: UploadItem): Promise<boolean> {
     let photoId: string | undefined;
     try {
+      if (
+        item.photoId &&
+        draftRef.current.photos.some(
+          (photo) => photo.id === item.photoId && photo.status !== "READY",
+        )
+      ) {
+        await cleanupReservation(item.photoId);
+      }
       updateUpload(item.id, {
         status: "reserving",
         progress: 10,
@@ -441,25 +462,51 @@ export function EventBuilder({
       const controller = new AbortController();
       controllers.current.add(controller);
       const timer = window.setTimeout(() => controller.abort(), 60_000);
-      let upload: Response;
+      let uploadedPathname: string;
       try {
-        upload = await fetch(reserved.reservation.uploadUrl, {
-          method: reserved.reservation.method,
-          headers: {
-            ...reserved.reservation.uploadHeaders,
-            "Content-Type": item.file.type,
-          },
-          body: item.file,
-          signal: controller.signal,
-        });
+        if (reserved.reservation.transport === "vercel-client") {
+          const uploaded = await uploadPrivateMedia({
+            pathname: reserved.reservation.uploadPathname,
+            file: item.file,
+            handleUploadUrl: `/api/events/${draftRef.current.id}/photos/upload`,
+            clientPayload: JSON.stringify({
+              expectedVersion: draftRef.current.version,
+              reservationId: reserved.reservation.reservationId,
+              photoId: reserved.reservation.photoId,
+            }),
+            contentType: item.file.type,
+            abortSignal: controller.signal,
+            onProgress(percentage) {
+              updateUpload(item.id, {
+                progress: 35 + Math.round(percentage * 0.4),
+              });
+            },
+          });
+          uploadedPathname = uploaded.pathname;
+        } else {
+          const upload = await fetch(reserved.reservation.uploadUrl, {
+            method: reserved.reservation.method,
+            headers: {
+              ...reserved.reservation.uploadHeaders,
+              "Content-Type": item.file.type,
+            },
+            body: item.file,
+            signal: controller.signal,
+          });
+          if (!upload.ok) {
+            throw new Error(
+              `The isolated test upload failed (${String(upload.status)}).`,
+            );
+          }
+          uploadedPathname = reserved.reservation.uploadPathname;
+        }
       } finally {
         window.clearTimeout(timer);
         controllers.current.delete(controller);
       }
-      if (!upload.ok)
-        throw new Error(
-          `The private Blob upload failed (${String(upload.status)}).`,
-        );
+      if (uploadedPathname !== reserved.reservation.uploadPathname) {
+        throw new Error("The uploaded Blob did not match its reservation.");
+      }
 
       updateUpload(item.id, { status: "processing", progress: 75 });
       const completed = await request<EventResponse>(
@@ -468,11 +515,20 @@ export function EventBuilder({
         {
           expectedVersion: draftRef.current.version,
           reservationId: reserved.reservation.reservationId,
+          pathname: uploadedPathname,
         },
         90_000,
       );
       acceptEvent(completed.event);
+      if (
+        !completed.event.photos.some(
+          (photo) => photo.id === photoId && photo.status === "READY",
+        )
+      ) {
+        throw new Error("The server did not confirm this photo as READY.");
+      }
       updateUpload(item.id, { status: "ready", progress: 100 });
+      return true;
     } catch (error) {
       if (photoId) {
         try {
@@ -494,29 +550,55 @@ export function EventBuilder({
         photoId,
         error: error instanceof Error ? error.message : "Photo upload failed.",
       });
+      return false;
     }
   }
 
-  async function uploadSelected(ids?: readonly string[]) {
-    if (uploadActive) return;
+  async function uploadSelected(batch: readonly UploadItem[]) {
+    if (uploadActiveRef.current || batch.length === 0) return;
+    uploadActiveRef.current = true;
     setUploadActive(true);
     setPending("photos");
     setStepFeedback("photos", { kind: "success", text: "" });
+    const hadReadyPhotos = draftRef.current.photos.some(
+      (photo) => photo.status === "READY",
+    );
+    const hadReadyCover = draftRef.current.photos.some(
+      (photo) => photo.status === "READY" && photo.isCover,
+    );
     try {
-      const candidates = uploads.filter(
+      const candidates = batch.filter(
         (item) =>
-          (ids ? ids.includes(item.id) : item.status === "selected") &&
           (item.status === "selected" || item.status === "failed") &&
           (!item.error || item.photoId),
       );
-      for (const item of candidates) await uploadOne(item);
+      let succeeded = 0;
+      for (const item of candidates) {
+        if (await uploadOne(item)) succeeded += 1;
+      }
+      try {
+        await refreshEvent();
+      } catch {
+        // Each ambiguous per-file failure already attempted reconciliation.
+      }
+      const failed = batch.length - succeeded;
+      const text = photoBatchSummary({
+        succeeded,
+        failed,
+        hadReadyCover,
+        hadReadyPhotos,
+        hasReadyCover: draftRef.current.photos.some(
+          (photo) => photo.status === "READY" && photo.isCover,
+        ),
+      });
       setStepFeedback("photos", {
-        kind: "success",
-        text: "Upload batch finished. Select a READY photo as the cover, then continue.",
+        kind: failed > 0 ? "error" : "success",
+        text,
       });
     } finally {
       setPending("");
       setUploadActive(false);
+      uploadActiveRef.current = false;
     }
   }
 
@@ -893,7 +975,7 @@ export function EventBuilder({
                   <div>
                     <strong>{item.file.name}</strong>
                     <span>
-                      {item.status} · {item.progress}%
+                      {UPLOAD_STATUS_LABELS[item.status]} · {item.progress}%
                     </span>
                     {item.error ? <small>{item.error}</small> : null}
                   </div>
@@ -907,7 +989,7 @@ export function EventBuilder({
                         type="button"
                         className="secondary-button"
                         disabled={uploadActive}
-                        onClick={() => void uploadSelected([item.id])}
+                        onClick={() => void uploadSelected([item])}
                       >
                         Retry
                       </button>
@@ -925,18 +1007,9 @@ export function EventBuilder({
               ))}
             </ul>
           ) : null}
-          <button
-            type="button"
-            disabled={
-              uploadActive ||
-              !uploads.some((item) => item.status === "selected")
-            }
-            onClick={() => void uploadSelected()}
-          >
-            {uploadActive
-              ? "Uploading and processing…"
-              : "Upload selected photos"}
-          </button>
+          {uploadActive ? (
+            <p role="status">Uploading and processing selected photos…</p>
+          ) : null}
           {draft.photos.length ? (
             <ol className="photo-list" aria-label="Event photo order">
               {draft.photos.map((photo, index) => (
@@ -998,7 +1071,9 @@ export function EventBuilder({
             </button>
             <button
               type="button"
-              disabled={Boolean(pending) || uploadActive}
+              disabled={
+                Boolean(pending) || uploadActive || !draft.steps.photosComplete
+              }
               onClick={() => void continueFromPhotos()}
             >
               {pending === "photos-continue"
