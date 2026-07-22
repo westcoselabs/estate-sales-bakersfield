@@ -11,7 +11,7 @@
   "packageManager": "pnpm@10.33.2",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "tsx scripts/vercel-build.ts",
     "start": "next start",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
