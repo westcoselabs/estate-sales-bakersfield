@@ -52,12 +52,6 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   serverExternalPackages: ["sharp"],
-  outputFileTracingIncludes: {
-    "/*": [
-      "node_modules/@img/sharp-linux-x64/**/*",
-      "node_modules/@img/sharp-libvips-linux-x64/**/*",
-    ],
-  },
   turbopack: { root: process.cwd() },
   async headers() {
     return [
