@@ -7,6 +7,7 @@ import {
 } from "@/app/api/auth/_shared";
 import {
   AuthenticationError,
+  AuthenticationServiceUnavailableError,
   InvalidCredentialsError,
   InvalidTokenError,
   MalformedPasswordHashError,
@@ -49,6 +50,21 @@ describe("enumeration-safe API errors", () => {
 
     expect(response.status).toBe(400);
     await expect(response.text()).resolves.not.toContain("consumed");
+  });
+
+  it("maps abuse-control database failures to a sanitized no-store 503", async () => {
+    const response = authenticationApiError(
+      new AuthenticationServiceUnavailableError("database connection failed"),
+      request,
+      "auth.login",
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      error: "Authentication is temporarily unavailable.",
+      requestId: "unit-request",
+    });
   });
 
   it("marks authentication responses no-store", () => {

@@ -741,7 +741,7 @@ Required before public launch:
 - Vercel Pro project with private Blob and signed-access capability enabled.
 - Stripe live Product/Price and signed webhook.
 - Mapbox account permitting permanent geocoding storage.
-- Separate production/staging Neon, Blob, Upstash, Stripe, Mapbox, Resend, and Vercel credentials.
+- Separate production/staging Neon, Blob, Stripe, Mapbox, Resend, and Vercel credentials; PostgreSQL rate-limit records are environment-namespaced inside the corresponding Neon database.
 - Named initial administrators and TOTP recovery custody.
 
 Provider contract validation for the selected dependencies is Phase 1 implementation work, not an unresolved architecture decision.
@@ -758,4 +758,3 @@ Provider contract validation for the selected dependencies is Phase 1 implementa
 - Imported inventory has explicit non-owner origins and cannot bypass paid publishing.
 - No unresolved architecture decision blocks Phase 1.
 - Only the signed-redirect-versus-private-proxy delivery mechanism remains an explicitly required implementation validation within the already selected Vercel Blob architecture.
-

@@ -54,6 +54,19 @@ async function main(): Promise<void> {
     TEST_MEDIA_SIGNING_SECRET:
       "phase-three-e2e-media-signing-secret-32-characters",
     TEST_LOCATION_FIXTURES: "bakersfield",
+    // Keep Next's dotenv loading from reintroducing local, Preview, or
+    // Production provider credentials into the isolated test server.
+    DATABASE_RESOURCE_ENV: "",
+    BLOB_READ_WRITE_TOKEN: "",
+    BLOB_RESOURCE_ENV: "",
+    RESEND_API_KEY: "",
+    RESEND_FROM: "",
+    RESEND_RESOURCE_ENV: "",
+    MAPBOX_ACCESS_TOKEN: "",
+    MAPBOX_RESOURCE_ENV: "",
+    SENTRY_DSN: "",
+    VERCEL_OIDC_TOKEN: "",
+    VERCEL_ENV: "",
   };
   const isWindows = process.platform === "win32";
   const build = spawnSync(

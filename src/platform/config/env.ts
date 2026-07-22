@@ -73,6 +73,14 @@ export const serverEnvironmentSchema = z
       (value) => (value === "" ? undefined : value),
       z.string().max(100).optional(),
     ),
+    TEST_RUN_ID: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z
+        .string()
+        .regex(/^testrun-[a-z0-9-]+$/)
+        .max(100)
+        .optional(),
+    ),
     CRON_SECRET: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z.string().min(32).optional(),
@@ -88,15 +96,6 @@ export const serverEnvironmentSchema = z
     AUTH_FINGERPRINT_SECRET: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z.string().min(32).optional(),
-    ),
-    UPSTASH_REDIS_REST_URL: optionalUrl,
-    UPSTASH_REDIS_REST_TOKEN: z.preprocess(
-      (value) => (value === "" ? undefined : value),
-      z.string().min(1).optional(),
-    ),
-    UPSTASH_RESOURCE_ENV: z.preprocess(
-      (value) => (value === "" ? undefined : value),
-      providerEnvironmentSchema.optional(),
     ),
     RESEND_API_KEY: z.preprocess(
       (value) => (value === "" ? undefined : value),
@@ -160,10 +159,7 @@ export const serverEnvironmentSchema = z
       }
     }
 
-    for (const [left, right] of [
-      ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"],
-      ["RESEND_API_KEY", "RESEND_FROM"],
-    ] as const) {
+    for (const [left, right] of [["RESEND_API_KEY", "RESEND_FROM"]] as const) {
       if (Boolean(environment[left]) !== Boolean(environment[right])) {
         context.addIssue({
           code: "custom",
@@ -177,7 +173,6 @@ export const serverEnvironmentSchema = z
       const configuredProviders = [
         ["DATABASE_URL", "DATABASE_RESOURCE_ENV"],
         ["BLOB_READ_WRITE_TOKEN", "BLOB_RESOURCE_ENV"],
-        ["UPSTASH_REDIS_REST_URL", "UPSTASH_RESOURCE_ENV"],
         ["RESEND_API_KEY", "RESEND_RESOURCE_ENV"],
         ["MAPBOX_ACCESS_TOKEN", "MAPBOX_RESOURCE_ENV"],
       ] as const;
@@ -215,6 +210,14 @@ export const serverEnvironmentSchema = z
         code: "custom",
         message: "Test media configuration is permitted only in APP_ENV=test",
         path: ["TEST_MEDIA_ROOT"],
+      });
+    }
+
+    if (environment.APP_ENV !== "test" && environment.TEST_RUN_ID) {
+      context.addIssue({
+        code: "custom",
+        message: "TEST_RUN_ID is permitted only in APP_ENV=test",
+        path: ["TEST_RUN_ID"],
       });
     }
   });

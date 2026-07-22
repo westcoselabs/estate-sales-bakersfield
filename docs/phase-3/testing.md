@@ -1,6 +1,6 @@
 # Phase 3 Testing
 
-Credential-free unit tests cover state/readiness, privacy projections, DST conversion, approval digests, migrations, environment guards, and image sanitation. Location, image, media, email, and rate-limit boundaries use deterministic contracts/mocks. Test Neon integration covers real constraints, PostGIS, ownership, optimistic conflicts, photos, approval, terms, audit, and migration ordering. Playwright uses only Test Neon and test adapters.
+Credential-free unit tests cover state/readiness, privacy projections, DST conversion, approval digests, migrations, environment guards, image sanitation, rate-limit policy, and sanitized database-failure mapping. Location, image, media, and email boundaries use deterministic contracts/mocks. Test Neon integration covers real PostgreSQL rate-limit thresholds, expiry, concurrency, environment isolation, cleanup, constraints, PostGIS, ownership, optimistic conflicts, photos, approval, terms, audit, and migration ordering. Playwright uses Test Neon rate limits and the existing non-database test adapters.
 
 ```text
 pnpm test:unit

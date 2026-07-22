@@ -67,9 +67,9 @@ No confirmed Critical finding.
 6. **Blocks provider configuration:** yes.
 7. **Blocks Phase 2 acceptance:** yes.
 
-### M-02 — Upstash key names omit the required environment namespace
+### M-02 — The former Redis key names omitted the required environment namespace
 
-1. **Exact evidence:** `src/modules/auth/infrastructure/upstash-rate-limiter.ts:42` builds `auth:v1:<workflow>:<fingerprint>` without `APP_ENV`; `src/modules/auth/infrastructure/configured-auth.ts:83-87` does not pass an environment prefix. ADR 006 requires environment-isolated resources but the required defense-in-depth key namespace is absent.
+1. **Historical evidence:** the Redis adapter reviewed in the audited revision built `auth:v1:<workflow>:<fingerprint>` without `APP_ENV`, and its composition root did not pass an environment prefix. The current architecture has replaced that adapter with environment-scoped PostgreSQL buckets under amended ADR 006.
 2. **Affected workflow:** distributed authentication rate limiting.
 3. **Why it matters:** separate resources are the primary boundary, but an accidental credential/database reuse makes Preview/staging counters collide with Production rather than remaining namespaced.
 4. **Failure/attack scenario:** Preview is mistakenly configured with the Production Redis endpoint during verification. Preview test traffic consumes Production login/registration counters and can deny real users across all Vercel instances.
@@ -133,14 +133,14 @@ No confirmed Critical finding.
 
 ### I-01 — Architecture boundaries and Phase scope are otherwise sound
 
-- No current domain/application file imports Next.js, Prisma, Resend, Upstash, Vercel Blob, or provider SDK types. Prisma and provider SDK usage is confined to infrastructure/platform composition. App Router handlers import the module facades, not generated Prisma or provider SDKs.
+- No current domain/application file imports Next.js, Prisma, Resend, Vercel Blob, or provider SDK types. Prisma and provider SDK usage is confined to infrastructure/platform composition. App Router handlers import the module facades, not generated Prisma or provider SDKs.
 - Narrow account/session/organizer DTOs are returned. Organizer ownership is derived from the authenticated principal and repeated in repository `userId` selectors. Protected mutations enforce trusted origins below React.
 - The Phase 1 migration has no Git diff. The Phase 2 migration is additive, uses real constraints/indexes, and the repository uses `prisma migrate deploy`; no `prisma db push` workflow was found.
 - No Phase 3 event, address, media-ownership, payment, checkout, publication, search, map, or import implementation was found. The verified-publishing guard is a Phase 2 prerequisite only.
 
 ### I-02 — Failure-mode inventory
 
-- Upstash missing/configuration/provider failure: fail closed with sanitized 503 for rate-limited authentication operations.
+- Rate-limit database failure: fail closed with sanitized 503 for every protected authentication operation.
 - Authentication email provider failure after token persistence: delivery fails open to the generic 202, marks the delivery failed, and leaves an active recoverable token/account state; resend/reset reissuance is the recovery path.
 - Rate-limit rejection for signup/login/reset: explicit 429; resend/forgot rejection: intentionally masked as generic 202.
 - Logout without a cookie or with an already-revoked cookie is idempotent; only the presented token hash is deleted.
@@ -150,7 +150,7 @@ No confirmed Critical finding.
 - PASS: Node 24.11.1, pnpm 10.33.2, format, lint, architecture check (127 modules/219 dependencies), typecheck, Prisma validation, unit 44/44, email contract 3/3, Blob contract 13/13, production build.
 - FAIL: `pnpm audit:prod` — one moderate advisory (M-04).
 - BLOCKED: PostgreSQL integration (19 authored, zero executed) and Playwright (4 authored, zero executed); Docker is not installed and Testcontainers reports no runtime strategy.
-- BLOCKED and not accessed: live Preview Upstash/Resend and controlled email delivery.
+- BLOCKED and not accessed: live Preview rate-limit/Resend verification and controlled email delivery.
 - Not rerun: previously reported live Preview Neon/Blob/Argon2 evidence; this audit did not require or access provider credentials.
 
 ## Planned fix disposition
@@ -170,7 +170,7 @@ Final code-review verdict: `READY FOR PROVIDER CONFIGURATION`. This is not Phase
 | H-03    | Resolved in code; database regression execution blocked | Verification, token consumption, sibling invalidation, session replacement, and both audit events now share one Prisma transaction; a forced replacement-conflict rollback test is authored.                                                                                                   |
 | H-04    | Resolved                                                | Sanitization covers sensitive URL parameters and token-shaped opaque string values, while token-bearing pages receive `Referrer-Policy: no-referrer`.                                                                                                                                          |
 | M-01    | Resolved                                                | Application URLs must be origin-only HTTP(S); deployed origins require HTTPS; Preview derives only from a validated `*.vercel.app` host and has no `APP_URL` fallback.                                                                                                                         |
-| M-02    | Resolved                                                | Upstash keys include the validated application environment before workflow and HMAC subject/network identifiers.                                                                                                                                                                               |
+| M-02    | Superseded and resolved                                 | PostgreSQL bucket keys include the validated environment, hashed Test scope, workflow namespace, and a SHA-256 hash of the HMAC subject/network fingerprint.                                                                                                                                   |
 | M-03    | Resolved                                                | Local/test are capture-only with capture paths confined to `.tmp`; deployed environments cannot select capture and local/test cannot select Resend.                                                                                                                                            |
 | M-04    | Resolved                                                | The override advances `@hono/node-server` to patched 2.0.5; Prisma generation/validation, build, and `pnpm audit:prod` pass.                                                                                                                                                                   |
 | M-05    | Resolved in authored coverage; execution blocked        | The invalid restricted fixture and ownership false-positive were corrected; real-transaction race, rollback, provider-failure recovery, and expired/replaced-state cases plus unit/config regressions were added. None of the 23 PostgreSQL or 4 Playwright tests was executed without Docker. |
@@ -206,7 +206,7 @@ The previously reported live Preview Neon/PostGIS, Private Blob, and Argon2 chec
 ## Remaining blocked acceptance work
 
 - Deploy this remediated, still-uncommitted revision to a new non-Production Preview.
-- Configure isolated Preview Upstash and Resend resources without reusing Production credentials.
+- Apply the PostgreSQL rate-limit migration to isolated Preview Neon and configure Preview Resend without reusing Production credentials.
 - Approve a controlled Preview recipient or provider test mode, then exercise delivery and full Preview authentication recovery paths.
 - Execute all 23 PostgreSQL integration and 4 Playwright tests on a Docker-capable host or CI and retain their actual results.
 - Complete administrator TOTP/recovery custody before public launch, as already required by the frozen roadmap.

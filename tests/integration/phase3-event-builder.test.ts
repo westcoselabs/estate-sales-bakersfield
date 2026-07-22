@@ -92,7 +92,7 @@ afterAll(async () => {
 });
 
 describe("Phase 3 event builder against isolated Test Neon", () => {
-  it("records the forward-only Phase 3 migration after the Phase 2 migration", async () => {
+  it("records Phase 3 and PostgreSQL rate limits as forward-only migrations", async () => {
     const migrations = await prisma.$queryRaw<
       Array<{ migration_name: string }>
     >`
@@ -106,6 +106,7 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
         "20260716000000_phase1_foundation",
         "20260717000000_phase2_auth_and_organizers",
         "20260721000000_phase3_event_builder",
+        "20260722000000_postgresql_auth_rate_limits",
       ]),
     );
     expect(
@@ -118,6 +119,18 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       migrations.findIndex(
         (migration) =>
           migration.migration_name === "20260721000000_phase3_event_builder",
+      ),
+    );
+    expect(
+      migrations.findIndex(
+        (migration) =>
+          migration.migration_name === "20260721000000_phase3_event_builder",
+      ),
+    ).toBeLessThan(
+      migrations.findIndex(
+        (migration) =>
+          migration.migration_name ===
+          "20260722000000_postgresql_auth_rate_limits",
       ),
     );
   });
@@ -269,6 +282,37 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       termsVersion: PUBLISHING_TERMS_VERSION,
     });
     expect(event.approvalDigest).not.toBe(firstApprovalDigest);
+    expect(event.approvedRevision).toBe(firstApprovedRevision + 1);
+
+    const approvals = await prisma.eventApproval.findMany({
+      where: { eventId: event.id },
+      orderBy: { contentRevision: "asc" },
+      select: {
+        contentRevision: true,
+        approvalDigest: true,
+        approvedAt: true,
+        id: true,
+      },
+    });
+    expect(approvals).toHaveLength(2);
+    expect(approvals.map((approval) => approval.contentRevision)).toEqual([
+      firstApprovedRevision,
+      firstApprovedRevision + 1,
+    ]);
+    expect(approvals[0]?.approvalDigest).not.toBe(approvals[1]?.approvalDigest);
+    const currentApproval = await prisma.eventApproval.findUnique({
+      where: {
+        eventId_contentRevision: {
+          eventId: event.id,
+          contentRevision: event.approvedRevision!,
+        },
+      },
+      select: { contentRevision: true, approvalDigest: true },
+    });
+    expect(currentApproval).toMatchObject({
+      contentRevision: event.approvedRevision,
+      approvalDigest: event.approvalDigest,
+    });
 
     const approvedRevision = event.contentRevision;
     event = await service.updateDetails(owner, event.id, {
@@ -282,7 +326,7 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
     expect(event.contentRevision).toBe(approvedRevision + 1);
     expect(
       await prisma.eventApproval.count({ where: { eventId: event.id } }),
-    ).toBe(1);
+    ).toBe(2);
 
     const auditActions = await prisma.auditEntry.findMany({
       where: { targetType: "EVENT", targetId: event.id },

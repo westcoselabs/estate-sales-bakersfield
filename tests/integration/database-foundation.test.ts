@@ -17,13 +17,14 @@ describe("fresh PostgreSQL/PostGIS foundation", () => {
     expect(extension[0]?.extversion).toMatch(/^3\./);
 
     const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
-      SELECT "table_name"
+      SELECT "table_name"::text AS "table_name"
       FROM "information_schema"."tables"
       WHERE "table_schema" = 'public'
       ORDER BY "table_name"
     `;
     expect(tables.map((row) => row.table_name)).toEqual(
       expect.arrayContaining([
+        "authentication_rate_limit_buckets",
         "audit_entries",
         "durable_jobs",
         "email_verification_tokens",

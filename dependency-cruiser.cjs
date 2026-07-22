@@ -33,7 +33,7 @@ module.exports = {
       from: { path: "^src/modules/[^/]+/(domain|application)" },
       to: {
         dependencyTypes: ["npm"],
-        path: "^(next($|/)|@prisma($|/)|resend$|@upstash/redis$|@vercel/blob$|sharp$)",
+        path: "^(next($|/)|@prisma($|/)|resend$|@vercel/blob$|sharp$)",
       },
     },
     {
@@ -53,12 +53,6 @@ module.exports = {
       severity: "error",
       from: { pathNot: "^src/modules/auth/infrastructure" },
       to: { dependencyTypes: ["npm"], path: "^resend$" },
-    },
-    {
-      name: "upstash-is-auth-infrastructure-only",
-      severity: "error",
-      from: { pathNot: "^src/modules/auth/infrastructure" },
-      to: { dependencyTypes: ["npm"], path: "^@upstash/redis$" },
     },
     {
       name: "sharp-is-media-infrastructure-only",

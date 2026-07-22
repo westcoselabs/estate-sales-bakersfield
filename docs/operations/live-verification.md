@@ -16,7 +16,9 @@ Provide `BLOB_READ_WRITE_TOKEN` for an isolated Preview private store and set `B
 
 ## Phase 2 authentication providers
 
-Preview authentication requires a Preview-only `AUTH_FINGERPRINT_SECRET`, isolated Upstash REST URL/token, and Preview Resend key/sender. Confirm variable names and environment scope without printing values. Exercise email only through a provider test mode or an explicitly approved controlled recipient. If Upstash or Resend is not configured, deployed authentication verification is `BLOCKED`; do not substitute Production credentials or an in-memory authority.
+Preview authentication requires Preview Neon with the PostgreSQL rate-limit migration, a Preview-only `AUTH_FINGERPRINT_SECRET`, and a Preview Resend key/sender. Confirm variable names and environment scope without printing values. Exercise email only through a provider test mode or an explicitly approved controlled recipient. Verify rate-limit thresholds, expiry, concurrency, and the sanitized fail-closed response without substituting Production credentials or a process-memory authority. If Resend or the controlled delivery target is unavailable, only delivery-dependent checks are `BLOCKED`.
+
+The authenticated `/api/internal/jobs/run` endpoint deletes expired authentication buckets from the current environment's Neon database before processing durable jobs. Run it at least hourly in deployed environments and retain sanitized evidence of `rateLimitBucketsDeleted`; a missing maintenance schedule is an acceptance blocker for bounded retention.
 
 ## Result semantics
 

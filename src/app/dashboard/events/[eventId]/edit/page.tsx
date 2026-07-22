@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/modules/auth";
 import {
   createConfiguredEventService,
+  EventNotFoundError,
   PUBLISHING_TERMS_VERSION,
 } from "@/modules/events";
 
@@ -19,7 +20,12 @@ export default async function EventEditPage({ params }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/dashboard");
   const { eventId } = await params;
-  const event = await createConfiguredEventService().get(user, eventId);
+  const event = await createConfiguredEventService()
+    .get(user, eventId)
+    .catch((error: unknown) => {
+      if (error instanceof EventNotFoundError) notFound();
+      throw error;
+    });
   return (
     <main className="builder-shell">
       <header className="builder-header">

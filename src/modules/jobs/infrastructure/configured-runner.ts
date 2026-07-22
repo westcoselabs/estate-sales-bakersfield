@@ -2,13 +2,16 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
+import { cleanupConfiguredAuthenticationRateLimits } from "@/modules/auth";
 import { getPrismaClient } from "@/platform/database/client";
 
 import { runJobBatch } from "../application/runner";
 import { PrismaDurableJobRepository } from "./prisma-job-repository";
 
-export function runConfiguredJobBatch(limit = 10) {
-  return runJobBatch(
+export async function runConfiguredJobBatch(limit = 10) {
+  const rateLimitBucketsDeleted =
+    await cleanupConfiguredAuthenticationRateLimits();
+  const jobs = await runJobBatch(
     new PrismaDurableJobRepository(getPrismaClient()),
     {},
     {
@@ -17,4 +20,5 @@ export function runConfiguredJobBatch(limit = 10) {
       limit,
     },
   );
+  return { ...jobs, rateLimitBucketsDeleted };
 }

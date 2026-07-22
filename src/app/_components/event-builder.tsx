@@ -154,7 +154,8 @@ export function EventBuilder({
 
   async function uploadPhoto(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = new FormData(form);
     const file = data.get("photo");
     if (!(file instanceof File) || file.size === 0) {
       setMessage("Choose an image before uploading.");
@@ -189,7 +190,7 @@ export function EventBuilder({
       );
       setDraft(completed.event);
       setMessage("Photo uploaded and sanitized.");
-      event.currentTarget.reset();
+      form.reset();
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Photo upload failed.",

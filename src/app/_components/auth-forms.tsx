@@ -37,9 +37,10 @@ export function SignupForm() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     submission.setPending(true);
     submission.setMessage("");
-    const data = new FormData(event.currentTarget);
+    const data = new FormData(form);
     try {
       const result = await submitJson("/api/auth/signup", {
         displayName: String(data.get("displayName") ?? ""),
@@ -50,7 +51,7 @@ export function SignupForm() {
       submission.setMessage(
         result.message ?? "Check your email for verification instructions.",
       );
-      event.currentTarget.reset();
+      form.reset();
     } catch (error) {
       submission.setMessage(
         error instanceof Error ? error.message : "Registration failed.",

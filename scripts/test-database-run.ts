@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 
 import { PrismaNeon } from "@prisma/adapter-neon";
 
@@ -28,9 +29,6 @@ export function testDatabaseEnvironment(
     RESEND_API_KEY: undefined,
     RESEND_FROM: undefined,
     RESEND_RESOURCE_ENV: undefined,
-    UPSTASH_REDIS_REST_URL: undefined,
-    UPSTASH_REDIS_REST_TOKEN: undefined,
-    UPSTASH_RESOURCE_ENV: undefined,
     MAPBOX_ACCESS_TOKEN: undefined,
     MAPBOX_RESOURCE_ENV: undefined,
     VERCEL_OIDC_TOKEN: undefined,
@@ -90,6 +88,12 @@ export async function cleanupTestRun(
     adapter: new PrismaNeon({ connectionString: database.pooledUrl }),
   });
   try {
+    const scopeHash = createHash("sha256")
+      .update(`auth-rate-limit-scope:v1\u0000test\u0000${runId}`, "utf8")
+      .digest("hex");
+    await prisma.authenticationRateLimitBucket.deleteMany({
+      where: { environment: "test", scopeHash },
+    });
     await prisma.durableJob.deleteMany({
       where: { queue: { startsWith: `${runId}-` } },
     });

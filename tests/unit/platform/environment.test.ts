@@ -149,4 +149,21 @@ describe("server environment validation", () => {
       }),
     ).toThrow(/Test media configuration/);
   });
+
+  it("confines per-run rate-limit isolation to APP_ENV=test", () => {
+    expect(
+      parseServerEnvironment({
+        ...base,
+        TEST_RUN_ID: "testrun-rate-limits-1234",
+      }).TEST_RUN_ID,
+    ).toBe("testrun-rate-limits-1234");
+    expect(() =>
+      parseServerEnvironment({
+        ...base,
+        APP_ENV: "local",
+        NODE_ENV: "development",
+        TEST_RUN_ID: "testrun-rate-limits-1234",
+      }),
+    ).toThrow(/TEST_RUN_ID/);
+  });
 });

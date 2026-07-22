@@ -397,6 +397,22 @@ model AuditEntry {
   @@map("audit_entries")
 }
 
+model AuthenticationRateLimitBucket {
+  environment     String   @db.VarChar(16)
+  scopeHash       String   @map("scope_hash") @db.Char(64)
+  namespace       String   @db.VarChar(64)
+  identifierHash  String   @map("identifier_hash") @db.Char(64)
+  attemptCount    Int      @map("attempt_count")
+  windowStartedAt DateTime @map("window_started_at") @db.Timestamptz(3)
+  expiresAt       DateTime @map("expires_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@id([environment, scopeHash, namespace, identifierHash])
+  @@index([expiresAt])
+  @@index([environment, scopeHash, expiresAt])
+  @@map("authentication_rate_limit_buckets")
+}
+
 model DurableJob {
   id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   queue            String    @db.VarChar(50)

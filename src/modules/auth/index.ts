@@ -5,6 +5,7 @@ export {
 export { benchmarkArgon2 } from "./infrastructure/argon2-benchmark";
 export { CryptoOpaqueTokenProvider } from "./infrastructure/crypto-token-provider";
 export {
+  cleanupConfiguredAuthenticationRateLimits,
   createConfiguredAbuseControl,
   createConfiguredAuthenticationWorkflow,
   createConfiguredSessionService,
@@ -26,7 +27,11 @@ export {
   renderAuthenticationEmail,
   ResendEmailService,
 } from "./infrastructure/resend-email-service";
-export { UpstashRateLimiter } from "./infrastructure/upstash-rate-limiter";
+export {
+  authenticationRateLimitIdentifierHash,
+  authenticationRateLimitScopeHash,
+  PrismaAuthenticationRateLimiter,
+} from "./infrastructure/prisma-authentication-rate-limiter";
 export { HmacPrivacyFingerprint } from "./infrastructure/hmac-privacy-fingerprint";
 export {
   AccountConflictError,

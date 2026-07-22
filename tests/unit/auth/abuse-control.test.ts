@@ -1,11 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { AuthenticationAbuseControl } from "@/modules/auth/application/abuse-control";
+import {
+  AUTHENTICATION_LIMITS,
+  AuthenticationAbuseControl,
+  type AuthenticationRoute,
+} from "@/modules/auth/application/abuse-control";
 import type {
   PrivacyFingerprint,
   RateLimiter,
 } from "@/modules/auth/application/ports";
 import type { RateLimitExceededError } from "@/modules/auth/domain/errors";
+import { AuthenticationServiceUnavailableError } from "@/modules/auth/domain/errors";
 
 describe("AuthenticationAbuseControl", () => {
   it("uses privacy-safe network and subject identifiers", async () => {
@@ -56,5 +61,49 @@ describe("AuthenticationAbuseControl", () => {
     ).rejects.toMatchObject({
       retryAfterSeconds: 90,
     } satisfies Partial<RateLimitExceededError>);
+  });
+
+  it.each(Object.keys(AUTHENTICATION_LIMITS) as AuthenticationRoute[])(
+    "%s fails closed when PostgreSQL rate limiting is unavailable",
+    async (route) => {
+      const failure = new AuthenticationServiceUnavailableError(
+        "Authentication abuse controls are unavailable",
+      );
+      const limiter = {
+        consume: vi.fn<RateLimiter["consume"]>().mockRejectedValue(failure),
+      };
+      const control = new AuthenticationAbuseControl(limiter, {
+        create: (value) => `safe:${value.length}`,
+      });
+
+      await expect(
+        control.assertAllowed(route, "network", "subject"),
+      ).rejects.toBe(failure);
+      expect(limiter.consume).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("keeps every workflow in a distinct network and subject namespace", async () => {
+    const limiter = {
+      consume: vi.fn<RateLimiter["consume"]>().mockResolvedValue({
+        allowed: true,
+        remaining: 1,
+        retryAfterSeconds: 60,
+      }),
+    };
+    const control = new AuthenticationAbuseControl(limiter, {
+      create: (value) => `safe:${value.length}`,
+    });
+
+    for (const route of Object.keys(
+      AUTHENTICATION_LIMITS,
+    ) as AuthenticationRoute[]) {
+      await control.assertAllowed(route, "network", "subject");
+    }
+
+    expect(
+      new Set(limiter.consume.mock.calls.map(([input]) => input.namespace))
+        .size,
+    ).toBe(10);
   });
 });

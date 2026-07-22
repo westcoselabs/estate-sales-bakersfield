@@ -53,7 +53,15 @@ async function registerAndVerify(
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByLabel("Confirm password").fill(password);
+  const signupResponse = page.waitForResponse((response) =>
+    response.url().endsWith("/api/auth/signup"),
+  );
   await page.getByRole("button", { name: "Create account" }).click();
+  const response = await signupResponse;
+  if (!response.ok()) {
+    const body = (await response.text()).slice(0, 500);
+    throw new Error(`Registration failed (${response.status()}): ${body}`);
+  }
   await expect(page.getByText(/verification instructions/i)).toBeVisible();
 
   const emailMessage = await capturedEmail(email, "EMAIL_VERIFICATION");
@@ -88,7 +96,7 @@ test("completes the Phase 2 account, recovery, session, and organizer lifecycle"
   await login(page, email, password);
   await expect(page.getByText("Email status: Verified")).toBeVisible();
 
-  await page.getByRole("link", { name: /organizer onboarding/i }).click();
+  await page.getByRole("link", { name: /continue onboarding/i }).click();
   await page.getByLabel("Organizer or business name").fill("Main organizer");
   await page.getByLabel("Contact name").fill("Primary owner");
   await page.getByLabel("Contact email").fill(email);
@@ -182,7 +190,7 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
 
   await registerAndVerify(page, email, "Phase three owner", password);
   await login(page, email, password);
-  await page.getByRole("link", { name: /organizer onboarding/i }).click();
+  await page.getByRole("link", { name: /continue onboarding/i }).click();
   await page.getByLabel("Organizer or business name").fill("Phase Three Sales");
   await page.getByLabel("Contact name").fill("Phase three owner");
   await page.getByLabel("Contact email").fill(email);
@@ -214,9 +222,11 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   const stalePage = await page.context().newPage();
   await stalePage.goto(page.url());
 
-  await page.getByLabel("Starts").fill("2026-08-08T09:00");
-  await page.getByLabel("Ends").fill("2026-08-08T15:00");
-  await page.getByLabel("IANA timezone").fill("America/Los_Angeles");
+  await page.getByLabel("Starts", { exact: true }).fill("2026-08-08T09:00");
+  await page.getByLabel("Ends", { exact: true }).fill("2026-08-08T15:00");
+  await page
+    .getByLabel("IANA timezone", { exact: true })
+    .fill("America/Los_Angeles");
   await page.getByRole("button", { name: "Save schedule" }).click();
   await expect(page.getByText("Draft saved.")).toBeVisible();
 
@@ -298,12 +308,15 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   await otherPage
     .getByRole("button", { name: "Save organizer profile" })
     .click();
+  await expect(otherPage.getByText("Organizer profile saved.")).toBeVisible();
+  await otherPage.goto("/dashboard");
+  await expect(
+    otherPage.getByText("Organizer onboarding: COMPLETE."),
+  ).toBeVisible();
   const denied = await otherPage.request.get(`/api/events/${eventId}`);
   expect(denied.status()).toBe(404);
-  await otherPage.goto(`/dashboard/events/${eventId}/edit`);
-  await expect(
-    otherPage.getByText(/application error|not found/i),
-  ).toBeVisible();
+  const deniedPage = await otherPage.goto(`/dashboard/events/${eventId}/edit`);
+  expect(deniedPage?.status()).toBe(404);
   await otherContext.close();
 
   expect(browserErrors).toEqual([]);

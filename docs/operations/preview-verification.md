@@ -4,13 +4,15 @@
 
 1. Confirm the current Git branch is not the configured Vercel Production Branch, or use an explicit Preview deployment command.
 2. Confirm `APP_ENV=preview` without printing secrets.
-3. Confirm Preview-only Neon, Upstash, Resend, Blob, and Mapbox resources and matching `*_RESOURCE_ENV=preview` markers, including `DATABASE_RESOURCE_ENV=preview`.
+3. Confirm Preview-only Neon, Resend, Blob, and Mapbox resources and matching `*_RESOURCE_ENV=preview` markers, including `DATABASE_RESOURCE_ENV=preview`.
 4. Apply `prisma migrate deploy` only to Preview Neon. Never run `prisma db push`.
 5. Use an approved controlled email recipient or provider test mode.
 
 ## Phase 2 workflow
 
 Register, receive verification, verify, log in, persist the session, complete onboarding, logout/login, request and receive reset, reset, verify prior-session revocation, reject the old password, accept the new password, and exercise safe provider failures.
+
+Exercise each PostgreSQL authentication limit namespace, verify cross-instance shared enforcement and expiry, simulate a safe database failure, and invoke the authenticated job endpoint to confirm expired-bucket cleanup. Do not print identifiers, bucket hashes, database URLs, or bearer secrets.
 
 ## Phase 3 workflow
 

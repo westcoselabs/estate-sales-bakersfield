@@ -7,8 +7,8 @@ This repository is a strict-TypeScript Next.js App Router modular monolith for b
 The application has exactly four environments: `local`, `test`, `preview`, and `production`.
 
 - Local manual development may use the isolated Preview Neon branch.
-- Automated integration and Playwright suites use only the persistent isolated Test Neon branch and deterministic test adapters.
-- Preview uses isolated Preview Neon, Upstash, Resend, Blob, and Mapbox resources.
+- Automated integration and Playwright suites use only the persistent isolated Test Neon branch; authentication rate limits are real PostgreSQL buckets isolated by a hashed test-run scope.
+- Preview uses isolated Preview Neon, Resend, Blob, and Mapbox resources.
 - Production is reserved for the future public application and must not be used for development or verification.
 
 The project has no Docker, Testcontainers, or local-PostgreSQL prerequisite.

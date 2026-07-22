@@ -2,7 +2,7 @@
 
 ## Boundaries
 
-Authentication remains a custom feature module. Domain and application code define narrow account, session, token, email, privacy-fingerprint, and rate-limit types. Infrastructure adapters own Prisma, Next.js cookies, Argon2id, Resend, and Upstash SDK usage. App Router routes parse HTTP input, apply trusted-origin checks, invoke application services, set or clear cookies, and map typed failures to sanitized responses.
+Authentication remains a custom feature module. Domain and application code define narrow account, session, token, email, privacy-fingerprint, and rate-limit types. Infrastructure adapters own Prisma, Next.js cookies, Argon2id, and Resend SDK usage. App Router routes parse HTTP input, apply trusted-origin checks, invoke application services, set or clear cookies, and map typed failures to sanitized responses.
 
 `src/modules/organizers` is a separate feature module. It receives only the authenticated principal ID and organizer input; ownership is never accepted from the client.
 
@@ -38,9 +38,9 @@ Application links come from validated server configuration. A Preview deployment
 
 ## Abuse controls
 
-`AuthenticationAbuseControl` applies route-specific network and subject limits to registration, login, verification resend, forgot password, and reset. Identifiers are HMAC-SHA-256 fingerprints created with an environment-specific secret. Upstash Redis keys include the validated application environment and perform atomic fixed-window `INCR`/`EXPIRE` operations with bounded TTLs across Vercel instances. Provider failure is fail-closed and returns a temporary-unavailability response.
+`AuthenticationAbuseControl` applies route-specific network and subject limits to registration, login, verification resend, forgot password, and reset. Identifiers are HMAC-SHA-256 fingerprints created with an environment-specific secret. The PostgreSQL adapter hashes that fingerprint again with the validated environment, test scope, and workflow namespace, then performs an atomic fixed-window upsert in `authentication_rate_limit_buckets`. The shared Neon database enforces the same counters across Vercel instances. Database failure is fail-closed and returns a sanitized temporary-unavailability response.
 
-The test-only in-memory adapter refuses non-test environments. Ordinary denied requests, unknown accounts, and incorrect passwords are logs/metrics concerns and do not create one immutable audit row each.
+No process-memory rate limiter is composed in any environment. A Test run receives a hashed per-run scope so active counters are deterministic and isolated without bypassing PostgreSQL. The authenticated job runner removes expired buckets from its environment-specific Neon database. Ordinary denied requests, unknown accounts, and incorrect passwords are logs/metrics concerns and do not create one immutable audit row each.
 
 ## Organizer onboarding
 

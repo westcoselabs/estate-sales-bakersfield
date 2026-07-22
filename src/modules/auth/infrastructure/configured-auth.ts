@@ -14,10 +14,9 @@ import { CryptoOpaqueTokenProvider } from "./crypto-token-provider";
 import { FileCaptureEmailService } from "./file-capture-email-service";
 import { HmacPrivacyFingerprint } from "./hmac-privacy-fingerprint";
 import { PrismaAccountRepository } from "./prisma-account-repository";
+import { PrismaAuthenticationRateLimiter } from "./prisma-authentication-rate-limiter";
 import { PrismaSessionRepository } from "./prisma-session-repository";
 import { ResendEmailService } from "./resend-email-service";
-import { TestMemoryRateLimiter } from "./test-memory-rate-limiter";
-import { UpstashRateLimiter } from "./upstash-rate-limiter";
 
 function configuredFingerprint(): HmacPrivacyFingerprint {
   const secret = getServerEnvironment().AUTH_FINGERPRINT_SECRET;
@@ -83,27 +82,19 @@ export function createConfiguredAuthenticationWorkflow(): AuthenticationWorkflow
 
 export function createConfiguredAbuseControl(): AuthenticationAbuseControl {
   const environment = getServerEnvironment();
-  if (environment.APP_ENV === "test") {
-    return new AuthenticationAbuseControl(
-      new TestMemoryRateLimiter(),
-      configuredFingerprint(),
-    );
-  }
-  if (
-    !environment.UPSTASH_REDIS_REST_URL ||
-    !environment.UPSTASH_REDIS_REST_TOKEN
-  ) {
-    throw new AuthenticationServiceUnavailableError(
-      "Distributed authentication rate limiting is not configured",
-    );
-  }
-
   return new AuthenticationAbuseControl(
-    new UpstashRateLimiter({
+    new PrismaAuthenticationRateLimiter(getPrismaClient(), {
       environment: environment.APP_ENV,
-      url: environment.UPSTASH_REDIS_REST_URL.toString(),
-      token: environment.UPSTASH_REDIS_REST_TOKEN,
+      ...(environment.TEST_RUN_ID ? { scope: environment.TEST_RUN_ID } : {}),
     }),
     configuredFingerprint(),
   );
+}
+
+export function cleanupConfiguredAuthenticationRateLimits(): Promise<number> {
+  const environment = getServerEnvironment();
+  return new PrismaAuthenticationRateLimiter(getPrismaClient(), {
+    environment: environment.APP_ENV,
+    ...(environment.TEST_RUN_ID ? { scope: environment.TEST_RUN_ID } : {}),
+  }).deleteExpired();
 }

@@ -12,7 +12,7 @@ export interface SafeTestDatabaseConfiguration {
 }
 
 export function loadDedicatedTestEnvironment(): void {
-  config({ path: ".env.test.local", override: false, quiet: true });
+  config({ path: ".env.test.local", override: true, quiet: true });
 }
 
 function parseNeonUrl(
