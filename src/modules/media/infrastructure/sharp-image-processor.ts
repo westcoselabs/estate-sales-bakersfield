@@ -2,8 +2,6 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import sharp from "sharp";
-
 import type {
   ImageProcessor,
   ProcessedImageVariant,
@@ -24,6 +22,7 @@ function variant(bytes: Buffer): ProcessedImageVariant {
 export class SharpImageProcessor implements ImageProcessor {
   async process(bytes: Uint8Array): Promise<ProcessedPhoto> {
     try {
+      const { default: sharp } = await import("sharp");
       const source = sharp(bytes, {
         failOn: "error",
         limitInputPixels: 80_000_000,
