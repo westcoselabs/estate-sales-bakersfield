@@ -74,7 +74,7 @@ try {
 
   const availableTables = await prisma.$queryRaw<Array<{ table_name: string }>>(
     Prisma.sql`
-      SELECT "table_name"
+      SELECT "table_name"::text AS "table_name"
       FROM "information_schema"."tables"
       WHERE "table_schema" = 'public'
         AND "table_name" IN (${Prisma.join(expectedTables)})
