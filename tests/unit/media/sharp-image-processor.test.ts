@@ -32,6 +32,39 @@ describe("SharpImageProcessor", () => {
     }
   });
 
+  it("processes a browser-like plain Uint8Array PNG with alpha", async () => {
+    const encoded = await sharp({
+      create: {
+        width: 1280,
+        height: 720,
+        channels: 4,
+        background: { r: 28, g: 72, b: 104, alpha: 0.72 },
+      },
+    })
+      .png({ palette: true })
+      .toBuffer();
+    const browserBytes = new Uint8Array(encoded.byteLength);
+    browserBytes.set(encoded);
+
+    expect(Buffer.isBuffer(browserBytes)).toBe(false);
+
+    const result = await new SharpImageProcessor().process(browserBytes);
+
+    expect(result).toMatchObject({ width: 1280, height: 720 });
+    expect(Object.keys(result.variants)).toEqual([
+      "dashboardThumbnail",
+      "listingCard",
+      "gallery",
+      "coverDisplay",
+    ]);
+    for (const output of Object.values(result.variants)) {
+      const metadata = await sharp(output.bytes).metadata();
+      expect(metadata.format).toBe("webp");
+      expect(output.bytes.byteLength).toBeGreaterThan(0);
+      expect(output.sha256).toMatch(/^[0-9a-f]{64}$/);
+    }
+  });
+
   it("rejects non-image bytes safely", async () => {
     await expect(
       new SharpImageProcessor().process(

@@ -72,4 +72,19 @@ describe("photo upload batch summaries", () => {
       "The new upload failed. Your existing cover and ready photos are unchanged.",
     );
   });
+
+  it("keeps ambiguous server processing distinct from a retryable failure", () => {
+    expect(
+      photoBatchSummary({
+        succeeded: 1,
+        failed: 1,
+        pending: 2,
+        hadReadyPhotos: false,
+        hadReadyCover: false,
+        hasReadyCover: false,
+      }),
+    ).toBe(
+      "1 photo uploaded successfully. 1 photo failed. 2 photos are still being confirmed by the server. Reload before taking another action; retry is disabled to prevent duplicates.",
+    );
+  });
 });

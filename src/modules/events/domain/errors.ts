@@ -16,4 +16,24 @@ export class EventStateError extends EventError {}
 
 export class OrganizerOnboardingRequiredError extends EventError {}
 
-export class PhotoProcessingError extends EventError {}
+export type PhotoProcessingStage =
+  | "reservation_validation"
+  | "upload_validation"
+  | "source_read"
+  | "image_decode"
+  | "variant_write"
+  | "variant_verify"
+  | "staging_cleanup"
+  | "database_transition";
+
+export class PhotoProcessingError extends EventError {
+  override readonly name = "PhotoProcessingError";
+
+  constructor(
+    message: string,
+    readonly stage: PhotoProcessingStage,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+  }
+}

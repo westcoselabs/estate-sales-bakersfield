@@ -96,10 +96,22 @@ export function eventApiError(
       { status, requestId },
     );
   }
-  if (
-    error instanceof PhotoProcessingError ||
-    error instanceof LocationNotFoundError
-  ) {
+  if (error instanceof PhotoProcessingError) {
+    logger.warn(
+      {
+        requestId,
+        operation,
+        errorType: error.name,
+        processingStage: error.stage,
+      },
+      "Event photo processing failed",
+    );
+    return authJson(
+      { error: error.message, requestId },
+      { status: 422, requestId },
+    );
+  }
+  if (error instanceof LocationNotFoundError) {
     return authJson(
       { error: error.message, requestId },
       { status: 422, requestId },

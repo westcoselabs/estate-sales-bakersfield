@@ -22,6 +22,7 @@ import {
   EventValidationError,
   OrganizerOnboardingRequiredError,
   PhotoProcessingError,
+  type PhotoProcessingStage,
 } from "../domain/errors";
 import { eventSlug } from "../domain/slug";
 import { validatedSchedule } from "../domain/schedule";
@@ -105,7 +106,10 @@ async function streamBytes(
     length += result.value.byteLength;
     if (length > maximum) {
       await reader.cancel();
-      throw new PhotoProcessingError("The uploaded image is too large.");
+      throw new PhotoProcessingError(
+        "The uploaded image is too large.",
+        "source_read",
+      );
     }
     chunks.push(result.value);
   }
@@ -396,6 +400,7 @@ export class EventService {
     ) {
       throw new PhotoProcessingError(
         "The upload reservation is invalid or expired.",
+        "reservation_validation",
       );
     }
     parseMediaObjectKey(input.pathname);
@@ -439,6 +444,7 @@ export class EventService {
     ) {
       throw new PhotoProcessingError(
         "The upload reservation is invalid or expired.",
+        "reservation_validation",
       );
     }
     const stagingKey = parseMediaObjectKey(reservation.stagingObjectKey);
@@ -463,6 +469,7 @@ export class EventService {
       await this.media.delete(stagingKey);
       throw new PhotoProcessingError(
         "The uploaded file did not pass validation.",
+        "upload_validation",
       );
     }
     const marked = await this.events.markPhotoProcessing({
@@ -502,12 +509,15 @@ export class EventService {
       }),
     } as const;
     const createdKeys = Object.values(finalKeys);
+    let processingStage: PhotoProcessingStage = "source_read";
     try {
       const bytes = await streamBytes(
         await this.media.read(stagingKey),
         MAXIMUM_EVENT_PHOTO_BYTES,
       );
+      processingStage = "image_decode";
       const processed = await this.images.process(bytes);
+      processingStage = "variant_write";
       const writes = await Promise.allSettled(
         (Object.keys(finalKeys) as Array<keyof typeof finalKeys>).map((name) =>
           this.media.putPrivate(
@@ -520,8 +530,10 @@ export class EventService {
       if (writes.some((write) => write.status === "rejected")) {
         throw new PhotoProcessingError(
           "A sanitized image variant could not be stored.",
+          "variant_write",
         );
       }
+      processingStage = "variant_verify";
       const inspections = await Promise.all(
         createdKeys.map((key) => this.media.inspect(key)),
       );
@@ -533,8 +545,10 @@ export class EventService {
       ) {
         throw new PhotoProcessingError(
           "A sanitized image variant could not be verified.",
+          "variant_verify",
         );
       }
+      processingStage = "staging_cleanup";
       await this.media.delete(stagingKey);
       const hypotheticalPhoto = {
         ...current.photos.find((photo) => photo.id === photoId)!,
@@ -550,6 +564,7 @@ export class EventService {
         ),
         approvalStatus: "NOT_APPROVED",
       });
+      processingStage = "database_transition";
       const result = await this.events.completePhoto({
         reservationId: input.reservationId,
         photoId,
@@ -596,6 +611,8 @@ export class EventService {
       }
       throw new PhotoProcessingError(
         "The image could not be processed safely.",
+        processingStage,
+        { cause: error },
       );
     }
   }

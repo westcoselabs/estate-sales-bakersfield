@@ -23,7 +23,12 @@ export class SharpImageProcessor implements ImageProcessor {
   async process(bytes: Uint8Array): Promise<ProcessedPhoto> {
     try {
       const { default: sharp } = await import("sharp");
-      const source = sharp(bytes, {
+      const input = Buffer.from(
+        bytes.buffer,
+        bytes.byteOffset,
+        bytes.byteLength,
+      );
+      const source = sharp(input, {
         failOn: "error",
         limitInputPixels: 80_000_000,
       });

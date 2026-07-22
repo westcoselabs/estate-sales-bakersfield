@@ -46,12 +46,21 @@ type UploadStatus =
 
 interface UploadItem {
   readonly id: string;
-  readonly file: File;
+  readonly file?: File | undefined;
+  readonly fileName: string;
+  readonly previewUrl: string;
+  readonly previewIsLocal: boolean;
   readonly status: UploadStatus;
   readonly progress: number;
   readonly error?: string | undefined;
   readonly photoId?: string | undefined;
 }
+
+type UploadAttemptResult = "ready" | "failed" | "pending";
+
+const PHOTO_RECONCILIATION_ATTEMPTS = 3;
+const PHOTO_RECONCILIATION_DELAY_MS = 750;
+const PHOTO_RECONCILIATION_REQUEST_TIMEOUT_MS = 5_000;
 
 const STEP_LABELS: Readonly<Record<EventWizardStep, string>> = {
   details: "Details",
@@ -78,6 +87,23 @@ const UPLOAD_STATUS_LABELS: Readonly<Record<UploadStatus, string>> = {
   ready: "Ready",
   failed: "Failed",
 };
+
+function UploadPreview({ item }: { readonly item: UploadItem }) {
+  const [failedSource, setFailedSource] = useState("");
+  if (failedSource === item.previewUrl) {
+    return <div className="upload-preview-fallback">Preview unavailable</div>;
+  }
+  return (
+    // This is a short-lived local object URL, not a public or raw Blob URL.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      className="upload-preview"
+      src={item.previewUrl}
+      alt={`${item.previewIsLocal ? "Selected preview" : "Processed thumbnail"} for ${item.fileName}`}
+      onError={() => setFailedSource(item.previewUrl)}
+    />
+  );
+}
 
 function requestError(
   result: {
@@ -165,7 +191,7 @@ export function CreateEventForm() {
           <option value="YARD_SALE">Yard sale</option>
         </select>
       </label>
-      <button type="submit" disabled={pending}>
+      <button type="submit" aria-busy={pending} disabled={pending}>
         {pending ? "Creating…" : "Create event draft"}
       </button>
       <p aria-live="polite">{message}</p>
@@ -233,11 +259,15 @@ export function EventBuilder({
   const [uploads, setUploads] = useState<readonly UploadItem[]>([]);
   const [uploadActive, setUploadActive] = useState(false);
   const uploadActiveRef = useRef(false);
+  const operationActiveRef = useRef(false);
+  const previewUrls = useRef(new Set<string>());
 
   useEffect(
     () => () => {
       for (const controller of controllers.current) controller.abort();
       controllers.current.clear();
+      for (const url of previewUrls.current) URL.revokeObjectURL(url);
+      previewUrls.current.clear();
     },
     [],
   );
@@ -294,6 +324,18 @@ export function EventBuilder({
     setFeedback((current) => ({ ...current, [target]: value }));
   }
 
+  function beginOperation(name: string): boolean {
+    if (operationActiveRef.current) return false;
+    operationActiveRef.current = true;
+    setPending(name);
+    return true;
+  }
+
+  function finishOperation() {
+    operationActiveRef.current = false;
+    setPending("");
+  }
+
   async function saveStep(
     target: EventWizardStep,
     endpoint: string,
@@ -302,7 +344,7 @@ export function EventBuilder({
     complete: (event: EventEditorDto) => boolean,
     next: EventWizardStep,
   ) {
-    setPending(target);
+    if (!beginOperation(target)) return;
     setConfirmation("");
     setStepFeedback(target, { kind: "success", text: "" });
     try {
@@ -329,7 +371,7 @@ export function EventBuilder({
         text: error instanceof Error ? error.message : "The save failed.",
       });
     } finally {
-      setPending("");
+      finishOperation();
     }
   }
 
@@ -385,6 +427,10 @@ export function EventBuilder({
   }
 
   function choosePhotos(event: ChangeEvent<HTMLInputElement>) {
+    if (operationActiveRef.current || uploadActiveRef.current) {
+      event.currentTarget.value = "";
+      return;
+    }
     const selected = [...(event.currentTarget.files ?? [])];
     const items = selected.map<UploadItem>((file) => {
       const error = !ACCEPTED_PHOTO_TYPES.has(file.type)
@@ -397,11 +443,15 @@ export function EventBuilder({
       return {
         id: crypto.randomUUID(),
         file,
+        fileName: file.name,
+        previewUrl: URL.createObjectURL(file),
+        previewIsLocal: true,
         status: error ? "failed" : "selected",
         progress: 0,
         error,
       };
     });
+    for (const item of items) previewUrls.current.add(item.previewUrl);
     setUploads((current) => [...current, ...items]);
     event.currentTarget.value = "";
     void uploadSelected(items);
@@ -413,12 +463,86 @@ export function EventBuilder({
     );
   }
 
-  async function refreshEvent() {
+  async function refreshEvent(timeoutMs = 25_000) {
     const response = await request<EventResponse>(
       `/api/events/${draftRef.current.id}`,
+      "GET",
+      undefined,
+      timeoutMs,
     );
     acceptEvent(response.event);
     return response.event;
+  }
+
+  function releaseLocalPreview(item: UploadItem) {
+    if (!item.previewIsLocal || !previewUrls.current.delete(item.previewUrl)) {
+      return;
+    }
+    window.setTimeout(() => URL.revokeObjectURL(item.previewUrl), 0);
+  }
+
+  function markUploadReady(
+    item: UploadItem,
+    photoId: string,
+    event: EventEditorDto,
+  ): boolean {
+    const photo = event.photos.find(
+      (candidate) => candidate.id === photoId && candidate.status === "READY",
+    );
+    if (!photo) return false;
+    updateUpload(item.id, {
+      file: undefined,
+      previewUrl: photo.urls.thumbnail,
+      previewIsLocal: false,
+      status: "ready",
+      progress: 100,
+      photoId,
+      error: undefined,
+    });
+    releaseLocalPreview(item);
+    return true;
+  }
+
+  async function waitForPhotoReconciliation() {
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, PHOTO_RECONCILIATION_DELAY_MS);
+    });
+  }
+
+  async function reconcilePhotoAfterFailure(
+    photoId: string,
+    finalizeAttempted: boolean,
+  ): Promise<"ready" | "retryable" | "pending"> {
+    for (
+      let attempt = 0;
+      attempt < PHOTO_RECONCILIATION_ATTEMPTS;
+      attempt += 1
+    ) {
+      try {
+        const event = await refreshEvent(
+          PHOTO_RECONCILIATION_REQUEST_TIMEOUT_MS,
+        );
+        const photo = event.photos.find(
+          (candidate) => candidate.id === photoId,
+        );
+        if (photo?.status === "READY") return "ready";
+        if (photo?.status === "FAILED") return "retryable";
+        if (!finalizeAttempted && photo?.status === "RESERVED") {
+          try {
+            await cleanupReservation(photoId);
+            return "retryable";
+          } catch {
+            return "pending";
+          }
+        }
+      } catch {
+        // A transient read failure is ambiguous; never make Retry available from it.
+      }
+      if (attempt + 1 < PHOTO_RECONCILIATION_ATTEMPTS) {
+        await waitForPhotoReconciliation();
+      }
+    }
+    return "pending";
   }
 
   async function cleanupReservation(photoId: string) {
@@ -430,8 +554,18 @@ export function EventBuilder({
     acceptEvent(response.event);
   }
 
-  async function uploadOne(item: UploadItem): Promise<boolean> {
+  async function uploadOne(item: UploadItem): Promise<UploadAttemptResult> {
     let photoId: string | undefined;
+    let finalizeAttempted = false;
+    const file = item.file;
+    if (!file) {
+      updateUpload(item.id, {
+        status: "failed",
+        progress: 0,
+        error: "Select this file again before retrying.",
+      });
+      return "failed";
+    }
     try {
       if (
         item.photoId &&
@@ -451,8 +585,8 @@ export function EventBuilder({
         "POST",
         {
           expectedVersion: draftRef.current.version,
-          contentType: item.file.type,
-          fileName: item.file.name,
+          contentType: file.type,
+          fileName: item.fileName,
         },
       );
       photoId = reserved.reservation.photoId;
@@ -465,20 +599,20 @@ export function EventBuilder({
       const timer = window.setTimeout(() => {
         uploadTimedOut = true;
         controller.abort();
-      }, photoUploadTimeoutMs(item.file.size));
+      }, photoUploadTimeoutMs(file.size));
       let uploadedPathname: string;
       try {
         if (reserved.reservation.transport === "vercel-client") {
           const uploaded = await uploadPrivateMedia({
             pathname: reserved.reservation.uploadPathname,
-            file: item.file,
+            file,
             handleUploadUrl: `/api/events/${draftRef.current.id}/photos/upload`,
             clientPayload: JSON.stringify({
               expectedVersion: draftRef.current.version,
               reservationId: reserved.reservation.reservationId,
               photoId: reserved.reservation.photoId,
             }),
-            contentType: item.file.type,
+            contentType: file.type,
             abortSignal: controller.signal,
             onProgress(percentage) {
               updateUpload(item.id, {
@@ -492,9 +626,9 @@ export function EventBuilder({
             method: reserved.reservation.method,
             headers: {
               ...reserved.reservation.uploadHeaders,
-              "Content-Type": item.file.type,
+              "Content-Type": file.type,
             },
-            body: item.file,
+            body: file,
             signal: controller.signal,
           });
           if (!upload.ok) {
@@ -529,6 +663,7 @@ export function EventBuilder({
       updateUpload(item.id, { status: "processing", progress: 75 });
       let completed: EventResponse;
       try {
+        finalizeAttempted = true;
         completed = await request<EventResponse>(
           `/api/events/${draftRef.current.id}/photos/${photoId}/finalize`,
           "POST",
@@ -559,21 +694,33 @@ export function EventBuilder({
           "Image processing failed. The server did not confirm this photo as READY.",
         );
       }
-      updateUpload(item.id, { status: "ready", progress: 100 });
-      return true;
+      if (!markUploadReady(item, photoId, completed.event)) {
+        throw new Error(
+          "Image processing failed. The server did not provide the processed thumbnail.",
+        );
+      }
+      return "ready";
     } catch (error) {
       if (photoId) {
-        try {
-          await refreshEvent();
-          if (
-            draftRef.current.photos.some(
-              (photo) => photo.id === photoId && photo.status === "RESERVED",
-            )
-          ) {
-            await cleanupReservation(photoId);
-          }
-        } catch {
-          // The server reservation expires independently; keep the original bounded error.
+        const reconciliation = await reconcilePhotoAfterFailure(
+          photoId,
+          finalizeAttempted,
+        );
+        if (
+          reconciliation === "ready" &&
+          markUploadReady(item, photoId, draftRef.current)
+        ) {
+          return "ready";
+        }
+        if (reconciliation === "pending" || reconciliation === "ready") {
+          updateUpload(item.id, {
+            status: "processing",
+            progress: 75,
+            photoId,
+            error:
+              "Server processing is still being confirmed. Reload before taking another action; retry is disabled to prevent a duplicate photo.",
+          });
+          return "pending";
         }
       }
       updateUpload(item.id, {
@@ -582,15 +729,20 @@ export function EventBuilder({
         photoId,
         error: error instanceof Error ? error.message : "Photo upload failed.",
       });
-      return false;
+      return "failed";
     }
   }
 
   async function uploadSelected(batch: readonly UploadItem[]) {
-    if (uploadActiveRef.current || batch.length === 0) return;
+    if (
+      uploadActiveRef.current ||
+      batch.length === 0 ||
+      !beginOperation("photos")
+    ) {
+      return;
+    }
     uploadActiveRef.current = true;
     setUploadActive(true);
-    setPending("photos");
     setStepFeedback("photos", { kind: "success", text: "" });
     const hadReadyPhotos = draftRef.current.photos.some(
       (photo) => photo.status === "READY",
@@ -602,21 +754,27 @@ export function EventBuilder({
       const candidates = batch.filter(
         (item) =>
           (item.status === "selected" || item.status === "failed") &&
+          Boolean(item.file) &&
           (!item.error || item.photoId),
       );
       let succeeded = 0;
+      let failed = batch.length - candidates.length;
+      let awaitingConfirmation = 0;
       for (const item of candidates) {
-        if (await uploadOne(item)) succeeded += 1;
+        const result = await uploadOne(item);
+        if (result === "ready") succeeded += 1;
+        else if (result === "pending") awaitingConfirmation += 1;
+        else failed += 1;
       }
       try {
         await refreshEvent();
       } catch {
         // Each ambiguous per-file failure already attempted reconciliation.
       }
-      const failed = batch.length - succeeded;
       const text = photoBatchSummary({
         succeeded,
         failed,
+        pending: awaitingConfirmation,
         hadReadyCover,
         hadReadyPhotos,
         hasReadyCover: draftRef.current.photos.some(
@@ -624,13 +782,13 @@ export function EventBuilder({
         ),
       });
       setStepFeedback("photos", {
-        kind: failed > 0 ? "error" : "success",
+        kind: failed > 0 || awaitingConfirmation > 0 ? "error" : "success",
         text,
       });
     } finally {
-      setPending("");
       setUploadActive(false);
       uploadActiveRef.current = false;
+      finishOperation();
     }
   }
 
@@ -640,7 +798,7 @@ export function EventBuilder({
     method: string,
     body: object,
   ) {
-    setPending(name);
+    if (!beginOperation(name)) return;
     try {
       const response = await request<EventResponse>(endpoint, method, body);
       acceptEvent(response.event);
@@ -655,7 +813,7 @@ export function EventBuilder({
           error instanceof Error ? error.message : "The photo change failed.",
       });
     } finally {
-      setPending("");
+      finishOperation();
     }
   }
 
@@ -677,29 +835,51 @@ export function EventBuilder({
     );
   }
 
-  async function removeUpload(item: UploadItem) {
-    if (uploadActive) return;
-    if (
-      item.photoId &&
-      draftRef.current.photos.some((photo) => photo.id === item.photoId)
-    ) {
-      await cleanupReservation(item.photoId).catch((error: unknown) => {
-        setStepFeedback("photos", {
-          kind: "error",
-          text:
-            error instanceof Error
-              ? error.message
-              : "The photo could not be removed.",
-        });
-      });
-    }
+  function dismissUpload(item: UploadItem) {
     setUploads((current) =>
       current.filter((candidate) => candidate.id !== item.id),
     );
+    releaseLocalPreview(item);
+  }
+
+  async function removeUpload(item: UploadItem) {
+    if (uploadActiveRef.current || operationActiveRef.current) return;
+    const persistedPhoto = item.photoId
+      ? draftRef.current.photos.find((photo) => photo.id === item.photoId)
+      : undefined;
+    const dismissOnly =
+      item.status === "ready" ||
+      item.status === "processing" ||
+      persistedPhoto?.status === "READY" ||
+      persistedPhoto?.status === "PROCESSING" ||
+      persistedPhoto?.status === "UPLOADED";
+    if (!persistedPhoto || dismissOnly) {
+      dismissUpload(item);
+      return;
+    }
+    if (!beginOperation(`remove-upload:${item.id}`)) return;
+    try {
+      await cleanupReservation(persistedPhoto.id);
+      dismissUpload(item);
+      setStepFeedback("photos", {
+        kind: "success",
+        text: "The abandoned upload was removed.",
+      });
+    } catch (error) {
+      setStepFeedback("photos", {
+        kind: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "The photo could not be removed.",
+      });
+    } finally {
+      finishOperation();
+    }
   }
 
   async function continueFromPhotos() {
-    setPending("photos-continue");
+    if (!beginOperation("photos-continue")) return;
     try {
       const event = await refreshEvent();
       if (!event.steps.photosComplete) {
@@ -723,7 +903,7 @@ export function EventBuilder({
             : "Photo readiness could not be confirmed.",
       });
     } finally {
-      setPending("");
+      finishOperation();
     }
   }
 
@@ -737,7 +917,7 @@ export function EventBuilder({
       });
       return;
     }
-    setPending("approval");
+    if (!beginOperation("approval")) return;
     try {
       const response = await request<EventResponse>(
         `/api/events/${draftRef.current.id}/approval`,
@@ -761,12 +941,45 @@ export function EventBuilder({
         text: error instanceof Error ? error.message : "Approval failed.",
       });
     } finally {
-      setPending("");
+      finishOperation();
     }
   }
 
   const completed = completedWizardSteps(draft.steps);
   const currentFeedback = feedback[step];
+  const readyPhotoCount = draft.photos.filter(
+    (photo) => photo.status === "READY",
+  ).length;
+  const hasReadyCover = draft.photos.some(
+    (photo) => photo.status === "READY" && photo.isCover,
+  );
+
+  function persistedUploadPhoto(item: UploadItem) {
+    return item.photoId
+      ? draft.photos.find((photo) => photo.id === item.photoId)
+      : undefined;
+  }
+
+  function uploadDismissesLocally(item: UploadItem): boolean {
+    const photo = persistedUploadPhoto(item);
+    return (
+      item.status === "ready" ||
+      item.status === "processing" ||
+      photo?.status === "READY" ||
+      photo?.status === "PROCESSING" ||
+      photo?.status === "UPLOADED"
+    );
+  }
+
+  function uploadCanRetry(item: UploadItem): boolean {
+    const photo = persistedUploadPhoto(item);
+    return Boolean(
+      item.status === "failed" &&
+      item.file &&
+      (!item.error || item.photoId) &&
+      (!photo || photo.status === "FAILED"),
+    );
+  }
 
   return (
     <div className="builder-layout">
@@ -997,30 +1210,34 @@ export function EventBuilder({
               accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
               multiple
               onChange={choosePhotos}
-              disabled={uploadActive}
+              disabled={Boolean(pending) || uploadActive}
             />
           </label>
           {uploads.length ? (
             <ul className="upload-queue" aria-label="Selected photo uploads">
               {uploads.map((item) => (
                 <li key={item.id}>
-                  <div>
-                    <strong>{item.file.name}</strong>
+                  <UploadPreview item={item} />
+                  <div className="upload-queue-details">
+                    <strong>{item.fileName}</strong>
                     <span>
                       {UPLOAD_STATUS_LABELS[item.status]} · {item.progress}%
                     </span>
                     {item.error ? <small>{item.error}</small> : null}
                   </div>
-                  <progress max={100} value={item.progress}>
+                  <progress
+                    aria-label={`Upload progress for ${item.fileName}`}
+                    max={100}
+                    value={item.progress}
+                  >
                     {item.progress}%
                   </progress>
                   <div className="button-row">
-                    {item.status === "failed" &&
-                    (!item.error || item.photoId) ? (
+                    {uploadCanRetry(item) ? (
                       <button
                         type="button"
                         className="secondary-button"
-                        disabled={uploadActive}
+                        disabled={Boolean(pending) || uploadActive}
                         onClick={() => void uploadSelected([item])}
                       >
                         Retry
@@ -1028,11 +1245,20 @@ export function EventBuilder({
                     ) : null}
                     <button
                       type="button"
-                      className="danger-button"
-                      disabled={uploadActive}
+                      className={
+                        uploadDismissesLocally(item)
+                          ? "secondary-button"
+                          : "danger-button"
+                      }
+                      aria-busy={pending === `remove-upload:${item.id}`}
+                      disabled={Boolean(pending) || uploadActive}
                       onClick={() => void removeUpload(item)}
                     >
-                      Remove
+                      {pending === `remove-upload:${item.id}`
+                        ? "Removingâ€¦"
+                        : uploadDismissesLocally(item)
+                          ? "Dismiss"
+                          : "Remove"}
                     </button>
                   </div>
                 </li>
@@ -1091,6 +1317,13 @@ export function EventBuilder({
           ) : (
             <p>No server-stored photos yet.</p>
           )}
+          <p className="photo-readiness" role="status">
+            {readyPhotoCount === 0
+              ? "No photos are READY yet. Uploaded files count only after server image processing succeeds."
+              : !hasReadyCover
+                ? `${String(readyPhotoCount)} ${readyPhotoCount === 1 ? "photo is" : "photos are"} READY. Select a READY photo as the cover to continue.`
+                : `${String(readyPhotoCount)} ${readyPhotoCount === 1 ? "photo is" : "photos are"} READY and the cover is selected.`}
+          </p>
           <StepFeedback feedback={currentFeedback} />
           <div className="wizard-actions">
             <button
@@ -1103,6 +1336,7 @@ export function EventBuilder({
             </button>
             <button
               type="button"
+              aria-busy={pending === "photos-continue"}
               disabled={
                 Boolean(pending) || uploadActive || !draft.steps.photosComplete
               }
@@ -1110,7 +1344,11 @@ export function EventBuilder({
             >
               {pending === "photos-continue"
                 ? "Checking…"
-                : "Save and continue"}
+                : readyPhotoCount === 0
+                  ? "Waiting for a READY photo"
+                  : !hasReadyCover
+                    ? "Select a cover to continue"
+                    : "Save and continue"}
             </button>
           </div>
         </section>
@@ -1244,7 +1482,7 @@ function WizardActions({
       >
         Back
       </button>
-      <button disabled={pending} type="submit">
+      <button aria-busy={pending} disabled={pending} type="submit">
         {pending ? loadingLabel : "Save and continue"}
       </button>
     </div>

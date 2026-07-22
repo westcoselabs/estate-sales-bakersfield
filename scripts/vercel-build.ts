@@ -1,5 +1,7 @@
 import { spawnSync } from "node:child_process";
 
+import { verifySharpRuntimeTrace } from "./verify-sharp-runtime-trace";
+
 function run(command: string, args: readonly string[]): void {
   const result =
     process.platform === "win32"
@@ -53,3 +55,5 @@ function applyPreviewMigrations(): void {
 
 applyPreviewMigrations();
 runPnpm(["exec", "next", "build"]);
+verifySharpRuntimeTrace();
+process.stdout.write("Verified the photo finalizer native runtime trace.\n");

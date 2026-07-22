@@ -345,6 +345,18 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   const password = "phase-three-browser-password";
   const browserErrors: string[] = [];
   page.on("pageerror", (error) => browserErrors.push(error.message));
+  await page.addInitScript(() => {
+    const originalRevokeObjectUrl = URL.revokeObjectURL.bind(URL);
+    const trackedWindow = window as Window & {
+      __revokedPhotoPreviewCount?: number;
+    };
+    trackedWindow.__revokedPhotoPreviewCount = 0;
+    URL.revokeObjectURL = (url) => {
+      trackedWindow.__revokedPhotoPreviewCount =
+        (trackedWindow.__revokedPhotoPreviewCount ?? 0) + 1;
+      originalRevokeObjectUrl(url);
+    };
+  });
 
   await registerAndVerify(page, email, "Phase three owner", password);
   await login(page, email, password);
@@ -417,6 +429,30 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     .withMetadata({ orientation: 6 })
     .jpeg()
     .toBuffer();
+
+  const waitingForReadyPhoto = page.getByRole("button", {
+    name: "Waiting for a READY photo",
+  });
+  await expect(waitingForReadyPhoto).toBeDisabled();
+  await expect(waitingForReadyPhoto).toHaveAttribute("aria-busy", "false");
+  await expect(waitingForReadyPhoto).toHaveCSS("cursor", "not-allowed");
+  await expect(
+    page.getByText(
+      "No photos are READY yet. Uploaded files count only after server image processing succeeds.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Upload selected photos" }),
+  ).toHaveCount(0);
+
+  await page.route(
+    "**/api/events/*/photos/reserve",
+    async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      await route.continue();
+    },
+    { times: 1 },
+  );
   await page.getByLabel(/Event photos/).setInputFiles([
     {
       name: "estate-photo.jpg",
@@ -430,19 +466,138 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     },
   ]);
   await expect(
-    page.getByRole("button", { name: "Upload selected photos" }),
-  ).toHaveCount(0);
+    page.getByRole("img", { name: /Selected preview for estate-photo/ }),
+  ).toHaveCount(2);
+  await expect
+    .poll(async () =>
+      page
+        .getByRole("img", { name: /Selected preview for estate-photo/ })
+        .evaluateAll((images) =>
+          images.every((image) => (image as HTMLImageElement).naturalWidth > 0),
+        ),
+    )
+    .toBe(true);
+  await expect(
+    page.getByRole("progressbar", {
+      name: "Upload progress for estate-photo.jpg",
+    }),
+  ).toBeVisible();
   await expect(page.getByText("Status: READY")).toHaveCount(2, {
     timeout: 30_000,
   });
+  const processedQueueThumbnails = page.getByRole("img", {
+    name: /Processed thumbnail for estate-photo/,
+  });
+  await expect(processedQueueThumbnails).toHaveCount(2);
+  await expect(processedQueueThumbnails.first()).toHaveAttribute(
+    "src",
+    /^\/media\//,
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as Window & {
+              __revokedPhotoPreviewCount?: number;
+            }
+          ).__revokedPhotoPreviewCount ?? 0,
+      ),
+    )
+    .toBeGreaterThanOrEqual(2);
+  const persistedThumbnails = page.getByRole("img", {
+    name: /^Event photo \d+$/,
+  });
+  await expect(persistedThumbnails).toHaveCount(2);
+  await expect
+    .poll(async () =>
+      persistedThumbnails.evaluateAll((images) =>
+        images.every((image) => (image as HTMLImageElement).naturalWidth > 0),
+      ),
+    )
+    .toBe(true);
+  const completedQueueRow = page
+    .getByRole("listitem")
+    .filter({ hasText: "estate-photo.jpg" });
+  await expect(
+    completedQueueRow.getByRole("button", { name: "Dismiss" }),
+  ).toBeVisible();
+  await completedQueueRow.getByRole("button", { name: "Dismiss" }).click();
+  await expect(completedQueueRow).toHaveCount(0);
+  await expect(page.getByText("Status: READY")).toHaveCount(2);
+
+  let interceptedCommittedFinalize = false;
+  await page.route(
+    "**/api/events/*/photos/*/finalize",
+    async (route) => {
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      interceptedCommittedFinalize = true;
+      await route.abort("failed");
+    },
+    { times: 1 },
+  );
+  await page.getByLabel(/Event photos/).setInputFiles({
+    name: "ambiguous-response.jpg",
+    mimeType: "image/jpeg",
+    buffer: image,
+  });
+  await expect.poll(() => interceptedCommittedFinalize).toBe(true);
+  const reconciledQueueRow = page
+    .getByRole("listitem")
+    .filter({ hasText: "ambiguous-response.jpg" });
+  await expect(reconciledQueueRow.getByText(/Ready.*100%/)).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(
+    reconciledQueueRow.getByRole("img", {
+      name: "Processed thumbnail for ambiguous-response.jpg",
+    }),
+  ).toHaveAttribute("src", /^\/media\//);
+  await expect(
+    reconciledQueueRow.getByRole("button", { name: "Retry" }),
+  ).toHaveCount(0);
+  await expect(
+    reconciledQueueRow.getByRole("button", { name: "Dismiss" }),
+  ).toBeVisible();
+  await expect(page.getByText("Status: READY")).toHaveCount(3);
+
+  const waitingForCover = page.getByRole("button", {
+    name: "Select a cover to continue",
+  });
+  await expect(waitingForCover).toBeDisabled();
+  await expect(waitingForCover).toHaveAttribute("aria-busy", "false");
+  await expect(
+    page.getByText(
+      "3 photos are READY. Select a READY photo as the cover to continue.",
+    ),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Make photo 1 cover" }).click();
   await expect(page.getByText("Photo changes saved.")).toBeVisible();
+  await expect(
+    page.getByText("3 photos are READY and the cover is selected."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Save and continue" }),
+  ).toBeEnabled();
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "Review, approval and payment" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Photos" }).click();
-  await expect(page.getByText("Status: READY")).toHaveCount(2);
+  await expect(page.getByText("Status: READY")).toHaveCount(3);
+  await expect(
+    page.getByRole("img", { name: /^Event photo \d+$/ }),
+  ).toHaveCount(3);
+  await expect
+    .poll(async () =>
+      page
+        .getByRole("img", { name: /^Event photo \d+$/ })
+        .evaluateAll((images) =>
+          images.every((image) => (image as HTMLImageElement).naturalWidth > 0),
+        ),
+    )
+    .toBe(true);
   await page.getByLabel(/Event photos/).setInputFiles({
     name: "not-an-image.gif",
     mimeType: "image/gif",
@@ -453,7 +608,7 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
       "The new upload failed. Your existing cover and ready photos are unchanged.",
     ),
   ).toBeVisible();
-  await expect(page.getByText("Status: READY")).toHaveCount(2);
+  await expect(page.getByText("Status: READY")).toHaveCount(3);
   await expect(
     page.getByRole("button", { name: "Save and continue" }),
   ).toBeEnabled();

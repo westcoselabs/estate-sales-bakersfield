@@ -3,6 +3,23 @@ import { describe, expect, it } from "vitest";
 import nextConfig from "../../../next.config";
 
 describe("sensitive page headers", () => {
+  it("traces only the native Sharp runtime assets for photo finalization", () => {
+    const routePattern = "/api/events/*/photos/*/finalize";
+    const tracingIncludes = nextConfig.outputFileTracingIncludes;
+
+    expect(Object.keys(tracingIncludes ?? {})).toEqual([routePattern]);
+    expect(tracingIncludes?.[routePattern]).toEqual([
+      "./node_modules/@img/sharp-linux-x64/**/*",
+      "./node_modules/@img/sharp-libvips-linux-x64/**/*",
+    ]);
+    expect(tracingIncludes?.["/*"]).toBeUndefined();
+    expect(tracingIncludes?.["/**"]).toBeUndefined();
+    expect(tracingIncludes?.[routePattern]).not.toContain(
+      "./node_modules/**/*",
+    );
+    expect(tracingIncludes?.[routePattern]).not.toContain("./**/*");
+  });
+
   it("permits only the required Blob and Sentry connection origins", async () => {
     const headers = await nextConfig.headers?.();
     const securityHeaders = headers?.find((entry) => entry.source === "/(.*)");
