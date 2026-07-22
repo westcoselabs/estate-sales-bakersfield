@@ -55,8 +55,12 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["sharp"],
   outputFileTracingIncludes: {
     "/api/events/*/photos/*/finalize": [
-      "./node_modules/@img/sharp-linux-x64/**/*",
-      "./node_modules/@img/sharp-libvips-linux-x64/**/*",
+      "./node_modules/@img/sharp-linux-x64/package.json",
+      "./node_modules/@img/sharp-linux-x64/index.cjs",
+      "./node_modules/@img/sharp-linux-x64/lib/*.node",
+      "./node_modules/@img/sharp-libvips-linux-x64/package.json",
+      "./node_modules/@img/sharp-libvips-linux-x64/versions.json",
+      "./node_modules/@img/sharp-libvips-linux-x64/lib/**/*",
     ],
   },
   turbopack: { root: process.cwd() },

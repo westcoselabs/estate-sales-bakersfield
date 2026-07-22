@@ -9,8 +9,12 @@ describe("sensitive page headers", () => {
 
     expect(Object.keys(tracingIncludes ?? {})).toEqual([routePattern]);
     expect(tracingIncludes?.[routePattern]).toEqual([
-      "./node_modules/@img/sharp-linux-x64/**/*",
-      "./node_modules/@img/sharp-libvips-linux-x64/**/*",
+      "./node_modules/@img/sharp-linux-x64/package.json",
+      "./node_modules/@img/sharp-linux-x64/index.cjs",
+      "./node_modules/@img/sharp-linux-x64/lib/*.node",
+      "./node_modules/@img/sharp-libvips-linux-x64/package.json",
+      "./node_modules/@img/sharp-libvips-linux-x64/versions.json",
+      "./node_modules/@img/sharp-libvips-linux-x64/lib/**/*",
     ]);
     expect(tracingIncludes?.["/*"]).toBeUndefined();
     expect(tracingIncludes?.["/**"]).toBeUndefined();
