@@ -953,6 +953,17 @@ export function EventBuilder({
   const hasReadyCover = draft.photos.some(
     (photo) => photo.status === "READY" && photo.isCover,
   );
+  const approvalIsCurrent =
+    !draft.publication &&
+    draft.workflowState === "APPROVED_FOR_PAYMENT" &&
+    draft.approvalStatus === "APPROVED" &&
+    draft.approvedRevision === draft.contentRevision &&
+    Boolean(
+      draft.approvalDigest &&
+      draft.approvedAt &&
+      draft.termsVersion &&
+      draft.termsAcceptedAt,
+    );
 
   function persistedUploadPhoto(item: UploadItem) {
     return item.photoId
@@ -1409,38 +1420,79 @@ export function EventBuilder({
               saved.
             </p>
           )}
-          <form onSubmit={approve}>
-            <label className="checkbox-label">
-              <input type="checkbox" name="acceptedTerms" value="yes" />I accept
-              publishing terms version {termsVersion} and approve this exact
-              event revision for payment.
-            </label>
-            <StepFeedback feedback={currentFeedback} />
-            <div className="wizard-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={Boolean(pending)}
-                onClick={() => setStep("photos")}
+          {draft.publication ? (
+            <div className="success-box" role="status">
+              <strong>This listing is published.</strong>
+              <p>
+                Payment was confirmed and the approved revision is live. The
+                published listing is no longer awaiting payment.
+              </p>
+              <Link
+                className="button-link"
+                href={draft.publication.canonicalPath}
               >
-                Back
-              </button>
-              <button
-                disabled={!draft.steps.reviewReady || Boolean(pending)}
-                type="submit"
-              >
-                {pending === "approval"
-                  ? "Approving…"
-                  : "Approve exact revision"}
-              </button>
+                View live listing
+              </Link>
             </div>
-          </form>
-          {draft.approvalStatus === "APPROVED" ? (
-            <p className="success-box">
-              Revision {draft.approvedRevision} approved. Continue on the
-              dedicated payment page.
-            </p>
-          ) : null}
+          ) : approvalIsCurrent ? (
+            <div>
+              <div className="success-box" role="status">
+                <strong>Revision {draft.approvedRevision} is approved.</strong>
+                <p>
+                  Approval is saved, and this listing remains a private draft
+                  until payment is confirmed. You can leave and come back to
+                  make the payment later.
+                </p>
+                <p>
+                  Editing saved listing content creates a new revision that must
+                  be reviewed and approved again.
+                </p>
+              </div>
+              <div className="wizard-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={Boolean(pending)}
+                  onClick={() => setStep("photos")}
+                >
+                  Back
+                </button>
+                <Link
+                  className="button-link"
+                  href={`/dashboard/events/${draft.id}/payment`}
+                >
+                  Make payment
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={approve}>
+              <label className="checkbox-label">
+                <input type="checkbox" name="acceptedTerms" value="yes" />I
+                accept publishing terms version {termsVersion} and approve this
+                exact event revision for payment.
+              </label>
+              <StepFeedback feedback={currentFeedback} />
+              <div className="wizard-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={Boolean(pending)}
+                  onClick={() => setStep("photos")}
+                >
+                  Back
+                </button>
+                <button
+                  disabled={!draft.steps.reviewReady || Boolean(pending)}
+                  type="submit"
+                >
+                  {pending === "approval"
+                    ? "Approving…"
+                    : "Approve exact revision"}
+                </button>
+              </div>
+            </form>
+          )}
         </section>
       ) : null}
     </div>

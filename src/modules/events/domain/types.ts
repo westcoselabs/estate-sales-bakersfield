@@ -180,6 +180,10 @@ export interface EventEditorDto {
   readonly approvedAt: string | null;
   readonly termsVersion: string | null;
   readonly termsAcceptedAt: string | null;
+  readonly publication: {
+    readonly canonicalPath: string;
+    readonly publishedAt: string;
+  } | null;
   readonly location: {
     readonly addressLine1: string;
     readonly addressLine2: string | null;

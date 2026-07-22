@@ -93,6 +93,20 @@ function listItem(event: EventRecord): EventListItemDto {
   };
 }
 
+function isExactCurrentApproval(event: EventRecord, digest: string): boolean {
+  return Boolean(
+    !event.publication &&
+    event.workflowState === "APPROVED_FOR_PAYMENT" &&
+    event.approvalStatus === "APPROVED" &&
+    event.currentApprovalId &&
+    event.approvedRevision === event.contentRevision &&
+    event.approvalDigest === digest &&
+    event.approvedAt &&
+    event.termsVersion === PUBLISHING_TERMS_VERSION &&
+    event.termsAcceptedAt,
+  );
+}
+
 async function streamBytes(
   stream: ReadableStream<Uint8Array>,
   maximum: number,
@@ -764,20 +778,33 @@ export class EventService {
       throw new EventConflictError();
     const projection = futurePublicEventProjection(current);
     const digest = approvalDigest(current, projection);
-    return toEventEditorDto(
-      this.changed(
-        await this.events.approve({
-          eventId,
-          principal: user,
-          expectedVersion: input.expectedVersion,
-          contentRevision: current.contentRevision,
-          digest,
-          termsVersion: PUBLISHING_TERMS_VERSION,
-          now: new Date(),
-          audit,
-        }),
-      ),
-    );
+    if (isExactCurrentApproval(current, digest)) {
+      return toEventEditorDto(current);
+    }
+    try {
+      const approved = await this.events.approve({
+        eventId,
+        principal: user,
+        expectedVersion: input.expectedVersion,
+        contentRevision: current.contentRevision,
+        digest,
+        termsVersion: PUBLISHING_TERMS_VERSION,
+        now: new Date(),
+        audit,
+      });
+      if (approved) return toEventEditorDto(approved);
+    } catch (error) {
+      const latest = await this.loadOwned(eventId, user.id);
+      if (isExactCurrentApproval(latest, digest)) {
+        return toEventEditorDto(latest);
+      }
+      throw error;
+    }
+    const latest = await this.loadOwned(eventId, user.id);
+    if (isExactCurrentApproval(latest, digest)) {
+      return toEventEditorDto(latest);
+    }
+    throw new EventConflictError();
   }
 
   async mediaVariant(

@@ -158,7 +158,18 @@ test("pays and publishes from a fake signed webhook while stale paid revisions r
   await page.goto(`/dashboard/events/${publishable.id}/payment`);
   await page.getByRole("button", { name: "Pay and publish" }).click();
   await expect(page).toHaveURL(/\/test-checkout\/cs_test_/);
+  const originalCheckoutUrl = page.url();
   await expect(page.getByText("$12.34")).toBeVisible();
+
+  await page.goto(`/dashboard/events/${publishable.id}/edit`);
+  await expect(page.getByText(/Approval is saved/)).toBeVisible();
+  await page.getByRole("link", { name: "Make payment" }).click();
+  await expect(
+    page.getByRole("button", { name: "Continue to Checkout" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Continue to Checkout" }).click();
+  await expect(page).toHaveURL(originalCheckoutUrl);
+
   await page.getByRole("button", { name: "Complete test payment" }).click();
   await expect(page).toHaveURL(
     new RegExp(`/dashboard/events/${publishable.id}/payment/success`),
@@ -170,6 +181,23 @@ test("pays and publishes from a fake signed webhook while stale paid revisions r
   ).toBeVisible();
   await expect(page.getByText(/exact address will be released/i)).toBeVisible();
   await expect(page.getByText("123 Main Street")).toHaveCount(0);
+
+  await page.goto(`/dashboard/events/${publishable.id}/edit`);
+  await expect(page.getByText("This listing is published.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Make payment" })).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "View live listing" }),
+  ).toBeVisible();
+  await page.goto(`/dashboard/events/${publishable.id}/preview`);
+  await expect(page.getByRole("link", { name: "Make payment" })).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "View live listing" }),
+  ).toBeVisible();
+  await page.goto(`/dashboard/events/${publishable.id}/payment`);
+  await expect(page.getByText(/no further payment is required/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /pay|checkout/i })).toHaveCount(
+    0,
+  );
 
   const stale = await buildApprovedEvent(
     page,

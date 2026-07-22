@@ -311,11 +311,16 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
     expect(JSON.stringify(preview)).not.toContain("123 Main Street");
     expect(JSON.stringify(preview)).not.toContain("35.373292");
 
-    event = await service.approve(owner, event.id, {
+    const initialApprovalInput = {
       expectedVersion: event.version,
-      acceptedTerms: true,
+      acceptedTerms: true as const,
       termsVersion: PUBLISHING_TERMS_VERSION,
-    });
+    };
+    const [approved, concurrentApproval] = await Promise.all([
+      service.approve(owner, event.id, initialApprovalInput),
+      service.approve(owner, event.id, initialApprovalInput),
+    ]);
+    event = approved;
     expect(event).toMatchObject({
       workflowState: "APPROVED_FOR_PAYMENT",
       approvalStatus: "APPROVED",
@@ -323,12 +328,53 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       termsVersion: PUBLISHING_TERMS_VERSION,
     });
     expect(event.approvalDigest).toMatch(/^[0-9a-f]{64}$/);
+    expect(concurrentApproval).toMatchObject({
+      version: event.version,
+      contentRevision: event.contentRevision,
+      approvedRevision: event.approvedRevision,
+      approvalDigest: event.approvalDigest,
+      approvalStatus: "APPROVED",
+      workflowState: "APPROVED_FOR_PAYMENT",
+    });
     expect(
       await prisma.eventApproval.count({
         where: {
           eventId: event.id,
           contentRevision: event.contentRevision,
           acceptedByUserId: owner.id,
+        },
+      }),
+    ).toBe(1);
+
+    const approvedVersion = event.version;
+    const approvedAt = event.approvedAt;
+    const approvedDigest = event.approvalDigest;
+    event = await service.approve(owner, event.id, {
+      expectedVersion: event.version,
+      acceptedTerms: true,
+      termsVersion: PUBLISHING_TERMS_VERSION,
+    });
+    expect(event).toMatchObject({
+      version: approvedVersion,
+      approvedAt,
+      approvalDigest: approvedDigest,
+      approvalStatus: "APPROVED",
+      workflowState: "APPROVED_FOR_PAYMENT",
+    });
+    expect(
+      await prisma.eventApproval.count({
+        where: {
+          eventId: event.id,
+          contentRevision: event.contentRevision,
+          acceptedByUserId: owner.id,
+        },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.auditEntry.count({
+        where: {
+          targetId: event.id,
+          action: "EVENT_REVISION_APPROVED",
         },
       }),
     ).toBe(1);

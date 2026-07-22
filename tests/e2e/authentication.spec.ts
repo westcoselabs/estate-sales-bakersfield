@@ -630,6 +630,47 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     new RegExp(`/dashboard/events/${eventId}/payment`),
   );
 
+  const approvedResponse = await page.request.get(`/api/events/${eventId}`);
+  expect(approvedResponse.status()).toBe(200);
+  const approvedPayload = (await approvedResponse.json()) as {
+    readonly event: {
+      readonly version: number;
+      readonly approvedRevision: number;
+    };
+  };
+  const repeatedApproval = await sameOriginPost(
+    page,
+    `/api/events/${eventId}/approval`,
+    {
+      expectedVersion: approvedPayload.event.version,
+      acceptedTerms: true,
+      termsVersion: PUBLISHING_TERMS_VERSION,
+    },
+  );
+  expect(repeatedApproval.status).toBe(200);
+  expect(repeatedApproval.body).toMatchObject({
+    event: {
+      version: approvedPayload.event.version,
+      approvedRevision: approvedPayload.event.approvedRevision,
+    },
+  });
+
+  await page.goto(`/dashboard/events/${eventId}/edit`);
+  await expect(page.getByText(/Approval is saved/)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Approve exact revision" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByLabel(/I accept publishing terms version/),
+  ).toHaveCount(0);
+  await page.getByRole("link", { name: "Make payment" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/dashboard/events/${eventId}/payment`),
+  );
+  await expect(page.getByText(/Your approval is saved/)).toBeVisible();
+  await page.goto("/dashboard");
+  await expect(page.getByRole("link", { name: "Make payment" })).toBeVisible();
+
   await page.goto(`/dashboard/events/${eventId}/edit`);
   await page.getByRole("button", { name: "Details" }).click();
   await page.getByLabel("Public title").fill("Oleander Estate Sale Updated");

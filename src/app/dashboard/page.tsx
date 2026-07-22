@@ -149,7 +149,17 @@ export default async function DashboardPage({
                       </Link>
                       {" · "}
                       <Link href={`/dashboard/events/${event.id}/payment`}>
-                        Payment status
+                        {paymentStatuses.get(event.id)?.displayState ===
+                        "READY_FOR_PAYMENT"
+                          ? "Make payment"
+                          : paymentStatuses.get(event.id)?.displayState ===
+                                "CHECKOUT_CREATED" ||
+                              paymentStatuses.get(event.id)?.displayState ===
+                                "PAYMENT_CANCELED" ||
+                              paymentStatuses.get(event.id)?.displayState ===
+                                "CHECKOUT_EXPIRED"
+                            ? "Continue payment"
+                            : "Payment status"}
                       </Link>
                       {paymentStatuses.get(event.id)?.canonicalPath ? (
                         <>

@@ -101,9 +101,17 @@ export function PaymentPanel({
 
   const canPay = [
     "READY_FOR_PAYMENT",
+    "CHECKOUT_CREATED",
     "CHECKOUT_EXPIRED",
     "PAYMENT_CANCELED",
   ].includes(status.displayState);
+  const checkoutAction =
+    status.displayState === "CHECKOUT_CREATED"
+      ? "Continue to Checkout"
+      : status.displayState === "CHECKOUT_EXPIRED" ||
+          status.displayState === "PAYMENT_CANCELED"
+        ? "Try payment again"
+        : "Pay and publish";
   return (
     <section className="payment-panel" aria-live="polite">
       <div>
@@ -136,7 +144,7 @@ export function PaymentPanel({
             onClick={() => void beginCheckout()}
             disabled={busy || !status.price}
           >
-            {busy ? "Opening Checkout…" : "Pay and publish"}
+            {busy ? "Opening Checkout…" : checkoutAction}
           </button>
         ) : null}
         {status.canonicalPath ? (

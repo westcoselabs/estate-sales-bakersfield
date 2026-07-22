@@ -140,6 +140,12 @@ export function toEventEditorDto(event: EventRecord): EventEditorDto {
     approvedAt: event.approvedAt?.toISOString() ?? null,
     termsVersion: event.termsVersion,
     termsAcceptedAt: event.termsAcceptedAt?.toISOString() ?? null,
+    publication: event.publication
+      ? {
+          canonicalPath: event.publication.canonicalPath,
+          publishedAt: event.publication.publishedAt.toISOString(),
+        }
+      : null,
     location: event.location
       ? {
           addressLine1: event.location.addressLine1,

@@ -57,6 +57,19 @@ export default async function EventPreviewPage({ params }: Props) {
         <strong>
           Exact future listing preview · revision {editor.contentRevision}
         </strong>
+        {editor.publication ? (
+          <Link className="button-link" href={editor.publication.canonicalPath}>
+            View live listing
+          </Link>
+        ) : editor.approvalStatus === "APPROVED" &&
+          editor.approvedRevision === editor.contentRevision ? (
+          <Link
+            className="button-link"
+            href={`/dashboard/events/${eventId}/payment`}
+          >
+            Make payment
+          </Link>
+        ) : null}
       </div>
       <article className="listing-preview">
         {/* eslint-disable-next-line @next/next/no-img-element */}
