@@ -13,7 +13,10 @@ Forbidden dependencies are executable in `dependency-cruiser.cjs`:
 - Next.js, Prisma, Resend, Vercel Blob, or Sharp in domain/application layers;
 - Prisma generated code in App Router or feature domain/application layers;
 - `sharp` outside media infrastructure.
+- `stripe` outside payment infrastructure;
 
 Phase 2 adds `src/modules/organizers` as a separate feature module. Its application service accepts the authenticated user ID supplied by the transport composition layer, and its Prisma repository enforces the one-profile-per-user ownership key. Neither organizer domain nor application code imports Prisma, Next.js, or Resend types.
 
 Media scopes remain application-owned opaque values. Phase 3 binds server-generated scopes to authenticated event ownership and database reservations without letting Blob paths or SDK types escape infrastructure. Location validation follows the same provider-neutral rule. Event App Router handlers import the module public entry point, not Prisma repositories or provider adapters.
+
+Phase 4 adds `src/modules/payments`. Its domain/application layers expose provider-neutral Checkout sessions, payment attempts, publication snapshots, and a `StripeProvider` port. Stripe SDK types, secret-key construction, raw signature parsing, and provider errors remain in payment infrastructure. The App Router composes the public module entry point and never imports Stripe or Prisma payment repositories directly.

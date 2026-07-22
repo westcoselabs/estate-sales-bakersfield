@@ -16,7 +16,7 @@ Public organizer display-name/website changes and organizer eligibility changes 
 
 ## State and privacy
 
-`INCOMPLETE_DRAFT` and `PREVIEW_READY` are derived by application policy. `APPROVED_FOR_PAYMENT` records exact revision approval, not publication. Public preview and future public listing use the same projector. Approximate and pre-start hidden projections never serialize exact coordinates/address.
+`INCOMPLETE_DRAFT` and `PREVIEW_READY` are derived by application policy. `APPROVED_FOR_PAYMENT` records exact revision approval, not publication. Phase 4 publication creates a separate immutable snapshot bound to that approval digest and payment attempt. Approximate and pre-start hidden runtime projections never serialize exact coordinates/address. Published Phase 4 events are edit-locked; the paid-edit workflow remains deferred.
 
 ## Routes
 
@@ -31,5 +31,9 @@ Public organizer display-name/website changes and organizer eligibility changes 
 - `DELETE /api/events/[eventId]/photos/[photoId]`
 - `POST /api/events/[eventId]/approval`
 - `GET /media/[photoId]/[variant]`
+- `POST /api/events/[eventId]/checkout`
+- `GET /api/events/[eventId]/payment-status`
+- `POST /api/events/[eventId]/payment-cancel`
+- `POST /api/webhooks/stripe`
 
-Dashboard/editor/preview pages are under `/dashboard`; future canonical paths are `/estate-sales/[slug]-[publicId]` and `/yard-sales/[slug]-[publicId]`. Those public detail routes deliberately return not-found until a future paid-publication transition exists.
+Dashboard/editor/preview/payment pages are under `/dashboard`. Canonical `/estate-sales/[slug]-[publicId]` and `/yard-sales/[slug]-[publicId]` detail routes return not-found until an immutable publication exists, redirect noncanonical slugs to the stored canonical path, and read only the published snapshot.

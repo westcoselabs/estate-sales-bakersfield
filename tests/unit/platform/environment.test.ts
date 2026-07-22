@@ -166,4 +166,57 @@ describe("server environment validation", () => {
       }),
     ).toThrow(/TEST_RUN_ID/);
   });
+
+  it("requires complete Preview-only Stripe test configuration", () => {
+    const preview = {
+      ...base,
+      NODE_ENV: "production",
+      APP_ENV: "preview",
+      APP_URL: "https://preview.example.test",
+      DATABASE_URL: "postgresql://example.test/database",
+      DIRECT_URL: "postgresql://example.test/database",
+      DATABASE_RESOURCE_ENV: "preview",
+      CRON_SECRET: "x".repeat(32),
+      STRIPE_SECRET_KEY: `sk_test_${"x".repeat(24)}`,
+      STRIPE_WEBHOOK_SECRET: `whsec_${"y".repeat(24)}`,
+      STRIPE_PRICE_ID: "price_preview_fixture",
+      STRIPE_EXPECTED_AMOUNT: "1234",
+      STRIPE_EXPECTED_CURRENCY: "USD",
+      STRIPE_MODE: "test",
+      STRIPE_RESOURCE_ENV: "preview",
+    };
+    expect(parseServerEnvironment(preview)).toMatchObject({
+      APP_ENV: "preview",
+      STRIPE_EXPECTED_AMOUNT: 1234,
+      STRIPE_EXPECTED_CURRENCY: "usd",
+      STRIPE_MODE: "test",
+    });
+    expect(() =>
+      parseServerEnvironment({ ...preview, STRIPE_PRICE_ID: undefined }),
+    ).toThrow(/STRIPE_PRICE_ID/);
+    expect(() =>
+      parseServerEnvironment({ ...preview, STRIPE_MODE: "live" }),
+    ).toThrow(/Stripe test mode/);
+    expect(() =>
+      parseServerEnvironment({
+        ...preview,
+        STRIPE_RESOURCE_ENV: "production",
+      }),
+    ).toThrow(/STRIPE_RESOURCE_ENV/);
+  });
+
+  it("keeps Test credential-free and on its deterministic Stripe adapter", () => {
+    expect(() =>
+      parseServerEnvironment({
+        ...base,
+        STRIPE_SECRET_KEY: `sk_test_${"x".repeat(24)}`,
+        STRIPE_WEBHOOK_SECRET: `whsec_${"y".repeat(24)}`,
+        STRIPE_PRICE_ID: "price_test_fixture",
+        STRIPE_EXPECTED_AMOUNT: "1234",
+        STRIPE_EXPECTED_CURRENCY: "usd",
+        STRIPE_MODE: "test",
+        STRIPE_RESOURCE_ENV: "test",
+      }),
+    ).toThrow(/cannot use real Stripe credentials/);
+  });
 });

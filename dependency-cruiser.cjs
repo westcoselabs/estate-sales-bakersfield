@@ -33,7 +33,7 @@ module.exports = {
       from: { path: "^src/modules/[^/]+/(domain|application)" },
       to: {
         dependencyTypes: ["npm"],
-        path: "^(next($|/)|@prisma($|/)|resend$|@vercel/blob$|sharp$)",
+        path: "^(next($|/)|@prisma($|/)|resend$|stripe$|@vercel/blob$|sharp$)",
       },
     },
     {
@@ -59,6 +59,12 @@ module.exports = {
       severity: "error",
       from: { pathNot: "^src/modules/media/infrastructure" },
       to: { dependencyTypes: ["npm"], path: "^sharp$" },
+    },
+    {
+      name: "stripe-is-payment-infrastructure-only",
+      severity: "error",
+      from: { pathNot: "^src/modules/payments/infrastructure" },
+      to: { dependencyTypes: ["npm"], path: "^stripe$" },
     },
   ],
   options: {

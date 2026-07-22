@@ -14,6 +14,16 @@ const optionalUrl = z.preprocess(
   z.url().optional(),
 );
 
+const optionalPositiveInteger = z.preprocess(
+  (value) =>
+    value === "" || value === undefined
+      ? undefined
+      : typeof value === "string"
+        ? Number(value)
+        : value,
+  z.number().int().positive().max(999_999_999).optional(),
+);
+
 const applicationUrl = z.url().superRefine((value, context) => {
   const url = new URL(value);
   if (!["http:", "https:"].includes(url.protocol)) {
@@ -133,6 +143,41 @@ export const serverEnvironmentSchema = z
       (value) => (value === "" ? undefined : value),
       providerEnvironmentSchema.optional(),
     ),
+    STRIPE_SECRET_KEY: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(16).optional(),
+    ),
+    STRIPE_WEBHOOK_SECRET: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(16).optional(),
+    ),
+    STRIPE_PRICE_ID: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z
+        .string()
+        .regex(/^price_[A-Za-z0-9_]+$/)
+        .max(255)
+        .optional(),
+    ),
+    STRIPE_EXPECTED_AMOUNT: optionalPositiveInteger,
+    STRIPE_EXPECTED_CURRENCY: z.preprocess(
+      (value) =>
+        typeof value === "string" && value !== ""
+          ? value.toLowerCase()
+          : undefined,
+      z
+        .string()
+        .regex(/^[a-z]{3}$/)
+        .optional(),
+    ),
+    STRIPE_MODE: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.enum(["test", "live"]).optional(),
+    ),
+    STRIPE_RESOURCE_ENV: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      providerEnvironmentSchema.optional(),
+    ),
     SENTRY_DSN: optionalUrl,
   })
   .superRefine((environment, context) => {
@@ -175,6 +220,7 @@ export const serverEnvironmentSchema = z
         ["BLOB_READ_WRITE_TOKEN", "BLOB_RESOURCE_ENV"],
         ["RESEND_API_KEY", "RESEND_RESOURCE_ENV"],
         ["MAPBOX_ACCESS_TOKEN", "MAPBOX_RESOURCE_ENV"],
+        ["STRIPE_SECRET_KEY", "STRIPE_RESOURCE_ENV"],
       ] as const;
       for (const [credential, marker] of configuredProviders) {
         if (
@@ -188,6 +234,75 @@ export const serverEnvironmentSchema = z
           });
         }
       }
+    }
+
+    const stripeKeys = [
+      "STRIPE_SECRET_KEY",
+      "STRIPE_WEBHOOK_SECRET",
+      "STRIPE_PRICE_ID",
+      "STRIPE_EXPECTED_AMOUNT",
+      "STRIPE_EXPECTED_CURRENCY",
+      "STRIPE_MODE",
+      "STRIPE_RESOURCE_ENV",
+    ] as const;
+    const stripeConfigured = stripeKeys.filter(
+      (key) => environment[key] !== undefined,
+    );
+    if (
+      stripeConfigured.length > 0 &&
+      stripeConfigured.length !== stripeKeys.length
+    ) {
+      for (const key of stripeKeys) {
+        if (environment[key] === undefined) {
+          context.addIssue({
+            code: "custom",
+            message: `${key} is required when Stripe is configured`,
+            path: [key],
+          });
+        }
+      }
+    }
+    if (stripeConfigured.length === stripeKeys.length) {
+      if (
+        environment.APP_ENV === "preview" &&
+        (environment.STRIPE_MODE !== "test" ||
+          !environment.STRIPE_SECRET_KEY?.startsWith("sk_test_"))
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Vercel Preview may use only Stripe test mode",
+          path: ["STRIPE_MODE"],
+        });
+      }
+      if (
+        environment.APP_ENV === "production" &&
+        (environment.STRIPE_MODE !== "live" ||
+          !environment.STRIPE_SECRET_KEY?.startsWith("sk_live_"))
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Production Stripe configuration must be explicitly live",
+          path: ["STRIPE_MODE"],
+        });
+      }
+      if (!environment.STRIPE_WEBHOOK_SECRET?.startsWith("whsec_")) {
+        context.addIssue({
+          code: "custom",
+          message: "STRIPE_WEBHOOK_SECRET must be a Stripe endpoint secret",
+          path: ["STRIPE_WEBHOOK_SECRET"],
+        });
+      }
+    }
+
+    if (
+      environment.APP_ENV === "test" &&
+      (environment.STRIPE_SECRET_KEY || environment.STRIPE_WEBHOOK_SECRET)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "APP_ENV=test cannot use real Stripe credentials",
+        path: ["STRIPE_SECRET_KEY"],
+      });
     }
 
     if (

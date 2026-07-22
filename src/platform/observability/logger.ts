@@ -17,6 +17,12 @@ export const REDACTED_LOG_PATHS = [
   "verificationToken",
   "resetToken",
   "token",
+  "stripeSignature",
+  "stripeSecretKey",
+  "webhookSecret",
+  "checkoutUrl",
+  "sessionUrl",
+  "rawBody",
   "*.password",
   "*.email",
   "*.normalizedEmail",
@@ -27,6 +33,12 @@ export const REDACTED_LOG_PATHS = [
   "*.verificationToken",
   "*.resetToken",
   "*.token",
+  "*.stripeSignature",
+  "*.stripeSecretKey",
+  "*.webhookSecret",
+  "*.checkoutUrl",
+  "*.sessionUrl",
+  "*.rawBody",
 ];
 
 export function createLogger(

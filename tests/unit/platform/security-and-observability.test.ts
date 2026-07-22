@@ -37,6 +37,9 @@ describe("security and observability boundaries", () => {
       password: "not-for-logs",
       nested: {
         resetToken: "raw-token",
+        stripeSignature: "raw-signature",
+        checkoutUrl: "https://checkout.example.test/raw-session",
+        rawBody: "raw-webhook-body",
         safe: "value",
         href: `/verify-email?token=${opaqueToken}`,
         opaqueCredential: opaqueToken,
@@ -56,6 +59,9 @@ describe("security and observability boundaries", () => {
       password: "[REDACTED]",
       nested: {
         resetToken: "[REDACTED]",
+        stripeSignature: "[REDACTED]",
+        checkoutUrl: "[REDACTED]",
+        rawBody: "[REDACTED]",
         safe: "value",
         href: "/verify-email?token=[REDACTED]",
         opaqueCredential: "[REDACTED]",

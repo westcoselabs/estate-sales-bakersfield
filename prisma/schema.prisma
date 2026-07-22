@@ -111,6 +111,47 @@ enum EventPhotoStatus {
   @@map("event_photo_status")
 }
 
+enum PaymentCheckoutState {
+  CREATING
+  OPEN
+  COMPLETE
+  EXPIRED
+  CANCELED
+  FAILED
+
+  @@map("payment_checkout_state")
+}
+
+enum PaymentState {
+  UNPAID
+  PENDING
+  PAID
+  FAILED
+
+  @@map("payment_state")
+}
+
+enum PaymentFulfillmentState {
+  NOT_STARTED
+  PROCESSING
+  RETRYING
+  FULFILLED
+  BLOCKED
+  MANUAL_REVIEW
+
+  @@map("payment_fulfillment_state")
+}
+
+enum StripeWebhookProcessingState {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  IGNORED
+  FAILED
+
+  @@map("stripe_webhook_processing_state")
+}
+
 model User {
   id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   displayName       String        @map("display_name") @db.VarChar(100)
@@ -132,6 +173,7 @@ model User {
   organizerProfile        OrganizerProfile?
   termsAcceptedEvents     Event[]                  @relation("EventTermsAcceptedBy")
   eventApprovals          EventApproval[]          @relation("EventApprovalUser")
+  paymentAttempts         PaymentAttempt[]
   auditEntries            AuditEntry[]             @relation("AuditActor")
 
   @@index([role])
@@ -203,6 +245,7 @@ model OrganizerProfile {
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   events         Event[]
   eventApprovals EventApproval[]
+  paymentAttempts PaymentAttempt[]
 
   @@index([status])
   @@map("organizer_profiles")
@@ -250,6 +293,8 @@ model Event {
   uploadReservations UploadReservation[]
   approvals          EventApproval[]     @relation("EventApprovals")
   currentApproval    EventApproval?      @relation("CurrentEventApproval", fields: [currentApprovalId], references: [id], onDelete: SetNull)
+  paymentAttempts    PaymentAttempt[]
+  publication        EventPublication?
 
   @@index([organizerId, updatedAt])
   @@index([workflowState, updatedAt])
@@ -350,11 +395,88 @@ model EventApproval {
   organizer       OrganizerProfile @relation(fields: [organizerId], references: [id], onDelete: Cascade)
   acceptedByUser  User             @relation("EventApprovalUser", fields: [acceptedByUserId], references: [id], onDelete: Cascade)
   currentForEvent Event?           @relation("CurrentEventApproval")
+  paymentAttempts PaymentAttempt[]
 
   @@unique([eventId, contentRevision])
   @@index([eventId, approvedAt])
   @@index([organizerId, approvedAt])
   @@map("event_approvals")
+}
+
+model PaymentAttempt {
+  id                      String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId                 String                  @map("event_id") @db.Uuid
+  organizerId             String                  @map("organizer_id") @db.Uuid
+  userId                  String                  @map("user_id") @db.Uuid
+  approvalId              String                  @map("approval_id") @db.Uuid
+  approvedRevision        Int                     @map("approved_revision")
+  approvedDigest          String                  @map("approved_digest") @db.Char(64)
+  attemptGeneration       Int                     @map("attempt_generation")
+  environment             String                  @db.VarChar(16)
+  stripeCheckoutSessionId String?                 @unique @map("stripe_checkout_session_id") @db.VarChar(255)
+  stripePaymentIntentId   String?                 @unique @map("stripe_payment_intent_id") @db.VarChar(255)
+  stripePriceId           String                  @map("stripe_price_id") @db.VarChar(255)
+  expectedAmount          Int                     @map("expected_amount")
+  expectedCurrency        String                  @map("expected_currency") @db.Char(3)
+  checkoutState           PaymentCheckoutState    @default(CREATING) @map("checkout_state")
+  paymentState            PaymentState            @default(UNPAID) @map("payment_state")
+  fulfillmentState        PaymentFulfillmentState @default(NOT_STARTED) @map("fulfillment_state")
+  expiresAt               DateTime?               @map("expires_at") @db.Timestamptz(3)
+  paidAt                  DateTime?               @map("paid_at") @db.Timestamptz(3)
+  fulfilledAt             DateTime?               @map("fulfilled_at") @db.Timestamptz(3)
+  lastReconciledAt        DateTime?               @map("last_reconciled_at") @db.Timestamptz(3)
+  failureReason           String?                 @map("failure_reason") @db.VarChar(500)
+  version                 Int                     @default(1)
+  createdAt               DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  event       Event            @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  organizer   OrganizerProfile @relation(fields: [organizerId], references: [id], onDelete: Restrict)
+  user        User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  approval    EventApproval    @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+  publication EventPublication?
+
+  @@unique([eventId, attemptGeneration])
+  @@index([eventId, createdAt])
+  @@index([checkoutState, paymentState, fulfillmentState, updatedAt])
+  @@index([lastReconciledAt])
+  @@map("payment_attempts")
+}
+
+model StripeWebhookEvent {
+  id                String                       @id @db.VarChar(255)
+  eventType         String                       @map("event_type") @db.VarChar(100)
+  checkoutSessionId String?                      @map("checkout_session_id") @db.VarChar(255)
+  stripeCreatedAt   DateTime?                    @map("stripe_created_at") @db.Timestamptz(3)
+  firstReceivedAt   DateTime                     @default(now()) @map("first_received_at") @db.Timestamptz(3)
+  processingState   StripeWebhookProcessingState @default(RECEIVED) @map("processing_state")
+  processedAt       DateTime?                    @map("processed_at") @db.Timestamptz(3)
+  failureReason     String?                      @map("failure_reason") @db.VarChar(500)
+  retryCount        Int                          @default(0) @map("retry_count")
+  updatedAt         DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([processingState, firstReceivedAt])
+  @@index([checkoutSessionId])
+  @@map("stripe_webhook_events")
+}
+
+model EventPublication {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId           String   @unique @map("event_id") @db.Uuid
+  paymentAttemptId  String   @unique @map("payment_attempt_id") @db.Uuid
+  approvedRevision  Int      @map("approved_revision")
+  approvalDigest    String   @map("approval_digest") @db.Char(64)
+  publicId          String   @unique @map("public_id") @db.VarChar(12)
+  canonicalPath     String   @unique @map("canonical_path") @db.VarChar(255)
+  snapshot          Json
+  publishedAt       DateTime @map("published_at") @db.Timestamptz(3)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  event          Event          @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  paymentAttempt PaymentAttempt @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
+
+  @@index([publishedAt])
+  @@map("event_publications")
 }
 
 model EmailDelivery {

@@ -63,7 +63,7 @@ export class PrismaOrganizerProfileRepository implements OrganizerProfileReposit
           existing.status !== input.status);
       if (changesPublicEventContent) {
         const affectedEvents = await transaction.event.findMany({
-          where: { organizerId: profile.id },
+          where: { organizerId: profile.id, publication: { is: null } },
           select: { id: true, approvalStatus: true },
         });
         const approvedIds = affectedEvents

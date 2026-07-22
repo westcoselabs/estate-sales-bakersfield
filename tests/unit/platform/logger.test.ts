@@ -19,6 +19,9 @@ describe("structured logger", () => {
         headers: { cookie: "estate_session=raw-cookie" },
         password: "raw-password",
         resetToken: "raw-reset-token",
+        stripeSignature: "raw-stripe-signature",
+        checkoutUrl: "https://checkout.example.test/raw-session",
+        rawBody: "raw-webhook-body",
         safe: "retained",
       });
     } finally {
@@ -33,5 +36,8 @@ describe("structured logger", () => {
     expect(serialized).not.toContain("raw-cookie");
     expect(serialized).not.toContain("raw-password");
     expect(serialized).not.toContain("raw-reset-token");
+    expect(serialized).not.toContain("raw-stripe-signature");
+    expect(serialized).not.toContain("raw-session");
+    expect(serialized).not.toContain("raw-webhook-body");
   });
 });

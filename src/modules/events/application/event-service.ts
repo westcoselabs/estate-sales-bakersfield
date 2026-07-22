@@ -155,6 +155,14 @@ export class EventService {
     return result;
   }
 
+  private assertEditable(event: EventRecord): void {
+    if (event.publication) {
+      throw new EventStateError(
+        "Published listings cannot be edited in the Phase 4 workflow.",
+      );
+    }
+  }
+
   async create(
     principal: AuthPrincipal | null,
     eventType: EventType,
@@ -195,6 +203,7 @@ export class EventService {
   ): Promise<EventEditorDto> {
     const { user } = await this.requireOrganizer(principal);
     const current = await this.loadOwned(eventId, user.id);
+    this.assertEditable(current);
     const hypothetical = withChanges(current, {
       title: input.title,
       description: input.description,
@@ -223,6 +232,7 @@ export class EventService {
   ): Promise<EventEditorDto> {
     const { user } = await this.requireOrganizer(principal);
     const current = await this.loadOwned(eventId, user.id);
+    this.assertEditable(current);
     if (current.location && current.location.timezone !== input.timezone) {
       throw new EventValidationError(
         "The schedule timezone must match the validated address timezone.",
@@ -260,6 +270,7 @@ export class EventService {
   ): Promise<EventEditorDto> {
     const { user } = await this.requireOrganizer(principal);
     const current = await this.loadOwned(eventId, user.id);
+    this.assertEditable(current);
     if (current.timezone && current.timezone !== input.timezone) {
       throw new EventValidationError(
         "The address timezone must match the saved schedule timezone.",
@@ -294,7 +305,7 @@ export class EventService {
   ): Promise<EventPhotoReservationDto> {
     const user = requireVerifiedPublishingPrincipal(principal);
     await this.requireOrganizer(user);
-    await this.loadOwned(eventId, user.id);
+    this.assertEditable(await this.loadOwned(eventId, user.id));
     const reservationId = randomUUID();
     const photoId = randomUUID();
     const expiresAt = new Date(Date.now() + 10 * 60_000);
@@ -343,6 +354,7 @@ export class EventService {
     const user = requireVerifiedPublishingPrincipal(principal);
     await this.requireOrganizer(user);
     const current = await this.loadOwned(eventId, user.id);
+    this.assertEditable(current);
     if (current.version !== input.expectedVersion)
       throw new EventConflictError();
     const reservation = await this.events.findPhotoReservation({
@@ -530,6 +542,7 @@ export class EventService {
     const user = requireVerifiedPublishingPrincipal(principal);
     await this.requireOrganizer(user);
     const current = await this.loadOwned(eventId, user.id);
+    this.assertEditable(current);
     const photo = current.photos.find(
       (candidate) => candidate.id === photoId && candidate.status === "READY",
     );
@@ -562,6 +575,7 @@ export class EventService {
     const user = requireVerifiedPublishingPrincipal(principal);
     await this.requireOrganizer(user);
     const current = await this.loadOwned(eventId, user.id);
+    this.assertEditable(current);
     const expectedIds = new Set(current.photos.map((photo) => photo.id));
     const submittedIds = new Set(photoIds);
     if (
@@ -605,6 +619,7 @@ export class EventService {
     const user = requireVerifiedPublishingPrincipal(principal);
     await this.requireOrganizer(user);
     const current = await this.loadOwned(eventId, user.id);
+    this.assertEditable(current);
     if (!current.photos.some((photo) => photo.id === photoId)) {
       throw new EventNotFoundError("The event photo was not found.");
     }
@@ -659,6 +674,7 @@ export class EventService {
       );
     }
     const current = await this.loadOwned(eventId, user.id);
+    this.assertEditable(current);
     if (current.version !== input.expectedVersion)
       throw new EventConflictError();
     const projection = futurePublicEventProjection(current);
@@ -684,22 +700,23 @@ export class EventService {
     photoId: string,
     variant: "thumbnail" | "card" | "gallery" | "cover",
   ) {
-    const user = requireUserPrincipal(principal);
     if (!DATABASE_ID.test(photoId)) {
       throw new EventNotFoundError("The media object was not found.");
     }
+    const user = principal?.status === "ACTIVE" ? principal : null;
     const administrator =
-      user.role === "ADMIN" ? Boolean(requireAdminPrincipal(user)) : false;
+      user?.role === "ADMIN" ? Boolean(requireAdminPrincipal(user)) : false;
     const media = await this.events.findPhotoVariantForPrincipal({
       photoId,
       variant,
-      userId: user.id,
+      userId: user?.id ?? null,
       administrator,
     });
     if (!media) throw new EventNotFoundError("The media object was not found.");
     return {
       stream: await this.media.read(parseMediaObjectKey(media.objectKey)),
       contentType: media.contentType,
+      public: media.public,
     };
   }
 }

@@ -170,10 +170,11 @@ export interface EventRepository {
   findPhotoVariantForPrincipal(input: {
     readonly photoId: string;
     readonly variant: "thumbnail" | "card" | "gallery" | "cover";
-    readonly userId: string;
+    readonly userId: string | null;
     readonly administrator: boolean;
   }): Promise<{
     readonly objectKey: string;
     readonly contentType: string;
+    readonly public: boolean;
   } | null>;
 }

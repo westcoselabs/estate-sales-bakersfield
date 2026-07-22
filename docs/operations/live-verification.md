@@ -14,6 +14,10 @@ Deploy the app to a non-production Vercel environment with a 32+ character `CRON
 
 Provide `BLOB_READ_WRITE_TOKEN` for an isolated Preview private store and set `BLOB_RESOURCE_ENV=preview`. The test uses only generated `test/live-contract/...` keys and always attempts deletion in `finally`.
 
+## Stripe test-mode Preview
+
+The ordinary suite uses no Stripe network access. Preview live acceptance requires a regular Stripe account in test mode, a Preview-only one-time Price, and an endpoint-specific webhook secret. Set all seven server-only `STRIPE_*` variables documented in `preview-verification.md`; `STRIPE_MODE=test` and `STRIPE_RESOURCE_ENV=preview` are mandatory. Confirm the Price ID, expected minor-unit amount, and currency against the Stripe dashboard before Checkout. Exercise successful and canceled hosted Checkout, duplicate replay, delayed-webhook reconciliation, stale-revision blocking, and the stable public route. Do not report this `PASS` from fake-adapter evidence.
+
 ## Phase 2 authentication providers
 
 Preview authentication requires Preview Neon with the PostgreSQL rate-limit migration, a Preview-only `AUTH_FINGERPRINT_SECRET`, and a Preview Resend key/sender. Confirm variable names and environment scope without printing values. Exercise email only through a provider test mode or an explicitly approved controlled recipient. Verify rate-limit thresholds, expiry, concurrency, and the sanitized fail-closed response without substituting Production credentials or a process-memory authority. If Resend or the controlled delivery target is unavailable, only delivery-dependent checks are `BLOCKED`.

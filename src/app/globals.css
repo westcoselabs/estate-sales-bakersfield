@@ -356,6 +356,55 @@ legend {
   color: #586269;
 }
 
+.payment-panel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-top: 1.5rem;
+  border: 1px solid #c9d8cf;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f7fbf8, #fff);
+  box-shadow: 0 0.75rem 2rem rgb(30 77 59 / 8%);
+}
+
+.payment-panel h2 {
+  margin-top: 0.25rem;
+}
+
+.payment-actions,
+.checkout-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.payment-actions {
+  max-width: 22rem;
+}
+
+.button-link {
+  display: inline-block;
+  border-radius: 0.4rem;
+  padding: 0.7rem 1rem;
+  background: #1f4d3b;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.listing-breadcrumb {
+  margin-bottom: 1rem;
+  color: #586269;
+}
+
+.publication-proof {
+  color: #586269;
+  font-size: 0.9rem;
+}
+
 @media (max-width: 42rem) {
   main {
     padding: 1rem;
@@ -363,7 +412,8 @@ legend {
 
   .dashboard-heading,
   .builder-header,
-  .preview-toolbar {
+  .preview-toolbar,
+  .payment-panel {
     display: block;
   }
 

@@ -1,5 +1,5 @@
 const SECRET_KEY_PATTERN =
-  /(authorization|cookie|email|password|recipient|secret|token)/i;
+  /(authorization|cookie|email|password|recipient|secret|token|signature|checkouturl|sessionurl|rawbody)/i;
 const OPAQUE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const SENSITIVE_QUERY_VALUE_PATTERN =
   /([?&#](?:authorization|code|credential|password|secret|token)=)[^&#\s]*/gi;

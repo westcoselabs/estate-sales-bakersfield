@@ -14,6 +14,7 @@ import {
   LocationProviderError,
 } from "@/modules/locations";
 import { MediaStoreError } from "@/modules/media";
+import { PaymentError } from "@/modules/payments";
 import { requestIdFrom } from "@/platform/http/request-context";
 import { logger } from "@/platform/observability/logger";
 import { TrustedOriginError } from "@/platform/security/trusted-origin";
@@ -76,6 +77,23 @@ export function eventApiError(
     return authJson(
       { error: error.message, requestId },
       { status: 422, requestId },
+    );
+  }
+  if (error instanceof PaymentError) {
+    const status =
+      error.code === "PAYMENT_CONFIGURATION_UNAVAILABLE" ||
+      error.code === "STRIPE_UNAVAILABLE"
+        ? 503
+        : error.code === "EVENT_NOT_APPROVED" ||
+            error.code === "STALE_APPROVAL" ||
+            error.code === "INVALID_SCHEDULE" ||
+            error.code === "INCOMPLETE_PHOTOS" ||
+            error.code === "PAYMENT_MISMATCH"
+          ? 422
+          : 409;
+    return authJson(
+      { error: error.message, code: error.code, requestId },
+      { status, requestId },
     );
   }
   if (

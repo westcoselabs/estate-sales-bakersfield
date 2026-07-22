@@ -35,6 +35,7 @@ export function readyEvent(changes: Partial<EventRecord> = {}): EventRecord {
     description:
       "Furniture, homewares, art, and collectibles from a family estate.",
     eventType: "ESTATE_SALE",
+    origin: "OWNER_CREATED",
     localStartsAt: "2026-07-25T09:00",
     localEndsAt: "2026-07-25T15:00",
     startsAt: new Date("2026-07-25T16:00:00.000Z"),
@@ -50,11 +51,13 @@ export function readyEvent(changes: Partial<EventRecord> = {}): EventRecord {
     approvedAt: null,
     termsVersion: null,
     termsAcceptedAt: null,
+    currentApprovalId: null,
     coverPhotoId: photo.id,
     canceledAt: null,
     removedAt: null,
     createdAt: new Date("2026-07-19T00:00:00.000Z"),
     updatedAt: new Date("2026-07-20T00:00:00.000Z"),
+    publication: null,
     location: {
       id: "location-1",
       eventId: "event-1",

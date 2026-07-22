@@ -9,6 +9,7 @@ export type LocationValidationStatus =
 export type EventPhotoStatus =
   "RESERVED" | "UPLOADED" | "PROCESSING" | "READY" | "FAILED";
 export type EventPhotoVariant = "thumbnail" | "card" | "gallery" | "cover";
+export type EventOrigin = "OWNER_CREATED" | "ADMIN_IMPORTED" | "PARTNER_FEED";
 
 export interface EventLocationRecord {
   readonly id: string;
@@ -68,6 +69,7 @@ export interface EventRecord {
   readonly title: string | null;
   readonly description: string | null;
   readonly eventType: EventType;
+  readonly origin: EventOrigin;
   readonly localStartsAt: string | null;
   readonly localEndsAt: string | null;
   readonly startsAt: Date | null;
@@ -83,11 +85,19 @@ export interface EventRecord {
   readonly approvedAt: Date | null;
   readonly termsVersion: string | null;
   readonly termsAcceptedAt: Date | null;
+  readonly currentApprovalId: string | null;
   readonly coverPhotoId: string | null;
   readonly canceledAt: Date | null;
   readonly removedAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  readonly publication: {
+    readonly paymentAttemptId: string;
+    readonly approvedRevision: number;
+    readonly approvalDigest: string;
+    readonly canonicalPath: string;
+    readonly publishedAt: Date;
+  } | null;
   readonly location: EventLocationRecord | null;
   readonly photos: readonly EventPhotoRecord[];
 }

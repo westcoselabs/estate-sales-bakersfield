@@ -6,7 +6,11 @@ process.env.TEST_RUN_ID ??= `testrun-e2e-${Date.now().toString(36)}-${crypto.ran
 
 export default defineConfig({
   testDir: "tests/e2e",
-  fullyParallel: true,
+  // Capture email, deterministic media, fake Stripe, and the Test Neon branch
+  // are intentionally shared integration fixtures. Serialize browser journeys
+  // so provider-heavy workflows cannot contend through the single test server.
+  fullyParallel: false,
+  workers: 1,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",

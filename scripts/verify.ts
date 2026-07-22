@@ -34,6 +34,7 @@ const credentialFreeCommands = [
   "test:contract:email",
   "test:contract:location",
   "test:contract:image",
+  "test:contract:stripe",
 ] as const;
 
 function runCredentialFreeChecks(): boolean {

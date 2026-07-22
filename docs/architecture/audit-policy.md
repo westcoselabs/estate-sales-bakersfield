@@ -13,3 +13,5 @@ All telemetry must:
 - be retention-bounded independently of immutable enforcement history.
 
 Audit metadata must remain narrow and must never become a copy of request bodies or private domain records.
+
+Phase 4 adds payment-attempt creation, Checkout creation/failure/expiry/cancel, paid-but-blocked evidence, payment receipt, and event publication actions. Payment audit metadata is limited to internal attempt/event identifiers, approved revision, configured minor-unit amount/currency, canonical path, and bounded reason codes. It never contains Checkout URLs, signatures, webhook bodies, Stripe secrets, private addresses, email, card/customer data, or raw provider exceptions.

@@ -23,7 +23,9 @@ export async function GET(_request: Request, context: Context) {
     return new Response(media.stream, {
       status: 200,
       headers: {
-        "Cache-Control": "private, no-store",
+        "Cache-Control": media.public
+          ? "public, max-age=300, stale-while-revalidate=60"
+          : "private, no-store",
         "Content-Type": media.contentType,
         "Content-Disposition": "inline",
         "X-Content-Type-Options": "nosniff",

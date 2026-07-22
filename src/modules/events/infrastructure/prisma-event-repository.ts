@@ -22,6 +22,15 @@ const eventInclude = {
     include: { uploadReservation: true },
     orderBy: [{ sortOrder: "asc" as const }, { id: "asc" as const }],
   },
+  publication: {
+    select: {
+      paymentAttemptId: true,
+      approvedRevision: true,
+      approvalDigest: true,
+      canonicalPath: true,
+      publishedAt: true,
+    },
+  },
 } satisfies Prisma.EventInclude;
 
 type EventPayload = Prisma.EventGetPayload<{ include: typeof eventInclude }>;
@@ -95,6 +104,7 @@ function mapEvent(event: EventPayload): EventRecord {
     title: event.title,
     description: event.description,
     eventType: event.eventType,
+    origin: event.origin,
     localStartsAt: event.localStartsAt,
     localEndsAt: event.localEndsAt,
     startsAt: event.startsAt,
@@ -110,11 +120,13 @@ function mapEvent(event: EventPayload): EventRecord {
     approvedAt: event.approvedAt,
     termsVersion: event.termsVersion,
     termsAcceptedAt: event.termsAcceptedAt,
+    currentApprovalId: event.currentApprovalId,
     coverPhotoId: event.coverPhotoId,
     canceledAt: event.canceledAt,
     removedAt: event.removedAt,
     createdAt: event.createdAt,
     updatedAt: event.updatedAt,
+    publication: event.publication,
     location: mapLocation(event.location),
     photos: event.photos.map(mapPhoto),
   };
@@ -233,6 +245,7 @@ export class PrismaEventRepository implements EventRepository {
           id: input.eventId,
           version: input.expectedVersion,
           organizer: { userId: input.userId },
+          publication: { is: null },
         },
         data: {
           ...input.data,
@@ -301,6 +314,7 @@ export class PrismaEventRepository implements EventRepository {
           id: input.eventId,
           version: input.expectedVersion,
           organizer: { userId: input.userId },
+          publication: { is: null },
         },
         data: {
           privacyMode: input.privacyMode,
@@ -373,6 +387,7 @@ export class PrismaEventRepository implements EventRepository {
           id: input.eventId,
           version: input.expectedVersion,
           organizer: { userId: input.userId },
+          publication: { is: null },
         },
         data: { version: { increment: 1 } },
       });
@@ -445,6 +460,7 @@ export class PrismaEventRepository implements EventRepository {
           id: input.eventId,
           version: input.expectedVersion,
           organizer: { userId: input.userId },
+          publication: { is: null },
         },
         data: { version: { increment: 1 } },
       });
@@ -478,6 +494,7 @@ export class PrismaEventRepository implements EventRepository {
           id: input.eventId,
           version: input.expectedVersion,
           organizer: { userId: input.userId },
+          publication: { is: null },
         },
         data: {
           ...invalidatedApproval,
@@ -566,6 +583,7 @@ export class PrismaEventRepository implements EventRepository {
           id: input.eventId,
           version: input.expectedVersion,
           organizer: { userId: input.userId },
+          publication: { is: null },
           photos: { some: { id: input.photoId, status: "READY" } },
         },
         data: {
@@ -600,6 +618,7 @@ export class PrismaEventRepository implements EventRepository {
           id: input.eventId,
           version: input.expectedVersion,
           organizer: { userId: input.userId },
+          publication: { is: null },
         },
         data: {
           ...invalidatedApproval,
@@ -638,6 +657,7 @@ export class PrismaEventRepository implements EventRepository {
           event: {
             version: input.expectedVersion,
             organizer: { userId: input.userId },
+            publication: { is: null },
           },
         },
         include: { event: { select: { coverPhotoId: true } } },
@@ -648,6 +668,7 @@ export class PrismaEventRepository implements EventRepository {
           id: input.eventId,
           version: input.expectedVersion,
           organizer: { userId: input.userId },
+          publication: { is: null },
         },
         data: {
           ...invalidatedApproval,
@@ -704,6 +725,7 @@ export class PrismaEventRepository implements EventRepository {
               userId: input.principal.id,
               status: "COMPLETE",
             },
+            publication: { is: null },
           },
           select: { id: true, organizerId: true },
         });
@@ -726,6 +748,7 @@ export class PrismaEventRepository implements EventRepository {
             version: input.expectedVersion,
             contentRevision: input.contentRevision,
             organizer: { userId: input.principal.id },
+            publication: { is: null },
           },
           data: {
             workflowState: "APPROVED_FOR_PAYMENT",
@@ -768,15 +791,35 @@ export class PrismaEventRepository implements EventRepository {
       where: {
         id: input.photoId,
         status: "READY",
-        ...(input.administrator
-          ? {}
-          : { event: { organizer: { userId: input.userId } } }),
+        ...(!input.administrator
+          ? {
+              OR: [
+                {
+                  event: {
+                    publication: { isNot: null },
+                    canceledAt: null,
+                    removedAt: null,
+                  },
+                },
+                ...(input.userId
+                  ? [{ event: { organizer: { userId: input.userId } } }]
+                  : []),
+              ],
+            }
+          : {}),
       },
       select: {
         dashboardThumbnailKey: true,
         listingCardKey: true,
         galleryKey: true,
         coverDisplayKey: true,
+        event: {
+          select: {
+            publication: { select: { id: true } },
+            canceledAt: true,
+            removedAt: true,
+          },
+        },
       },
     });
     if (!photo) return null;
@@ -786,6 +829,16 @@ export class PrismaEventRepository implements EventRepository {
       gallery: photo.galleryKey,
       cover: photo.coverDisplayKey,
     }[input.variant];
-    return objectKey ? { objectKey, contentType: "image/webp" } : null;
+    return objectKey
+      ? {
+          objectKey,
+          contentType: "image/webp",
+          public: Boolean(
+            photo.event.publication &&
+            !photo.event.canceledAt &&
+            !photo.event.removedAt,
+          ),
+        }
+      : null;
   }
 }

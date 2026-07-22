@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/modules/auth";
 import { createConfiguredEventService } from "@/modules/events";
+import { createConfiguredPaymentService } from "@/modules/payments";
+
+import { PaymentPanel } from "../../../../_components/payment-panel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { referrer: "no-referrer" };
@@ -17,6 +20,7 @@ export default async function EventPreviewPage({ params }: Props) {
   const { eventId } = await params;
   const service = createConfiguredEventService();
   const editor = await service.get(user, eventId);
+  const payment = await createConfiguredPaymentService().status(user, eventId);
 
   if (!editor.readiness.ready) {
     return (
@@ -34,6 +38,11 @@ export default async function EventPreviewPage({ params }: Props) {
               <li key={item}>{item}</li>
             ))}
           </ul>
+          <PaymentPanel
+            eventId={eventId}
+            expectedVersion={editor.version}
+            initialStatus={payment}
+          />
         </section>
       </main>
     );
@@ -120,6 +129,11 @@ export default async function EventPreviewPage({ params }: Props) {
           <p className="future-path">Future public URL: {preview.path}</p>
         </div>
       </article>
+      <PaymentPanel
+        eventId={eventId}
+        expectedVersion={editor.version}
+        initialStatus={payment}
+      />
     </main>
   );
 }

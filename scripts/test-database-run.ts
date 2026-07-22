@@ -31,6 +31,13 @@ export function testDatabaseEnvironment(
     RESEND_RESOURCE_ENV: undefined,
     MAPBOX_ACCESS_TOKEN: undefined,
     MAPBOX_RESOURCE_ENV: undefined,
+    STRIPE_SECRET_KEY: undefined,
+    STRIPE_WEBHOOK_SECRET: undefined,
+    STRIPE_PRICE_ID: undefined,
+    STRIPE_EXPECTED_AMOUNT: undefined,
+    STRIPE_EXPECTED_CURRENCY: undefined,
+    STRIPE_MODE: undefined,
+    STRIPE_RESOURCE_ENV: undefined,
     VERCEL_OIDC_TOKEN: undefined,
     VERCEL_ENV: undefined,
     SENTRY_DSN: undefined,
@@ -127,6 +134,20 @@ export async function cleanupTestRun(
         (user) => user.organizerProfile?.events.map((event) => event.id) ?? [],
       );
       if (eventIds.length > 0) {
+        await transaction.$executeRaw`
+          ALTER TABLE "event_publications"
+          DISABLE TRIGGER "event_publications_immutable"
+        `;
+        await transaction.eventPublication.deleteMany({
+          where: { eventId: { in: eventIds } },
+        });
+        await transaction.$executeRaw`
+          ALTER TABLE "event_publications"
+          ENABLE TRIGGER "event_publications_immutable"
+        `;
+        await transaction.paymentAttempt.deleteMany({
+          where: { eventId: { in: eventIds } },
+        });
         await transaction.event.updateMany({
           where: { id: { in: eventIds } },
           data: { coverPhotoId: null },

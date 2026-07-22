@@ -99,6 +99,13 @@ function isUniqueConstraint(error: unknown): boolean {
   );
 }
 
+function isIssuanceRace(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === "P2002" || error.code === "P2034")
+  );
+}
+
 export class PrismaAccountRepository implements AccountRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -186,62 +193,65 @@ export class PrismaAccountRepository implements AccountRepository {
     input: Parameters<AccountRepository["issueVerification"]>[0],
   ): Promise<Awaited<ReturnType<AccountRepository["issueVerification"]>>> {
     try {
-      return await this.prisma.$transaction(async (transaction) => {
-        const account = await transaction.user.findFirst({
-          where: {
-            normalizedEmail: input.normalizedEmail,
-            emailVerifiedAt: null,
-            status: { not: "DISABLED" },
-          },
-          select: accountSelection,
-        });
-        if (!account) return null;
+      return await this.prisma.$transaction(
+        async (transaction) => {
+          const account = await transaction.user.findFirst({
+            where: {
+              normalizedEmail: input.normalizedEmail,
+              emailVerifiedAt: null,
+              status: { not: "DISABLED" },
+            },
+            select: accountSelection,
+          });
+          if (!account) return null;
 
-        const previous = await transaction.emailVerificationToken.findFirst({
-          where: {
-            userId: account.id,
-            consumedAt: null,
-            invalidatedAt: null,
-          },
-          orderBy: { createdAt: "desc" },
-          select: { resendCount: true },
-        });
-        await transaction.emailVerificationToken.updateMany({
-          where: {
-            userId: account.id,
-            consumedAt: null,
-            invalidatedAt: null,
-          },
-          data: { invalidatedAt: input.now },
-        });
-        await transaction.emailVerificationToken.create({
-          data: {
-            userId: account.id,
-            tokenHash: input.tokenHash,
-            expiresAt: input.expiresAt,
-            resendCount: (previous?.resendCount ?? 0) + 1,
-          },
-        });
-        const delivery = await transaction.emailDelivery.create({
-          data: {
-            userId: account.id,
-            kind: "EMAIL_VERIFICATION",
-            recipientHash: input.recipientHash,
-          },
-          select: { id: true, userId: true },
-        });
-        await transaction.auditEntry.create({
-          data: auditData(input.audit, {
-            action: "EMAIL_VERIFICATION_REISSUED",
-            targetType: "USER",
-            targetId: account.id,
-            metadata: { resendCount: (previous?.resendCount ?? 0) + 1 },
-          }),
-        });
-        return { account: mapAccount(account), delivery };
-      });
+          const previous = await transaction.emailVerificationToken.findFirst({
+            where: {
+              userId: account.id,
+              consumedAt: null,
+              invalidatedAt: null,
+            },
+            orderBy: { createdAt: "desc" },
+            select: { resendCount: true },
+          });
+          await transaction.emailVerificationToken.updateMany({
+            where: {
+              userId: account.id,
+              consumedAt: null,
+              invalidatedAt: null,
+            },
+            data: { invalidatedAt: input.now },
+          });
+          await transaction.emailVerificationToken.create({
+            data: {
+              userId: account.id,
+              tokenHash: input.tokenHash,
+              expiresAt: input.expiresAt,
+              resendCount: (previous?.resendCount ?? 0) + 1,
+            },
+          });
+          const delivery = await transaction.emailDelivery.create({
+            data: {
+              userId: account.id,
+              kind: "EMAIL_VERIFICATION",
+              recipientHash: input.recipientHash,
+            },
+            select: { id: true, userId: true },
+          });
+          await transaction.auditEntry.create({
+            data: auditData(input.audit, {
+              action: "EMAIL_VERIFICATION_REISSUED",
+              targetType: "USER",
+              targetId: account.id,
+              metadata: { resendCount: (previous?.resendCount ?? 0) + 1 },
+            }),
+          });
+          return { account: mapAccount(account), delivery };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
     } catch (error) {
-      if (isUniqueConstraint(error)) return null;
+      if (isIssuanceRace(error)) return null;
       throw error;
     }
   }
@@ -393,50 +403,53 @@ export class PrismaAccountRepository implements AccountRepository {
     input: Parameters<AccountRepository["issuePasswordReset"]>[0],
   ): Promise<Awaited<ReturnType<AccountRepository["issuePasswordReset"]>>> {
     try {
-      return await this.prisma.$transaction(async (transaction) => {
-        const account = await transaction.user.findFirst({
-          where: {
-            normalizedEmail: input.normalizedEmail,
-            status: { not: "DISABLED" },
-          },
-          select: accountSelection,
-        });
-        if (!account) return null;
+      return await this.prisma.$transaction(
+        async (transaction) => {
+          const account = await transaction.user.findFirst({
+            where: {
+              normalizedEmail: input.normalizedEmail,
+              status: { not: "DISABLED" },
+            },
+            select: accountSelection,
+          });
+          if (!account) return null;
 
-        await transaction.passwordResetToken.updateMany({
-          where: {
-            userId: account.id,
-            consumedAt: null,
-            invalidatedAt: null,
-          },
-          data: { invalidatedAt: input.now },
-        });
-        await transaction.passwordResetToken.create({
-          data: {
-            userId: account.id,
-            tokenHash: input.tokenHash,
-            expiresAt: input.expiresAt,
-          },
-        });
-        const delivery = await transaction.emailDelivery.create({
-          data: {
-            userId: account.id,
-            kind: "PASSWORD_RESET",
-            recipientHash: input.recipientHash,
-          },
-          select: { id: true, userId: true },
-        });
-        await transaction.auditEntry.create({
-          data: auditData(input.audit, {
-            action: "PASSWORD_RESET_REQUESTED",
-            targetType: "USER",
-            targetId: account.id,
-          }),
-        });
-        return { account: mapAccount(account), delivery };
-      });
+          await transaction.passwordResetToken.updateMany({
+            where: {
+              userId: account.id,
+              consumedAt: null,
+              invalidatedAt: null,
+            },
+            data: { invalidatedAt: input.now },
+          });
+          await transaction.passwordResetToken.create({
+            data: {
+              userId: account.id,
+              tokenHash: input.tokenHash,
+              expiresAt: input.expiresAt,
+            },
+          });
+          const delivery = await transaction.emailDelivery.create({
+            data: {
+              userId: account.id,
+              kind: "PASSWORD_RESET",
+              recipientHash: input.recipientHash,
+            },
+            select: { id: true, userId: true },
+          });
+          await transaction.auditEntry.create({
+            data: auditData(input.audit, {
+              action: "PASSWORD_RESET_REQUESTED",
+              targetType: "USER",
+              targetId: account.id,
+            }),
+          });
+          return { account: mapAccount(account), delivery };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
     } catch (error) {
-      if (isUniqueConstraint(error)) return null;
+      if (isIssuanceRace(error)) return null;
       throw error;
     }
   }

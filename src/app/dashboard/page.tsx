@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createConfiguredSessionService, getCurrentUser } from "@/modules/auth";
 import { createConfiguredEventService } from "@/modules/events";
 import { createConfiguredOrganizerService } from "@/modules/organizers";
+import { createConfiguredPaymentService } from "@/modules/payments";
 
 import {
   EmailRequestForm,
@@ -41,6 +42,17 @@ export default async function DashboardPage() {
     organizer?.status === "COMPLETE"
       ? await createConfiguredEventService().list(user)
       : [];
+  const paymentStatuses = new Map(
+    await Promise.all(
+      events.map(
+        async (event) =>
+          [
+            event.id,
+            await createConfiguredPaymentService().status(user, event.id),
+          ] as const,
+      ),
+    ),
+  );
 
   return (
     <main className="dashboard-shell">
@@ -99,6 +111,12 @@ export default async function DashboardPage() {
                       Approval readiness:{" "}
                       {event.approvalReady ? "Ready" : "Incomplete"}
                     </p>
+                    <p>
+                      Payment/publication:{" "}
+                      {paymentStatuses
+                        .get(event.id)
+                        ?.displayState.replaceAll("_", " ")}
+                    </p>
                     <p>Updated {new Date(event.updatedAt).toLocaleString()}</p>
                     <p>
                       <Link href={`/dashboard/events/${event.id}/edit`}>
@@ -108,6 +126,20 @@ export default async function DashboardPage() {
                       <Link href={`/dashboard/events/${event.id}/preview`}>
                         Preview
                       </Link>
+                      {" · "}
+                      <Link href={`/dashboard/events/${event.id}/payment`}>
+                        Payment status
+                      </Link>
+                      {paymentStatuses.get(event.id)?.canonicalPath ? (
+                        <>
+                          {" · "}
+                          <Link
+                            href={paymentStatuses.get(event.id)!.canonicalPath!}
+                          >
+                            Live listing
+                          </Link>
+                        </>
+                      ) : null}
                     </p>
                   </article>
                 ))}
