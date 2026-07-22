@@ -10,9 +10,13 @@ test("serves the Phase 1 shell with baseline security headers", async ({
   ).toBeVisible();
   expect(response?.headers()["x-content-type-options"]).toBe("nosniff");
   expect(response?.headers()["x-frame-options"]).toBe("DENY");
-  expect(response?.headers()["content-security-policy"]).toContain(
-    "default-src 'self'",
+  const csp = response?.headers()["content-security-policy"];
+  expect(csp).toContain("default-src 'self'");
+  expect(csp).toContain(
+    "connect-src 'self' https://vercel.com https://*.ingest.sentry.io",
   );
+  expect(csp).not.toContain("connect-src *");
+  expect(csp).not.toContain("connect-src https:");
 });
 
 test("exposes a no-store health endpoint with a request identifier", async ({

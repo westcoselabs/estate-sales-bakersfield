@@ -1,6 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { photoBatchSummary } from "@/app/_components/photo-upload-state";
+import {
+  photoBatchSummary,
+  photoUploadTimeoutMs,
+} from "@/app/_components/photo-upload-state";
+
+describe("photo upload timeout", () => {
+  it("uses a two-minute minimum for small files", () => {
+    expect(photoUploadTimeoutMs(128 * 1024)).toBe(120_000);
+  });
+
+  it("allows a 15 MB file four and a half minutes", () => {
+    expect(photoUploadTimeoutMs(15 * 1024 * 1024)).toBe(270_000);
+  });
+
+  it("keeps invalid and unexpectedly large inputs bounded", () => {
+    expect(photoUploadTimeoutMs(-1)).toBe(120_000);
+    expect(photoUploadTimeoutMs(Number.MAX_SAFE_INTEGER)).toBe(480_000);
+  });
+});
 
 describe("photo upload batch summaries", () => {
   it("reports all success from READY outcomes", () => {

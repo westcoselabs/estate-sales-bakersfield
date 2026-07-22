@@ -17,7 +17,7 @@ function configurePreviewEnvironment() {
   vi.stubEnv("CRON_SECRET", "x".repeat(32));
   vi.stubEnv("AUTH_EMAIL_CAPTURE_PATH", "");
   vi.stubEnv("TEST_MEDIA_ROOT", "");
-  vi.stubEnv("TEST_MEDIA_SECRET", "");
+  vi.stubEnv("TEST_MEDIA_SIGNING_SECRET", "");
   resetEnvironmentCacheForTests();
 }
 

@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const isDevelopment = process.env.NODE_ENV === "development";
 const isProduction = process.env.NODE_ENV === "production";
+const vercelBlobUploadOrigin = "https://vercel.com";
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -9,7 +10,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data:",
   "font-src 'self' data:",
-  "connect-src 'self' https://*.ingest.sentry.io",
+  `connect-src 'self' ${vercelBlobUploadOrigin} https://*.ingest.sentry.io`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

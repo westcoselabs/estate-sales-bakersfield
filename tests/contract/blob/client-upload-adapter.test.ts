@@ -4,7 +4,8 @@ const provider = vi.hoisted(() => ({ upload: vi.fn() }));
 
 vi.mock("@vercel/blob/client", () => provider);
 
-const { uploadPrivateMedia } = await import("@/modules/media/client/upload");
+const { classifyPhotoUploadError, PhotoUploadError, uploadPrivateMedia } =
+  await import("@/modules/media/client/upload");
 
 describe("browser Blob client adapter", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -55,5 +56,42 @@ describe("browser Blob client adapter", () => {
     expect(options).not.toHaveProperty("token");
     expect(options).not.toHaveProperty("headers.Authorization");
     expect(progress).toHaveBeenCalledWith(100);
+  });
+
+  it.each([
+    {
+      error: new Error("Failed to retrieve the client token"),
+      policyBlocked: false,
+      code: "TOKEN_PERMISSION_FAILED",
+      message: "Upload permission failed",
+    },
+    {
+      error: new DOMException("The request was aborted.", "AbortError"),
+      policyBlocked: false,
+      code: "TRANSFER_ABORTED",
+      message: "Blob transfer was canceled",
+    },
+    {
+      error: new TypeError("Failed to fetch"),
+      policyBlocked: false,
+      code: "TRANSFER_FAILED",
+      message: "Blob transfer failed",
+    },
+    {
+      error: new TypeError("Failed to fetch"),
+      policyBlocked: true,
+      code: "POLICY_BLOCKED",
+      message: "browser security policy",
+    },
+  ])("classifies $code failures without provider details", (testCase) => {
+    const result = classifyPhotoUploadError(
+      testCase.error,
+      testCase.policyBlocked,
+    );
+
+    expect(result).toBeInstanceOf(PhotoUploadError);
+    expect(result.code).toBe(testCase.code);
+    expect(result.message).toContain(testCase.message);
+    expect(result.message).not.toContain("Failed to fetch");
   });
 });

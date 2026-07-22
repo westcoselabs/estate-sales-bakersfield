@@ -15,7 +15,7 @@ import type {
   EventPhotoReservationDto,
   EventType,
 } from "@/modules/events";
-import { uploadPrivateMedia } from "@/modules/media/client";
+import { PhotoUploadError, uploadPrivateMedia } from "@/modules/media/client";
 
 import {
   completedWizardSteps,
@@ -24,7 +24,7 @@ import {
   wizardStepAvailable,
   type EventWizardStep,
 } from "./event-wizard-state";
-import { photoBatchSummary } from "./photo-upload-state";
+import { photoBatchSummary, photoUploadTimeoutMs } from "./photo-upload-state";
 
 interface EventResponse {
   readonly event: EventEditorDto;
@@ -461,7 +461,11 @@ export function EventBuilder({
 
       const controller = new AbortController();
       controllers.current.add(controller);
-      const timer = window.setTimeout(() => controller.abort(), 60_000);
+      let uploadTimedOut = false;
+      const timer = window.setTimeout(() => {
+        uploadTimedOut = true;
+        controller.abort();
+      }, photoUploadTimeoutMs(item.file.size));
       let uploadedPathname: string;
       try {
         if (reserved.reservation.transport === "vercel-client") {
@@ -500,6 +504,20 @@ export function EventBuilder({
           }
           uploadedPathname = reserved.reservation.uploadPathname;
         }
+      } catch (error) {
+        if (
+          error instanceof PhotoUploadError &&
+          error.code === "POLICY_BLOCKED"
+        ) {
+          throw error;
+        }
+        if (uploadTimedOut) {
+          throw new Error(
+            "Upload timed out before the Blob transfer completed. Check your connection and retry.",
+            { cause: error },
+          );
+        }
+        throw error;
       } finally {
         window.clearTimeout(timer);
         controllers.current.delete(controller);
@@ -509,23 +527,37 @@ export function EventBuilder({
       }
 
       updateUpload(item.id, { status: "processing", progress: 75 });
-      const completed = await request<EventResponse>(
-        `/api/events/${draftRef.current.id}/photos/${photoId}/finalize`,
-        "POST",
-        {
-          expectedVersion: draftRef.current.version,
-          reservationId: reserved.reservation.reservationId,
-          pathname: uploadedPathname,
-        },
-        90_000,
-      );
+      let completed: EventResponse;
+      try {
+        completed = await request<EventResponse>(
+          `/api/events/${draftRef.current.id}/photos/${photoId}/finalize`,
+          "POST",
+          {
+            expectedVersion: draftRef.current.version,
+            reservationId: reserved.reservation.reservationId,
+            pathname: uploadedPathname,
+          },
+          90_000,
+        );
+      } catch (error) {
+        throw new Error(
+          `Image processing failed. ${
+            error instanceof Error
+              ? error.message
+              : "The server did not complete the photo."
+          }`,
+          { cause: error },
+        );
+      }
       acceptEvent(completed.event);
       if (
         !completed.event.photos.some(
           (photo) => photo.id === photoId && photo.status === "READY",
         )
       ) {
-        throw new Error("The server did not confirm this photo as READY.");
+        throw new Error(
+          "Image processing failed. The server did not confirm this photo as READY.",
+        );
       }
       updateUpload(item.id, { status: "ready", progress: 100 });
       return true;
