@@ -48,6 +48,7 @@ function applyPreviewMigrations(): void {
   }
 
   runPnpm(["prisma", "migrate", "deploy"]);
+  runPnpm(["exec", "tsx", "scripts/verify-preview-auth-rate-limit.ts"]);
 }
 
 applyPreviewMigrations();
