@@ -8,6 +8,26 @@ interface ApiResponse {
   readonly authenticated?: boolean;
 }
 
+const PASSWORD_MIN_CHARACTERS = 12;
+const PASSWORD_MAX_CHARACTERS = 128;
+
+function newPasswordValidationMessage(
+  password: string,
+  passwordConfirmation: string,
+): string {
+  const characterCount = [...password].length;
+  if (
+    characterCount < PASSWORD_MIN_CHARACTERS ||
+    characterCount > PASSWORD_MAX_CHARACTERS
+  ) {
+    return `Password must contain ${PASSWORD_MIN_CHARACTERS} to ${PASSWORD_MAX_CHARACTERS} characters`;
+  }
+  if (password !== passwordConfirmation) {
+    return "Passwords do not match";
+  }
+  return "";
+}
+
 async function submitJson(
   endpoint: string,
   body: Readonly<Record<string, string | null>>,
@@ -38,15 +58,25 @@ export function SignupForm() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    submission.setPending(true);
     submission.setMessage("");
     const data = new FormData(form);
+    const password = String(data.get("password") ?? "");
+    const passwordConfirmation = String(data.get("passwordConfirmation") ?? "");
+    const validationMessage = newPasswordValidationMessage(
+      password,
+      passwordConfirmation,
+    );
+    if (validationMessage) {
+      submission.setMessage(validationMessage);
+      return;
+    }
+    submission.setPending(true);
     try {
       const result = await submitJson("/api/auth/signup", {
         displayName: String(data.get("displayName") ?? ""),
         email: String(data.get("email") ?? ""),
-        password: String(data.get("password") ?? ""),
-        passwordConfirmation: String(data.get("passwordConfirmation") ?? ""),
+        password,
+        passwordConfirmation,
       });
       submission.setMessage(
         result.message ?? "Check your email for verification instructions.",
@@ -227,13 +257,23 @@ export function ResetPasswordForm({ token }: { readonly token: string }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    submission.setPending(true);
     const data = new FormData(event.currentTarget);
+    const password = String(data.get("password") ?? "");
+    const passwordConfirmation = String(data.get("passwordConfirmation") ?? "");
+    const validationMessage = newPasswordValidationMessage(
+      password,
+      passwordConfirmation,
+    );
+    if (validationMessage) {
+      submission.setMessage(validationMessage);
+      return;
+    }
+    submission.setPending(true);
     try {
       await submitJson("/api/auth/reset-password", {
         token,
-        password: String(data.get("password") ?? ""),
-        passwordConfirmation: String(data.get("passwordConfirmation") ?? ""),
+        password,
+        passwordConfirmation,
       });
       window.location.replace("/login?reset=1");
     } catch (error) {

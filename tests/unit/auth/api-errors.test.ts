@@ -8,10 +8,12 @@ import {
 import {
   AuthenticationError,
   AuthenticationServiceUnavailableError,
+  InvalidPasswordError,
   InvalidCredentialsError,
   InvalidTokenError,
   MalformedPasswordHashError,
 } from "@/modules/auth/domain/errors";
+import { registrationSchema } from "@/modules/auth/application/schemas";
 
 const request = new Request("https://application.example.test/api/auth/login", {
   headers: { "x-request-id": "unit-request" },
@@ -98,6 +100,45 @@ describe("enumeration-safe API errors", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Please check the submitted information.",
       requestId: "malformed-request",
+    });
+  });
+
+  it("returns safe signup validation messages without exposing account state", async () => {
+    const validationError = registrationSchema.safeParse({
+      displayName: "Test Person",
+      email: "person@example.test",
+      password: "one-valid-password",
+      passwordConfirmation: "another-valid-password",
+    }).error;
+    expect(validationError).toBeDefined();
+
+    const response = authenticationApiError(
+      validationError,
+      request,
+      "auth.signup",
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Passwords do not match",
+      requestId: "unit-request",
+    });
+  });
+
+  it("returns safe password policy messages only for account setup flows", async () => {
+    const error = new InvalidPasswordError(
+      "Password must contain 12 to 128 characters",
+    );
+
+    await expect(
+      authenticationApiError(error, request, "auth.signup").json(),
+    ).resolves.toMatchObject({
+      error: "Password must contain 12 to 128 characters",
+    });
+    await expect(
+      authenticationApiError(error, request, "auth.login").json(),
+    ).resolves.toMatchObject({
+      error: "Please check the submitted information.",
     });
   });
 });

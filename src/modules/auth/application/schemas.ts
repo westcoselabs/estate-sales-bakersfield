@@ -1,19 +1,36 @@
 import { z } from "zod";
 
 import { normalizeEmail } from "../domain/email";
+import {
+  PASSWORD_MAX_CHARACTERS,
+  PASSWORD_MIN_CHARACTERS,
+} from "./password-policy";
 
 const emailSchema = z
   .string()
   .trim()
   .max(320)
-  .email()
+  .email("Enter a valid email address")
   .transform(normalizeEmail);
 
-const passwordSchema = z.string().min(12).max(128);
+const passwordSchema = z
+  .string()
+  .min(
+    PASSWORD_MIN_CHARACTERS,
+    `Password must contain ${PASSWORD_MIN_CHARACTERS} to ${PASSWORD_MAX_CHARACTERS} characters`,
+  )
+  .max(
+    PASSWORD_MAX_CHARACTERS,
+    `Password must contain ${PASSWORD_MIN_CHARACTERS} to ${PASSWORD_MAX_CHARACTERS} characters`,
+  );
 
 export const registrationSchema = z
   .object({
-    displayName: z.string().trim().min(2).max(100),
+    displayName: z
+      .string()
+      .trim()
+      .min(2, "Display name must contain 2 to 100 characters")
+      .max(100, "Display name must contain 2 to 100 characters"),
     email: emailSchema,
     password: passwordSchema,
     passwordConfirmation: passwordSchema,

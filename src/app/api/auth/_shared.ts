@@ -24,6 +24,38 @@ const noStoreHeaders = {
   "Content-Type": "application/json",
 } as const;
 
+const genericInputError = "Please check the submitted information.";
+
+const safeValidationFields = {
+  "auth.reset-password": new Set(["password", "passwordConfirmation"]),
+  "auth.signup": new Set([
+    "displayName",
+    "email",
+    "password",
+    "passwordConfirmation",
+  ]),
+} as const;
+
+function safeValidationMessage(error: ZodError, operation: string): string {
+  const fields =
+    safeValidationFields[operation as keyof typeof safeValidationFields];
+  if (!fields) return genericInputError;
+
+  const safeIssue = error.issues.find((issue) =>
+    fields.has(String(issue.path[0] ?? "")),
+  );
+  return safeIssue?.message ?? genericInputError;
+}
+
+function safePasswordPolicyMessage(
+  error: InvalidPasswordError,
+  operation: string,
+): string {
+  return operation === "auth.signup" || operation === "auth.reset-password"
+    ? error.message
+    : genericInputError;
+}
+
 export function assertAuthenticationOrigin(request: Request): void {
   assertTrustedOrigin(request, getTrustedApplicationUrls());
 }
@@ -75,10 +107,13 @@ export function authenticationApiError(
     error instanceof SyntaxError ||
     error instanceof InvalidPasswordError
   ) {
-    return authJson(
-      { error: "Please check the submitted information.", requestId },
-      { status: 400, requestId },
-    );
+    const message =
+      error instanceof ZodError
+        ? safeValidationMessage(error, operation)
+        : error instanceof InvalidPasswordError
+          ? safePasswordPolicyMessage(error, operation)
+          : genericInputError;
+    return authJson({ error: message, requestId }, { status: 400, requestId });
   }
   if (error instanceof InvalidTokenError) {
     return authJson(
