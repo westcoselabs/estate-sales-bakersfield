@@ -114,7 +114,13 @@ export class TestFileMediaStore implements MediaStore {
       "signature",
       signedValue(this.secret, objectKey, expires, maximumSize, contentTypes),
     );
-    return { objectKey, uploadUrl, method: "PUT", expiresAt: input.expiresAt };
+    return {
+      objectKey,
+      uploadUrl,
+      method: "PUT",
+      headers: {},
+      expiresAt: input.expiresAt,
+    };
   }
 
   async inspect(key: MediaObjectKey): Promise<MediaObjectMetadata | null> {

@@ -260,8 +260,10 @@ test("supports unverified onboarding while preserving publishing verification ga
   await page
     .getByLabel("Public description")
     .fill("Ordinary draft text remains editable before email verification.");
-  await page.getByRole("button", { name: "Save details" }).click();
-  await expect(page.getByText("Draft saved.")).toBeVisible();
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(
+    page.getByText("Saved and confirmed by the server."),
+  ).toBeVisible();
 
   const eventResponse = await page.request.get(`/api/events/${eventId}`);
   expect(eventResponse.status()).toBe(200);
@@ -366,11 +368,14 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     .fill(
       "A thoughtfully organized estate sale with furniture, art, books, and collectible household pieces.",
     );
-  await page.getByRole("button", { name: "Save details" }).click();
-  await expect(page.getByText("Draft saved.")).toBeVisible();
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Local schedule" }),
+  ).toBeVisible();
 
   await page.goto("/dashboard");
   await page.getByRole("link", { name: "Continue editing" }).click();
+  await page.getByRole("button", { name: "Details" }).click();
   await expect(page.getByLabel("Public title")).toHaveValue(
     "Oleander Estate Sale",
   );
@@ -378,24 +383,28 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   const stalePage = await page.context().newPage();
   await stalePage.goto(page.url());
 
+  await page.getByRole("button", { name: "Schedule" }).click();
+
   await page.getByLabel("Starts", { exact: true }).fill("2026-08-08T09:00");
   await page.getByLabel("Ends", { exact: true }).fill("2026-08-08T15:00");
   await page
     .getByLabel("IANA timezone", { exact: true })
     .fill("America/Los_Angeles");
-  await page.getByRole("button", { name: "Save schedule" }).click();
-  await expect(page.getByText("Draft saved.")).toBeVisible();
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Address and privacy" }),
+  ).toBeVisible();
 
+  await stalePage.getByRole("button", { name: "Details" }).click();
   await stalePage.getByLabel("Public title").fill("Stale tab overwrite");
-  await stalePage.getByRole("button", { name: "Save details" }).click();
+  await stalePage.getByRole("button", { name: "Save and continue" }).click();
   await expect(stalePage.getByText(/changed in another tab/i)).toBeVisible();
   await stalePage.close();
 
   await page.getByLabel("Street address").fill("123 Main Street");
   await page.getByLabel("Postal code").fill("93301");
   await page.getByLabel("Hide exact address until the event starts").check();
-  await page.getByRole("button", { name: "Validate and save address" }).click();
-  await expect(page.getByText("Draft saved.")).toBeVisible();
+  await page.getByRole("button", { name: "Save and continue" }).click();
 
   const image = await sharp({
     create: {
@@ -408,20 +417,25 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     .withMetadata({ orientation: 6 })
     .jpeg()
     .toBuffer();
-  await page.getByLabel(/Upload an event photo/).setInputFiles({
-    name: "estate-photo.jpg",
-    mimeType: "image/jpeg",
-    buffer: image,
-  });
-  await page.getByRole("button", { name: "Upload photo" }).click();
-  await expect(page.getByText("Photo uploaded and sanitized.")).toBeVisible({
+  await page.getByLabel(/Event photos/).setInputFiles([
+    {
+      name: "estate-photo.jpg",
+      mimeType: "image/jpeg",
+      buffer: image,
+    },
+    {
+      name: "estate-photo-two.jpg",
+      mimeType: "image/jpeg",
+      buffer: image,
+    },
+  ]);
+  await page.getByRole("button", { name: "Upload selected photos" }).click();
+  await expect(page.getByText("Status: READY")).toHaveCount(2, {
     timeout: 30_000,
   });
-  await expect(page.getByText("Status: READY")).toBeVisible();
-  await page.getByRole("button", { name: "Make cover" }).click();
-  await expect(
-    page.getByText("This draft is ready for exact preview."),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Make photo 1 cover" }).click();
+  await expect(page.getByText("Photo changes saved.")).toBeVisible();
+  await page.getByRole("button", { name: "Save and continue" }).click();
 
   await page.getByRole("link", { name: "Open exact listing preview" }).click();
   await expect(
@@ -435,18 +449,24 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
 
   await page.getByLabel(/I accept publishing terms version/).check();
   await page.getByRole("button", { name: "Approve exact revision" }).click();
-  await expect(
-    page.getByText(/exact event revision is approved/i),
-  ).toBeVisible();
-  await expect(page.getByText(/Revision \d+ approved/)).toBeVisible();
+  await expect(page).toHaveURL(
+    new RegExp(`/dashboard/events/${eventId}/payment`),
+  );
 
+  await page.goto(`/dashboard/events/${eventId}/edit`);
+  await page.getByRole("button", { name: "Details" }).click();
   await page.getByLabel("Public title").fill("Oleander Estate Sale Updated");
-  await page.getByRole("button", { name: "Save details" }).click();
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await page
+    .getByRole("button", { name: "Review, approval and payment" })
+    .click();
   await expect(page.getByText("Approval", { exact: true })).toBeVisible();
   await expect(page.getByText("NOT APPROVED", { exact: true })).toBeVisible();
   await page.getByLabel(/I accept publishing terms version/).check();
   await page.getByRole("button", { name: "Approve exact revision" }).click();
-  await expect(page.getByText(/Revision \d+ approved/)).toBeVisible();
+  await expect(page).toHaveURL(
+    new RegExp(`/dashboard/events/${eventId}/payment`),
+  );
 
   const otherContext = await browser.newContext();
   const otherPage = await otherContext.newPage();

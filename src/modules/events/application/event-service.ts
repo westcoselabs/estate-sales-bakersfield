@@ -339,6 +339,10 @@ export class EventService {
       reservationId,
       uploadUrl: authorization.uploadUrl.toString(),
       method: authorization.method,
+      uploadHeaders: {
+        ...authorization.headers,
+        "x-content-type": input.contentType,
+      },
       expiresAt: authorization.expiresAt.toISOString(),
       maximumSizeInBytes: MAXIMUM_EVENT_PHOTO_BYTES,
     };

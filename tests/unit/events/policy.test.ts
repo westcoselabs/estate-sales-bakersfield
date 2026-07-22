@@ -4,6 +4,7 @@ import { approvalDigest } from "@/modules/events/application/approval";
 import {
   draftWorkflowState,
   eventReadiness,
+  eventStepReadiness,
   futurePublicEventProjection,
   publicEventProjection,
   toEventEditorDto,
@@ -26,6 +27,23 @@ describe("event publication policy", () => {
         }),
       ).missing,
     ).toContain("Validate the event address.");
+  });
+
+  it("exposes structured server-owned wizard readiness", () => {
+    expect(eventStepReadiness(readyEvent())).toEqual({
+      detailsComplete: true,
+      scheduleComplete: true,
+      locationComplete: true,
+      photosComplete: true,
+      reviewReady: true,
+    });
+    expect(
+      eventStepReadiness(readyEvent({ title: null, coverPhotoId: null })),
+    ).toMatchObject({
+      detailsComplete: false,
+      photosComplete: false,
+      reviewReady: false,
+    });
   });
 
   it("never includes exact address or coordinates in an approximate projection", () => {

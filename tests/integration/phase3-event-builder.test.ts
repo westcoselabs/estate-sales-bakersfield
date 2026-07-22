@@ -215,6 +215,62 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
     );
     expect(event.photos[0]?.status).toBe("READY");
     expect(await media.inspect(objectKey)).toBeNull();
+
+    const secondReservation = await service.reservePhoto(owner, event.id, {
+      expectedVersion: event.version,
+      contentType: "image/jpeg",
+    });
+    event = secondReservation.event;
+    const secondObjectKey = parseMediaObjectKey(
+      decodeURIComponent(
+        new URL(secondReservation.uploadUrl).pathname.slice(1),
+      ),
+    );
+    await media.putPrivate(secondObjectKey, source, "image/jpeg");
+    event = await service.finalizePhoto(
+      owner,
+      event.id,
+      secondReservation.photoId,
+      {
+        expectedVersion: event.version,
+        reservationId: secondReservation.reservationId,
+      },
+      { requestId: "phase3-photo-second" },
+    );
+    expect(
+      event.photos.filter((photo) => photo.status === "READY"),
+    ).toHaveLength(2);
+
+    const failedReservation = await service.reservePhoto(owner, event.id, {
+      expectedVersion: event.version,
+      contentType: "image/jpeg",
+    });
+    event = failedReservation.event;
+    const failedObjectKey = parseMediaObjectKey(
+      decodeURIComponent(
+        new URL(failedReservation.uploadUrl).pathname.slice(1),
+      ),
+    );
+    await media.putPrivate(
+      failedObjectKey,
+      new Uint8Array([1, 2, 3]),
+      "image/jpeg",
+    );
+    await expect(
+      service.finalizePhoto(owner, event.id, failedReservation.photoId, {
+        expectedVersion: event.version,
+        reservationId: failedReservation.reservationId,
+      }),
+    ).rejects.toThrow("image could not be processed safely");
+    event = await service.get(owner, event.id);
+    expect(
+      event.photos.filter((photo) => photo.status === "READY"),
+    ).toHaveLength(2);
+    expect(
+      event.photos.find((photo) => photo.id === failedReservation.photoId)
+        ?.status,
+    ).toBe("FAILED");
+
     event = await service.setCover(
       owner,
       event.id,

@@ -4,6 +4,7 @@ import type {
   EventEditorDto,
   EventPhotoDto,
   EventReadiness,
+  EventStepReadiness,
   EventRecord,
   PublicAddressProjection,
   PublicEventProjection,
@@ -54,6 +55,39 @@ export function eventReadiness(event: EventRecord): EventReadiness {
   if (event.canceledAt) missing.push("Canceled events cannot be approved.");
   if (event.removedAt) missing.push("Removed events cannot be approved.");
   return { ready: missing.length === 0, missing };
+}
+
+export function eventStepReadiness(event: EventRecord): EventStepReadiness {
+  const detailsComplete = Boolean(event.title && event.description);
+  const scheduleComplete = Boolean(
+    event.localStartsAt &&
+    event.localEndsAt &&
+    event.startsAt &&
+    event.endsAt &&
+    event.timezone,
+  );
+  const locationComplete = Boolean(
+    event.location?.validationStatus === "VERIFIED" && event.privacyMode,
+  );
+  const readyPhotos = event.photos.filter((photo) => photo.status === "READY");
+  const photosComplete = Boolean(
+    readyPhotos.length > 0 &&
+    event.coverPhotoId &&
+    readyPhotos.some((photo) => photo.id === event.coverPhotoId),
+  );
+  return {
+    detailsComplete,
+    scheduleComplete,
+    locationComplete,
+    photosComplete,
+    reviewReady:
+      detailsComplete &&
+      scheduleComplete &&
+      locationComplete &&
+      photosComplete &&
+      !event.canceledAt &&
+      !event.removedAt,
+  };
 }
 
 export function draftWorkflowState(
@@ -122,6 +156,7 @@ export function toEventEditorDto(event: EventRecord): EventEditorDto {
       : null,
     photos: photoDto(event),
     readiness: eventReadiness(event),
+    steps: eventStepReadiness(event),
     updatedAt: event.updatedAt.toISOString(),
   };
 }

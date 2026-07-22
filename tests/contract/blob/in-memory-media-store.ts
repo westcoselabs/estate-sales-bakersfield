@@ -25,6 +25,7 @@ export class InMemoryMediaStore implements MediaStore {
       objectKey,
       uploadUrl: new URL(`https://upload.example.test/${objectKey}`),
       method: "PUT",
+      headers: {},
       expiresAt: input.expiresAt,
     };
   }

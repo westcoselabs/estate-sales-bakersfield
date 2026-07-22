@@ -40,6 +40,7 @@ export type {
   EventListItemDto,
   EventRecord,
   EventPhotoReservationDto,
+  EventStepReadiness,
   EventType,
   PublicEventProjection,
 } from "./domain/types";

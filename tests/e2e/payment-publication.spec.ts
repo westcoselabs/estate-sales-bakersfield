@@ -85,17 +85,17 @@ async function buildApprovedEvent(
     .fill(
       "A deterministic Phase 4 estate sale with furniture, art, books, and collectible household pieces.",
     );
-  await page.getByRole("button", { name: "Save details" }).click();
+  await page.getByRole("button", { name: "Save and continue" }).click();
   await page.getByLabel("Starts", { exact: true }).fill(`${date}T09:00`);
   await page.getByLabel("Ends", { exact: true }).fill(`${date}T15:00`);
   await page
     .getByLabel("IANA timezone", { exact: true })
     .fill("America/Los_Angeles");
-  await page.getByRole("button", { name: "Save schedule" }).click();
+  await page.getByRole("button", { name: "Save and continue" }).click();
   await page.getByLabel("Street address").fill("123 Main Street");
   await page.getByLabel("Postal code").fill("93301");
   await page.getByLabel("Hide exact address until the event starts").check();
-  await page.getByRole("button", { name: "Validate and save address" }).click();
+  await page.getByRole("button", { name: "Save and continue" }).click();
 
   const image = await sharp({
     create: {
@@ -107,21 +107,22 @@ async function buildApprovedEvent(
   })
     .jpeg()
     .toBuffer();
-  await page.getByLabel(/Upload an event photo/).setInputFiles({
+  await page.getByLabel(/Event photos/).setInputFiles({
     name: "phase4-estate-photo.jpg",
     mimeType: "image/jpeg",
     buffer: image,
   });
-  await page.getByRole("button", { name: "Upload photo" }).click();
-  await expect(page.getByText("Photo uploaded and sanitized.")).toBeVisible({
+  await page.getByRole("button", { name: "Upload selected photos" }).click();
+  await expect(page.getByText("Status: READY")).toBeVisible({
     timeout: 30_000,
   });
-  await page.getByRole("button", { name: "Make cover" }).click();
+  await page.getByRole("button", { name: "Make photo 1 cover" }).click();
+  await page.getByRole("button", { name: "Save and continue" }).click();
   await page.getByLabel(/I accept publishing terms version/).check();
   await page.getByRole("button", { name: "Approve exact revision" }).click();
-  await expect(
-    page.getByText(/exact event revision is approved/i),
-  ).toBeVisible();
+  await expect(page).toHaveURL(
+    new RegExp(`/dashboard/events/${eventId}/payment`),
+  );
 
   const response = await page.request.get(`/api/events/${eventId}`);
   expect(response.ok()).toBe(true);
@@ -182,11 +183,14 @@ test("pays and publishes from a fake signed webhook while stale paid revisions r
   const checkoutUrl = page.url();
 
   await page.goto(`/dashboard/events/${stale.id}/edit`);
+  await page.getByRole("button", { name: "Details" }).click();
   await page
     .getByLabel("Public title")
     .fill("Materially Edited After Checkout");
-  await page.getByRole("button", { name: "Save details" }).click();
-  await expect(page.getByText("NOT APPROVED", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Local schedule" }),
+  ).toBeVisible();
   const changed = (await (
     await page.request.get(`/api/events/${stale.id}`)
   ).json()) as EventResponse;

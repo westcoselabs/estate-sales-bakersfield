@@ -160,18 +160,70 @@ a {
   gap: 1.25rem;
 }
 
-.step-nav {
+.wizard-timeline {
   position: sticky;
   z-index: 5;
   top: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.5rem;
   border: 1px solid #d8d3c7;
   border-radius: 0.75rem;
   background: #fff;
-  padding: 1rem;
+  padding: 0.75rem;
   box-shadow: 0 0.5rem 1.5rem rgb(30 41 59 / 8%);
+}
+
+.wizard-timeline button {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  background: #f1eee7;
+  color: #44504c;
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.wizard-timeline button span {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border-radius: 999px;
+  background: #d8d3c7;
+  font-weight: 800;
+}
+
+.wizard-timeline button.is-current {
+  background: #175a43;
+  color: #fff;
+}
+
+.wizard-timeline button.is-current span,
+.wizard-timeline button.is-complete span {
+  background: #cfe8dc;
+  color: #124734;
+}
+
+.wizard-timeline button:disabled:not(.is-current) {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.wizard-version {
+  margin: -0.5rem 0 0;
+  color: #586269;
+  font-size: 0.9rem;
+}
+
+.wizard-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.25rem;
 }
 
 .form-message {
@@ -227,6 +279,38 @@ legend {
   gap: 1rem;
   padding: 0;
   list-style: none;
+}
+
+.upload-queue {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.upload-queue li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, 16rem) auto;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid #d8d3c7;
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+}
+
+.upload-queue li > div:first-child {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.upload-queue strong,
+.upload-queue small {
+  overflow-wrap: anywhere;
+}
+
+.upload-queue progress {
+  width: 100%;
 }
 
 .photo-list li {
@@ -434,7 +518,17 @@ legend {
 
   .form-grid,
   .status-list,
-  .photo-list li {
+  .photo-list li,
+  .upload-queue li {
     grid-template-columns: 1fr;
+  }
+
+  .wizard-timeline {
+    position: static;
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-timeline button {
+    padding: 0.55rem 0.7rem;
   }
 }

@@ -117,6 +117,13 @@ export class VercelBlobMediaStore implements MediaStore {
         objectKey,
         uploadUrl: new URL(presignedUrl),
         method: "PUT",
+        headers: {
+          "x-vercel-blob-access": "private",
+          "x-content-type":
+            input.allowedContentTypes[0] ?? "application/octet-stream",
+          "x-add-random-suffix": "0",
+          "x-allow-overwrite": "0",
+        },
         expiresAt: input.expiresAt,
       };
     } catch (error) {

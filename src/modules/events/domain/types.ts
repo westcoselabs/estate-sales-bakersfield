@@ -140,6 +140,7 @@ export interface EventPhotoReservationDto {
   readonly reservationId: string;
   readonly uploadUrl: string;
   readonly method: "PUT";
+  readonly uploadHeaders: Readonly<Record<string, string>>;
   readonly expiresAt: string;
   readonly maximumSizeInBytes: number;
 }
@@ -181,7 +182,16 @@ export interface EventEditorDto {
   } | null;
   readonly photos: readonly EventPhotoDto[];
   readonly readiness: EventReadiness;
+  readonly steps: EventStepReadiness;
   readonly updatedAt: string;
+}
+
+export interface EventStepReadiness {
+  readonly detailsComplete: boolean;
+  readonly scheduleComplete: boolean;
+  readonly locationComplete: boolean;
+  readonly photosComplete: boolean;
+  readonly reviewReady: boolean;
 }
 
 export interface EventReadiness {

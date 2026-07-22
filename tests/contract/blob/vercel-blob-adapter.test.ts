@@ -56,6 +56,12 @@ describe("VercelBlobMediaStore error and input mapping", () => {
     ).resolves.toMatchObject({
       objectKey: "test/fixture-resource/opaque-reservation/random.jpg",
       method: "PUT",
+      headers: {
+        "x-vercel-blob-access": "private",
+        "x-content-type": "image/jpeg",
+        "x-add-random-suffix": "0",
+        "x-allow-overwrite": "0",
+      },
     });
     expect(provider.issueSignedToken).toHaveBeenCalledWith(
       expect.objectContaining({

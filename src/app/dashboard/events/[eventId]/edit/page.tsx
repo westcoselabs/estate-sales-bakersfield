@@ -9,8 +9,6 @@ import {
 } from "@/modules/events";
 
 import { EventBuilder } from "../../../../_components/event-builder";
-import { PaymentPanel } from "../../../../_components/payment-panel";
-import { createConfiguredPaymentService } from "@/modules/payments";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +26,6 @@ export default async function EventEditPage({ params }: Props) {
       if (error instanceof EventNotFoundError) notFound();
       throw error;
     });
-  const payment = await createConfiguredPaymentService().status(user, eventId);
   return (
     <main className="builder-shell">
       <header className="builder-header">
@@ -48,11 +45,6 @@ export default async function EventEditPage({ params }: Props) {
       <EventBuilder
         initialEvent={event}
         termsVersion={PUBLISHING_TERMS_VERSION}
-      />
-      <PaymentPanel
-        eventId={eventId}
-        expectedVersion={event.version}
-        initialStatus={payment}
       />
     </main>
   );

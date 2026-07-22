@@ -15,6 +15,9 @@ function configurePreviewEnvironment() {
   vi.stubEnv("DIRECT_URL", "postgresql://example.test/database");
   vi.stubEnv("DATABASE_RESOURCE_ENV", "preview");
   vi.stubEnv("CRON_SECRET", "x".repeat(32));
+  vi.stubEnv("AUTH_EMAIL_CAPTURE_PATH", "");
+  vi.stubEnv("TEST_MEDIA_ROOT", "");
+  vi.stubEnv("TEST_MEDIA_SECRET", "");
   resetEnvironmentCacheForTests();
 }
 

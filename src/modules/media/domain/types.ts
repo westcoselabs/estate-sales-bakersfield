@@ -21,6 +21,7 @@ export interface UploadAuthorization {
   readonly objectKey: MediaObjectKey;
   readonly uploadUrl: URL;
   readonly method: "PUT";
+  readonly headers: Readonly<Record<string, string>>;
   readonly expiresAt: Date;
 }
 
