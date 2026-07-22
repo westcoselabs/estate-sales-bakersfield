@@ -4,6 +4,7 @@ import { getServerEnvironment } from "@/platform/config/env";
 import type { ServerEnvironment } from "@/platform/config/env";
 import { getServerApplicationUrl } from "@/platform/config/application-url";
 import { getPrismaClient } from "@/platform/database/client";
+import { logger } from "@/platform/observability/logger";
 
 import { AuthenticationAbuseControl } from "../application/abuse-control";
 import { SessionService } from "../application/session-service";
@@ -77,6 +78,17 @@ export function createConfiguredAuthenticationWorkflow(): AuthenticationWorkflow
     email,
     configuredFingerprint(),
     getServerApplicationUrl(),
+    () => new Date(),
+    (failure) => {
+      logger.warn(
+        {
+          deliveryId: failure.deliveryId,
+          deliveryStatus: failure.status,
+          errorType: failure.errorType,
+        },
+        "Authentication email delivery tracking failed",
+      );
+    },
   );
 }
 

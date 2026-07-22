@@ -32,8 +32,12 @@ export async function POST(request: Request) {
     return authJson(
       {
         account: result.account,
-        authenticated: result.rotatedSession !== null,
+        authenticated: result.authenticated,
         verified: true,
+        alreadyVerified: result.alreadyVerified,
+        message: result.alreadyVerified
+          ? "This email is already verified. Continue to login."
+          : "Email verified.",
         requestId,
       },
       { requestId },

@@ -63,7 +63,8 @@ function dependencies() {
         delivery: { id: "delivery-2", userId: account.id },
       }),
     ),
-    verifyEmail: vi.fn(async () => ({
+    verifyEmail: vi.fn<AccountRepository["verifyEmail"]>(async () => ({
+      status: "VERIFIED" as const,
       account: { ...account, emailVerifiedAt: now },
       rotatedSession: { ...current, id: "session-2" },
     })),
@@ -104,6 +105,7 @@ function dependencies() {
   const fingerprints = {
     create: vi.fn(() => "a".repeat(64)),
   } satisfies PrivacyFingerprint;
+  const reportDeliveryTrackingFailure = vi.fn();
   const service = new AuthenticationWorkflowService(
     accounts,
     passwords,
@@ -113,11 +115,13 @@ function dependencies() {
     fingerprints,
     new URL("https://preview.example.test"),
     () => now,
+    reportDeliveryTrackingFailure,
   );
   return {
     accounts,
     email,
     passwords,
+    reportDeliveryTrackingFailure,
     service,
     sessionRepository,
     tokens,
@@ -226,6 +230,8 @@ describe("AuthenticationWorkflowService", () => {
     );
 
     expect(result.account.emailVerified).toBe(true);
+    expect(result.alreadyVerified).toBe(false);
+    expect(result.authenticated).toBe(true);
     expect(result.rotatedSession?.session.id).toBe("session-2");
     expect(accounts.verifyEmail).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -237,6 +243,48 @@ describe("AuthenticationWorkflowService", () => {
         }),
       }),
     );
+  });
+
+  it("returns a useful result when an already verified token is reused", async () => {
+    const { accounts, service } = dependencies();
+    accounts.verifyEmail.mockResolvedValueOnce({
+      status: "ALREADY_VERIFIED",
+      account: { ...account, emailVerifiedAt: now },
+      rotatedSession: null,
+    });
+
+    const result = await service.verifyEmail(
+      "raw-verification-token-with-32-characters",
+      "raw-current-session-token-with-32-characters",
+    );
+
+    expect(result.account.emailVerified).toBe(true);
+    expect(result.alreadyVerified).toBe(true);
+    expect(result.authenticated).toBe(true);
+    expect(result.rotatedSession).toBeNull();
+  });
+
+  it("accepts registration after the email is sent when delivery tracking fails", async () => {
+    const { accounts, email, reportDeliveryTrackingFailure, service } =
+      dependencies();
+    accounts.markDeliverySent.mockRejectedValueOnce(
+      new Error("tracking unavailable"),
+    );
+
+    await expect(
+      service.register({
+        displayName: "Test person",
+        email: "person@example.test",
+        password: "a-valid-registration-password",
+      }),
+    ).resolves.toEqual({ accepted: true, emailDeliveryAttempted: true });
+    expect(email.send).toHaveBeenCalledOnce();
+    expect(accounts.markDeliveryFailed).not.toHaveBeenCalled();
+    expect(reportDeliveryTrackingFailure).toHaveBeenCalledWith({
+      deliveryId: "delivery-1",
+      status: "SENT",
+      errorType: "Error",
+    });
   });
 
   it("records provider failures without exposing the raw token", async () => {
@@ -259,6 +307,24 @@ describe("AuthenticationWorkflowService", () => {
     expect(
       JSON.stringify(accounts.markDeliveryFailed.mock.calls),
     ).not.toContain("raw-token");
+  });
+
+  it("keeps an accepted recovery response when failed-delivery tracking is unavailable", async () => {
+    const { accounts, email, reportDeliveryTrackingFailure, service } =
+      dependencies();
+    email.send.mockRejectedValueOnce(new Error("provider failed"));
+    accounts.markDeliveryFailed.mockRejectedValueOnce(
+      new Error("tracking unavailable"),
+    );
+
+    await expect(
+      service.requestPasswordReset(account.normalizedEmail),
+    ).resolves.toBeUndefined();
+    expect(reportDeliveryTrackingFailure).toHaveBeenCalledWith({
+      deliveryId: "delivery-3",
+      status: "FAILED",
+      errorType: "Error",
+    });
   });
 
   it("keeps recovery and resend responses silent for ineligible accounts", async () => {

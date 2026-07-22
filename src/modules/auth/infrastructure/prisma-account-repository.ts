@@ -288,6 +288,7 @@ export class PrismaAccountRepository implements AccountRepository {
             consumedAt: true,
             invalidatedAt: true,
             expiresAt: true,
+            user: { select: accountSelection },
           },
         });
         if (rejected) {
@@ -310,6 +311,17 @@ export class PrismaAccountRepository implements AccountRepository {
               metadata: { reason },
             }),
           });
+          if (
+            reason === "CONSUMED" &&
+            rejected.user.emailVerifiedAt &&
+            rejected.user.status !== "DISABLED"
+          ) {
+            return {
+              status: "ALREADY_VERIFIED" as const,
+              account: mapAccount(rejected.user),
+              rotatedSession: null,
+            };
+          }
         }
         return null;
       }
@@ -395,7 +407,11 @@ export class PrismaAccountRepository implements AccountRepository {
           actorUserId: userId,
         }),
       });
-      return { account: mapAccount(account), rotatedSession };
+      return {
+        status: "VERIFIED" as const,
+        account: mapAccount(account),
+        rotatedSession,
+      };
     });
   }
 

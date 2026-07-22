@@ -165,7 +165,7 @@ describe("Phase 2 authentication persistence", () => {
     ).resolves.toBe(1);
   });
 
-  it("verifies once, rotates a matching session, and audits a repeated rejection", async () => {
+  it("verifies once, rotates a matching session, and safely accepts token reuse", async () => {
     const { email, workflow } = fixture();
     const normalizedEmail = testEmail("verification");
     const password = "phase-two-verification-password";
@@ -190,7 +190,11 @@ describe("Phase 2 authentication persistence", () => {
     ).resolves.not.toBeNull();
     await expect(
       workflow.verifyEmail(rawToken, undefined),
-    ).rejects.toBeInstanceOf(InvalidTokenError);
+    ).resolves.toMatchObject({
+      account: { emailVerified: true },
+      alreadyVerified: true,
+      authenticated: false,
+    });
     const user = await prisma.user.findUniqueOrThrow({
       where: { normalizedEmail },
     });
@@ -219,7 +223,12 @@ describe("Phase 2 authentication persistence", () => {
       accounts.verifyEmail({ tokenHash, now: new Date(), audit: {} }),
     ]);
 
-    expect(attempts.filter(Boolean)).toHaveLength(1);
+    expect(
+      attempts.filter((attempt) => attempt?.status === "VERIFIED"),
+    ).toHaveLength(1);
+    expect(
+      attempts.filter((attempt) => attempt?.status === "ALREADY_VERIFIED"),
+    ).toHaveLength(1);
   });
 
   it("keeps verification and reset issuance races generic with one active token", async () => {

@@ -15,7 +15,12 @@ import { CreateEventForm } from "../_components/event-builder";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  readonly searchParams: Promise<{ verified?: string }>;
+}) {
+  const query = await searchParams;
   const user = await getCurrentUser();
   if (!user || user.status === "DISABLED") {
     redirect("/login?next=/dashboard");
@@ -57,6 +62,12 @@ export default async function DashboardPage() {
   return (
     <main className="dashboard-shell">
       <section className="dashboard-panel">
+        {query.verified === "1" ? (
+          <div className="success-box" role="status">
+            Email verified. Your publishing tools are now available when the
+            event is ready.
+          </div>
+        ) : null}
         <p>Account</p>
         <h1>Welcome, {user.displayName}</h1>
         <p>
@@ -64,10 +75,20 @@ export default async function DashboardPage() {
           {user.emailVerifiedAt ? "Verified" : "Verification required"}
         </p>
         {!user.emailVerifiedAt ? (
-          <EmailRequestForm
-            endpoint="/api/auth/resend-verification"
-            buttonLabel="Resend verification"
-          />
+          <aside className="verification-banner" aria-labelledby="verify-title">
+            <h2 id="verify-title">Email verification required</h2>
+            <p>Status: Not verified</p>
+            <p>
+              Verify your email before uploading photos, approving, paying, or
+              publishing.
+            </p>
+            <EmailRequestForm
+              endpoint="/api/auth/resend-verification"
+              buttonLabel="Resend verification"
+              initialEmail={user.email}
+              hideEmailInput
+            />
+          </aside>
         ) : null}
         <p>
           Organizer onboarding: {organizer?.status ?? "Not started"}.{" "}

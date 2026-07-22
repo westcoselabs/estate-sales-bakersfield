@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useEffect, useState, type FormEvent } from "react";
 
 interface ApiResponse {
   readonly error?: string;
   readonly message?: string;
   readonly authenticated?: boolean;
+  readonly alreadyVerified?: boolean;
 }
 
 const PASSWORD_MIN_CHARACTERS = 12;
@@ -54,6 +56,15 @@ function useSubmission() {
 
 export function SignupForm() {
   const submission = useSubmission();
+  const [accepted, setAccepted] = useState(false);
+
+  useEffect(() => {
+    if (!accepted) return;
+    const timeout = window.setTimeout(() => {
+      window.location.assign("/login?registered=1");
+    }, 4_000);
+    return () => window.clearTimeout(timeout);
+  }, [accepted]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -79,8 +90,10 @@ export function SignupForm() {
         passwordConfirmation,
       });
       submission.setMessage(
-        result.message ?? "Check your email for verification instructions.",
+        result.message ??
+          "Check your email for verification instructions. You can sign in now.",
       );
+      setAccepted(true);
       form.reset();
     } catch (error) {
       submission.setMessage(
@@ -89,6 +102,22 @@ export function SignupForm() {
     } finally {
       submission.setPending(false);
     }
+  }
+
+  if (accepted) {
+    return (
+      <div className="success-box" role="status" aria-live="polite">
+        <h2>Check your email</h2>
+        <p>
+          {submission.message ||
+            "Check your email for verification instructions. You can sign in now."}
+        </p>
+        <p>You will be redirected to login shortly.</p>
+        <Link className="button-link" href="/login?registered=1">
+          Continue to login
+        </Link>
+      </div>
+    );
   }
 
   return (
@@ -180,10 +209,14 @@ export function LoginForm({ nextPath }: { readonly nextPath: string }) {
 export function EmailRequestForm({
   endpoint,
   buttonLabel,
+  initialEmail = "",
+  hideEmailInput = false,
 }: {
   readonly endpoint:
     "/api/auth/resend-verification" | "/api/auth/forgot-password";
   readonly buttonLabel: string;
+  readonly initialEmail?: string;
+  readonly hideEmailInput?: boolean;
 }) {
   const submission = useSubmission();
 
@@ -209,10 +242,20 @@ export function EmailRequestForm({
 
   return (
     <form onSubmit={submit}>
-      <label>
-        Email
-        <input name="email" type="email" autoComplete="email" required />
-      </label>
+      {hideEmailInput ? (
+        <input name="email" type="hidden" value={initialEmail} />
+      ) : (
+        <label>
+          Email
+          <input
+            name="email"
+            type="email"
+            autoComplete="email"
+            defaultValue={initialEmail}
+            required
+          />
+        </label>
+      )}
       <button disabled={submission.pending} type="submit">
         {submission.pending ? "Sending…" : buttonLabel}
       </button>

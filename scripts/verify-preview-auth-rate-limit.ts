@@ -32,7 +32,67 @@ const prisma = new PrismaClient({
   adapter: new PrismaNeon({ connectionString: process.env.DATABASE_URL }),
 });
 
+const expectedMigrations = [
+  "20260716000000_phase1_foundation",
+  "20260717000000_phase2_auth_and_organizers",
+  "20260721000000_phase3_event_builder",
+  "20260722000000_postgresql_auth_rate_limits",
+  "20260723000000_phase4_paid_publication",
+  "20260724000000_auth_rate_limit_repair",
+] as const;
+
+const expectedTables = [
+  "users",
+  "sessions",
+  "organizer_profiles",
+  "events",
+  "payment_attempts",
+  "authentication_rate_limit_buckets",
+] as const;
+
 try {
+  const appliedMigrations = await prisma.$queryRaw<
+    Array<{ migration_name: string }>
+  >(Prisma.sql`
+    SELECT "migration_name"
+    FROM "_prisma_migrations"
+    WHERE "finished_at" IS NOT NULL
+      AND "rolled_back_at" IS NULL
+    ORDER BY "migration_name"
+  `);
+  const appliedNames = new Set(
+    appliedMigrations.map((migration) => migration.migration_name),
+  );
+  const missingMigrations = expectedMigrations.filter(
+    (migration) => !appliedNames.has(migration),
+  );
+  if (missingMigrations.length > 0) {
+    throw new Error(
+      `Preview database is missing migrations: ${missingMigrations.join(", ")}`,
+    );
+  }
+
+  const availableTables = await prisma.$queryRaw<Array<{ table_name: string }>>(
+    Prisma.sql`
+      SELECT "table_name"
+      FROM "information_schema"."tables"
+      WHERE "table_schema" = 'public'
+        AND "table_name" IN (${Prisma.join(expectedTables)})
+      ORDER BY "table_name"
+    `,
+  );
+  const availableNames = new Set(
+    availableTables.map((table) => table.table_name),
+  );
+  const missingTables = expectedTables.filter(
+    (table) => !availableNames.has(table),
+  );
+  if (missingTables.length > 0) {
+    throw new Error(
+      `Preview database is missing tables: ${missingTables.join(", ")}`,
+    );
+  }
+
   const marker = randomUUID();
   const scopeHash = sha256(`preview-auth-rate-limit-smoke:v1:${marker}:scope`);
   const identifierHash = sha256(
@@ -75,7 +135,12 @@ try {
       if (!(error instanceof ExpectedRollback)) throw error;
     });
 
-  process.stdout.write("Preview auth rate-limit table verified.\n");
+  process.stdout.write(
+    `Preview database verified (${expectedMigrations.length} migrations, ${expectedTables.length} required tables, auth rate-limit write rollback).\n`,
+  );
+  process.stdout.write(
+    `Applied Preview migrations verified: ${expectedMigrations.join(", ")}.\n`,
+  );
 } finally {
   await prisma.$disconnect();
 }

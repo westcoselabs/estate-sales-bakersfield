@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     return authJson(
       {
         message:
-          "If registration can be completed, verification instructions have been sent.",
+          "Check your email for verification instructions. You can sign in now.",
         requestId,
       },
       { status: 202, requestId },

@@ -133,10 +133,19 @@ export interface AccountRepository {
       readonly replacementExpiresAt: Date;
       readonly metadata: SessionMetadata;
     };
-  }): Promise<{
-    readonly account: AuthenticationAccount;
-    readonly rotatedSession: CurrentSession | null;
-  } | null>;
+  }): Promise<
+    | {
+        readonly status: "VERIFIED";
+        readonly account: AuthenticationAccount;
+        readonly rotatedSession: CurrentSession | null;
+      }
+    | {
+        readonly status: "ALREADY_VERIFIED";
+        readonly account: AuthenticationAccount;
+        readonly rotatedSession: null;
+      }
+    | null
+  >;
   issuePasswordReset(input: {
     readonly normalizedEmail: string;
     readonly tokenHash: string;

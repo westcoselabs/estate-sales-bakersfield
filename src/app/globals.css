@@ -292,7 +292,8 @@ legend {
 }
 
 .warning-box,
-.success-box {
+.success-box,
+.verification-banner {
   border-radius: 0.5rem;
   padding: 1rem;
 }
@@ -305,6 +306,20 @@ legend {
 .success-box {
   border: 1px solid #4b8d6c;
   background: #eef6f1;
+}
+
+.verification-banner {
+  margin: 1.25rem 0;
+  border: 2px solid #d59b2d;
+  background: #fff7df;
+}
+
+.verification-banner h2 {
+  margin-top: 0;
+}
+
+.verification-banner form {
+  margin-bottom: 0;
 }
 
 .listing-preview {

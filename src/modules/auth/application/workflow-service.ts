@@ -51,6 +51,12 @@ export interface RegistrationResult {
   readonly emailDeliveryAttempted: boolean;
 }
 
+export interface DeliveryTrackingFailure {
+  readonly deliveryId: string;
+  readonly status: "SENT" | "FAILED";
+  readonly errorType: string;
+}
+
 export class AuthenticationWorkflowService {
   constructor(
     private readonly accounts: AccountRepository,
@@ -61,6 +67,9 @@ export class AuthenticationWorkflowService {
     private readonly fingerprints: PrivacyFingerprint,
     private readonly applicationUrl: URL,
     private readonly clock: Clock = () => new Date(),
+    private readonly reportDeliveryTrackingFailure: (
+      failure: DeliveryTrackingFailure,
+    ) => void = () => undefined,
   ) {}
 
   async register(
@@ -155,6 +164,8 @@ export class AuthenticationWorkflowService {
   ): Promise<{
     readonly account: AccountSummary;
     readonly rotatedSession: SessionGrant | null;
+    readonly authenticated: boolean;
+    readonly alreadyVerified: boolean;
   }> {
     const now = this.clock();
     const replacementToken = currentSessionToken
@@ -181,12 +192,29 @@ export class AuthenticationWorkflowService {
       );
     }
 
+    if (verified.status === "ALREADY_VERIFIED") {
+      const currentSession = currentSessionToken
+        ? await this.sessions.read(currentSessionToken)
+        : null;
+      return {
+        account: summarize(verified.account),
+        rotatedSession: null,
+        authenticated: currentSession?.principal.id === verified.account.id,
+        alreadyVerified: true,
+      };
+    }
+
     const rotatedSession =
       replacementToken && verified.rotatedSession
         ? { token: replacementToken, session: verified.rotatedSession }
         : null;
 
-    return { account: summarize(verified.account), rotatedSession };
+    return {
+      account: summarize(verified.account),
+      rotatedSession,
+      authenticated: rotatedSession !== null,
+      alreadyVerified: false,
+    };
   }
 
   async resendVerification(
@@ -269,19 +297,38 @@ export class AuthenticationWorkflowService {
     message: Parameters<EmailService["send"]>[0],
     now: Date,
   ): Promise<boolean> {
+    let providerMessageId: string;
     try {
       const result = await this.email.send(message);
-      await this.accounts.markDeliverySent(
-        deliveryId,
-        result.providerMessageId,
-        now,
-      );
-      return true;
+      providerMessageId = result.providerMessageId;
     } catch (error) {
       const errorCode =
         error instanceof Error ? error.name.slice(0, 100) : "UNKNOWN";
-      await this.accounts.markDeliveryFailed(deliveryId, errorCode, now);
+      try {
+        await this.accounts.markDeliveryFailed(deliveryId, errorCode, now);
+      } catch (trackingError) {
+        this.reportDeliveryTrackingFailure({
+          deliveryId,
+          status: "FAILED",
+          errorType:
+            trackingError instanceof Error
+              ? trackingError.name.slice(0, 100)
+              : "UnknownError",
+        });
+      }
       return false;
     }
+
+    try {
+      await this.accounts.markDeliverySent(deliveryId, providerMessageId, now);
+    } catch (error) {
+      this.reportDeliveryTrackingFailure({
+        deliveryId,
+        status: "SENT",
+        errorType:
+          error instanceof Error ? error.name.slice(0, 100) : "UnknownError",
+      });
+    }
+    return true;
   }
 }

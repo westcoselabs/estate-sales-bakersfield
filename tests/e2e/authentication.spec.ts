@@ -4,6 +4,8 @@ import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import sharp from "sharp";
 
+import { PUBLISHING_TERMS_VERSION } from "@/modules/events/application/policy";
+
 interface CapturedEmail {
   readonly kind: "EMAIL_VERIFICATION" | "PASSWORD_RESET";
   readonly to: string;
@@ -77,6 +79,25 @@ async function login(page: Page, email: string, password: string) {
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Log in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
+}
+
+async function sameOriginPost(
+  page: Page,
+  url: string,
+  body: Readonly<Record<string, unknown>>,
+): Promise<{ readonly status: number; readonly body: unknown }> {
+  return page.evaluate(
+    async ({ endpoint, payload }) => {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      return { status: response.status, body: await response.json() };
+    },
+    { endpoint: url, payload: body },
+  );
 }
 
 test("completes the Phase 2 account, recovery, session, and organizer lifecycle", async ({
@@ -157,6 +178,141 @@ test("completes the Phase 2 account, recovery, session, and organizer lifecycle"
   await secondContext.close();
   await parallelSession.close();
   expect(pageErrors).toEqual([]);
+});
+
+test("supports unverified onboarding while preserving publishing verification gates", async ({
+  page,
+}) => {
+  test.slow();
+  const suffix = crypto.randomUUID();
+  const email = `${runId}-unverified-${suffix}@example.test`;
+  const password = "unverified-browser-password";
+  await page.context().setExtraHTTPHeaders({
+    "x-forwarded-for": `e2e-unverified-${suffix}`,
+  });
+
+  await page.goto("/signup");
+  await page.getByLabel("Display name").fill("Unverified owner");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByLabel("Confirm password").fill(password);
+  const signupResponse = page.waitForResponse((response) =>
+    response.url().endsWith("/api/auth/signup"),
+  );
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect((await signupResponse).status()).toBe(202);
+  await expect(
+    page.getByText(
+      "Check your email for verification instructions. You can sign in now.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Continue to login" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Continue to login" }).click();
+  await expect(page).toHaveURL(/\/login\?registered=1$/);
+  await expect(page.url()).not.toContain(encodeURIComponent(email));
+  await expect(
+    page.getByText(/sign in now and verify before uploading photos/i),
+  ).toBeVisible();
+
+  const duplicate = await sameOriginPost(page, "/api/auth/signup", {
+    displayName: "Unverified owner",
+    email,
+    password,
+    passwordConfirmation: password,
+  });
+  expect(duplicate.status).toBe(202);
+  expect(duplicate.body).toMatchObject({
+    message:
+      "Check your email for verification instructions. You can sign in now.",
+  });
+
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(
+    page.getByText("Email status: Verification required"),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Verify your email before uploading photos, approving, paying, or publishing.",
+    ),
+  ).toBeVisible();
+
+  await page.getByRole("link", { name: /continue onboarding/i }).click();
+  await page
+    .getByLabel("Organizer or business name")
+    .fill("Unverified Draft Sales");
+  await page.getByLabel("Contact name").fill("Unverified owner");
+  await page.getByLabel("Contact email").fill(email);
+  await page.getByRole("button", { name: "Save organizer profile" }).click();
+  await expect(page.getByText("Organizer profile saved.")).toBeVisible();
+
+  await page.goto("/dashboard");
+  await page.getByLabel("Sale type").selectOption("ESTATE_SALE");
+  await page.getByRole("button", { name: "Create event draft" }).click();
+  await expect(page).toHaveURL(/\/dashboard\/events\/[0-9a-f-]+\/edit$/);
+  const eventId = page.url().match(/events\/([^/]+)\/edit/)?.[1];
+  expect(eventId).toBeTruthy();
+  await page.getByLabel("Public title").fill("Unverified editable draft");
+  await page
+    .getByLabel("Public description")
+    .fill("Ordinary draft text remains editable before email verification.");
+  await page.getByRole("button", { name: "Save details" }).click();
+  await expect(page.getByText("Draft saved.")).toBeVisible();
+
+  const eventResponse = await page.request.get(`/api/events/${eventId}`);
+  expect(eventResponse.status()).toBe(200);
+  const eventPayload = (await eventResponse.json()) as {
+    readonly event: { readonly version: number };
+  };
+  const expectedVersion = eventPayload.event.version;
+  expect(
+    (
+      await sameOriginPost(page, `/api/events/${eventId}/photos/reserve`, {
+        expectedVersion,
+        contentType: "image/jpeg",
+        fileName: "blocked.jpg",
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await sameOriginPost(page, `/api/events/${eventId}/approval`, {
+        expectedVersion,
+        acceptedTerms: true,
+        termsVersion: PUBLISHING_TERMS_VERSION,
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await sameOriginPost(page, `/api/events/${eventId}/checkout`, {
+        expectedVersion,
+      })
+    ).status,
+  ).toBe(403);
+
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Resend verification" }).click();
+  await expect(
+    page.getByText(/account can be verified, instructions have been sent/i),
+  ).toBeVisible();
+  const verificationMessage = await capturedEmail(email, "EMAIL_VERIFICATION");
+  const action = new URL(verificationMessage.actionUrl);
+  const verificationPath = `${action.pathname}${action.search}`;
+  await page.goto(verificationPath);
+  await page.getByRole("button", { name: "Verify email" }).click();
+  await expect(page).toHaveURL(/\/dashboard\?verified=1$/);
+  await expect(page.getByText(/Email verified/).first()).toBeVisible();
+  await expect(page.getByText("Email status: Verified")).toBeVisible();
+
+  await page.goto(verificationPath);
+  await page.getByRole("button", { name: "Verify email" }).click();
+  await expect(page).toHaveURL(/\/dashboard\?verified=1$/);
+  await expect(page.getByText("Email status: Verified")).toBeVisible();
 });
 
 test("denies anonymous organizer access and retains security headers", async ({
