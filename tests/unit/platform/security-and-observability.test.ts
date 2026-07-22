@@ -27,6 +27,31 @@ describe("security and observability boundaries", () => {
     ).toThrow(TrustedOriginError);
   });
 
+  it("accepts an explicit list of trusted application origins", () => {
+    expect(() =>
+      assertTrustedOrigin(
+        new Request("https://deployment.example.test/action", {
+          headers: { origin: "https://branch.example.test" },
+        }),
+        [
+          new URL("https://deployment.example.test"),
+          new URL("https://branch.example.test"),
+        ],
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertTrustedOrigin(
+        new Request("https://deployment.example.test/action", {
+          headers: { origin: "https://attacker.example.test" },
+        }),
+        [
+          new URL("https://deployment.example.test"),
+          new URL("https://branch.example.test"),
+        ],
+      ),
+    ).toThrow(TrustedOriginError);
+  });
+
   it("removes credentials and direct user identifiers from error events", () => {
     const opaqueToken = "abcdefghijklmnopqrstuvwxyzABCDEFGH123456789";
     const sanitized = sanitizeSentryEvent({

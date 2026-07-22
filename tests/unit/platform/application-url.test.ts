@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getServerApplicationUrl } from "@/platform/config/application-url";
+import {
+  getServerApplicationUrl,
+  getTrustedApplicationUrls,
+} from "@/platform/config/application-url";
 import { resetEnvironmentCacheForTests } from "@/platform/config/env";
 
 function configurePreviewEnvironment() {
@@ -29,6 +32,31 @@ describe("server application URL", () => {
         VERCEL_URL: "estate-sales-preview-123.vercel.app",
       }),
     ).toEqual(new URL("https://estate-sales-preview-123.vercel.app"));
+  });
+
+  it("trusts the active Preview deployment and branch alias origins", () => {
+    configurePreviewEnvironment();
+    expect(
+      getTrustedApplicationUrls({
+        NODE_ENV: "production",
+        VERCEL_URL: "estate-sales-preview-123.vercel.app",
+        VERCEL_BRANCH_URL: "estate-sales-git-branch-team.vercel.app",
+      }).map((url) => url.origin),
+    ).toEqual([
+      "https://estate-sales-preview-123.vercel.app",
+      "https://estate-sales-git-branch-team.vercel.app",
+    ]);
+  });
+
+  it("fails closed when Preview has an invalid branch alias host", () => {
+    configurePreviewEnvironment();
+    expect(() =>
+      getTrustedApplicationUrls({
+        NODE_ENV: "production",
+        VERCEL_URL: "estate-sales-preview-123.vercel.app",
+        VERCEL_BRANCH_URL: "attacker.example.test",
+      }),
+    ).toThrow(/VERCEL_BRANCH_URL/);
   });
 
   it("fails closed when Preview has no valid Vercel host", () => {

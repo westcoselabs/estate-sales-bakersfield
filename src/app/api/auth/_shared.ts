@@ -11,7 +11,7 @@ import {
   MalformedPasswordHashError,
   RateLimitExceededError,
 } from "@/modules/auth";
-import { getServerApplicationUrl } from "@/platform/config/application-url";
+import { getTrustedApplicationUrls } from "@/platform/config/application-url";
 import { logger } from "@/platform/observability/logger";
 import { requestIdFrom } from "@/platform/http/request-context";
 import {
@@ -25,7 +25,7 @@ const noStoreHeaders = {
 } as const;
 
 export function assertAuthenticationOrigin(request: Request): void {
-  assertTrustedOrigin(request, getServerApplicationUrl());
+  assertTrustedOrigin(request, getTrustedApplicationUrls());
 }
 
 export async function readJson(request: Request): Promise<unknown> {

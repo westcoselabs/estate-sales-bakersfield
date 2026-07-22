@@ -4,7 +4,7 @@ export class TrustedOriginError extends Error {
 
 export function assertTrustedOrigin(
   request: Request,
-  applicationUrl: URL,
+  applicationUrls: URL | readonly URL[],
 ): void {
   const originHeader = request.headers.get("origin");
   if (!originHeader) {
@@ -18,7 +18,11 @@ export function assertTrustedOrigin(
     throw new TrustedOriginError("The Origin header is invalid");
   }
 
-  if (origin.origin !== applicationUrl.origin) {
+  const trustedOrigins =
+    applicationUrls instanceof URL
+      ? [applicationUrls.origin]
+      : applicationUrls.map((url) => url.origin);
+  if (!trustedOrigins.includes(origin.origin)) {
     throw new TrustedOriginError("The request origin is not trusted");
   }
 }
