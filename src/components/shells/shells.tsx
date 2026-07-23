@@ -178,7 +178,14 @@ export function DashboardShell({
       <aside className="dashboard-sidebar">
         <Brand />
         <nav aria-label="Organizer dashboard">{nav}</nav>
-        <TextLink href="/">Public site</TextLink>
+        <TextLink
+          className="dashboard-exit-link"
+          href="/"
+          aria-label="Exit dashboard to public site"
+        >
+          <Icon name="logout" size={19} />
+          <span>Exit</span>
+        </TextLink>
       </aside>
       <header className="dashboard-topbar">
         <Brand />
@@ -191,7 +198,11 @@ export function DashboardShell({
       <main id="main-content" className="dashboard-main">
         {children}
       </main>
-      <nav className="dashboard-bottom-nav" aria-label="Organizer mobile">
+      <nav
+        className="dashboard-bottom-nav"
+        aria-label="Organizer mobile"
+        data-active={active}
+      >
         {nav}
       </nav>
     </div>
@@ -224,7 +235,16 @@ export function BuilderShell({
       <SkipLink />
       <header className="builder-app__header">
         <div className="shell-container builder-app__header-inner">
-          <TextLink href={backHref}>← {backLabel}</TextLink>
+          <TextLink
+            className="builder-back-link"
+            href={backHref}
+            aria-label={backLabel}
+          >
+            <span className="builder-back-link__icon" aria-hidden="true">
+              <Icon name="arrow" size={18} />
+            </span>
+            <span>Back</span>
+          </TextLink>
           <Brand />
           {account ? (
             <AccountMenu account={account} />

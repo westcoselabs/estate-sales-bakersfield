@@ -91,17 +91,17 @@ function formatListingDate(
 const STEP_LABELS: Readonly<Record<EventWizardStep, string>> = {
   details: "Details",
   schedule: "Schedule",
-  location: "Address and privacy",
+  location: "Privacy",
   photos: "Photos",
-  review: "Review, approval and payment",
+  review: "Review",
 };
 
-const STEP_DESCRIPTIONS: Readonly<Record<EventWizardStep, string>> = {
-  details: "Sale basics",
+const STEP_SUMMARIES: Readonly<Record<EventWizardStep, string>> = {
+  details: "Sale details",
   schedule: "Dates and times",
-  location: "Location settings",
-  photos: "Images and cover",
-  review: "Approve and publish",
+  location: "Address and privacy",
+  photos: "Photos and cover",
+  review: "Review and payment",
 };
 
 const ACCEPTED_PHOTO_TYPES = new Set([
@@ -1072,6 +1072,8 @@ export function EventBuilder({
     );
   }
 
+  const currentStepNumber = EVENT_WIZARD_STEPS.indexOf(step) + 1;
+
   return (
     <div className="builder-layout">
       <nav aria-label="Event builder progress" className="wizard-timeline">
@@ -1094,17 +1096,27 @@ export function EventBuilder({
               </span>
               <span className="wizard-step-copy">
                 <strong>{STEP_LABELS[item]}</strong>
-                <small>{STEP_DESCRIPTIONS[item]}</small>
               </span>
             </button>
           );
         })}
       </nav>
 
-      <p className="wizard-version">
-        <Icon name="check" size={16} /> Draft version {draft.version}. Changes
-        count after server confirmation.
-      </p>
+      <div className="wizard-progress-meta">
+        <p className="wizard-current-step">
+          <strong>
+            Step {currentStepNumber} of {EVENT_WIZARD_STEPS.length}
+          </strong>
+          <span>{STEP_SUMMARIES[step]}</span>
+        </p>
+        <p className="wizard-version">
+          <Icon name="check" size={16} />
+          <span>Draft v{draft.version}</span>
+          <span className="wizard-version__detail">
+            Changes are server confirmed
+          </span>
+        </p>
+      </div>
       {confirmation ? (
         <p className="success-box" role="status">
           {confirmation}

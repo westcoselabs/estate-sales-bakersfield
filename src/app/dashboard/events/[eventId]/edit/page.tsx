@@ -31,12 +31,6 @@ export default async function EventEditPage({ params }: Props) {
       account={{ displayName: user.displayName }}
       eyebrow={`${event.eventType === "ESTATE_SALE" ? "Estate sale" : "Yard sale"} draft`}
       title={event.title ?? "Build your event"}
-      meta={
-        <p>
-          Draft version {event.version}. Saves use optimistic conflict
-          protection.
-        </p>
-      }
     >
       <EventBuilder
         initialEvent={event}

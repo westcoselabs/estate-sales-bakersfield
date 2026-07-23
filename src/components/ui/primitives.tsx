@@ -67,7 +67,7 @@ export function TextLink({
 }: LinkProps & {
   readonly children: ReactNode;
   readonly className?: string;
-}) {
+} & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href">) {
   return (
     <Link className={`ui-text-link ${className}`.trim()} {...props}>
       {children}
