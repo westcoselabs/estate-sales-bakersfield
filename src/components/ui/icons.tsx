@@ -13,70 +13,104 @@ export type IconName =
   | "calendar"
   | "photo"
   | "check"
-  | "warning";
+  | "warning"
+  | "clock"
+  | "edit"
+  | "status"
+  | "estate"
+  | "yard";
+
+type IconWeight = "regular" | "fill";
+
+const house = (
+  <>
+    <path d="M3.75 10.5 12 3.75l8.25 6.75" />
+    <path d="M5.5 9.75v10.5h13V9.75M9.25 20.25v-6.5h5.5v6.5" />
+  </>
+);
 
 const paths: Record<IconName, ReactNode> = {
-  home: (
-    <>
-      <path d="m3 11 9-8 9 8" />
-      <path d="M5 10v10h14V10" />
-      <path d="M9 20v-6h6v6" />
-    </>
-  ),
+  home: house,
+  estate: house,
   list: (
     <>
-      <path d="M8 6h13M8 12h13M8 18h13" />
-      <path d="M3 6h.01M3 12h.01M3 18h.01" />
+      <path d="M9 6h11M9 12h11M9 18h11" />
+      <circle cx="4.5" cy="6" r="1" />
+      <circle cx="4.5" cy="12" r="1" />
+      <circle cx="4.5" cy="18" r="1" />
     </>
   ),
-  plus: (
-    <>
-      <path d="M12 5v14M5 12h14" />
-    </>
-  ),
+  plus: <path d="M12 4.5v15M4.5 12h15" />,
   user: (
     <>
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 21a8 8 0 0 1 16 0" />
+      <circle cx="12" cy="8" r="3.75" />
+      <path d="M4.75 20.25c.65-4.1 3.05-6.15 7.25-6.15s6.6 2.05 7.25 6.15" />
     </>
   ),
   settings: (
     <>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19 15a2 2 0 0 0 .4 2.2l-2.2 2.2A2 2 0 0 0 15 19a2 2 0 0 0-1.4 2h-3.2A2 2 0 0 0 9 19a2 2 0 0 0-2.2.4l-2.2-2.2A2 2 0 0 0 5 15a2 2 0 0 0-2-1.4v-3.2A2 2 0 0 0 5 9a2 2 0 0 0-.4-2.2l2.2-2.2A2 2 0 0 0 9 5a2 2 0 0 0 1.4-2h3.2A2 2 0 0 0 15 5a2 2 0 0 0 2.2-.4l2.2 2.2A2 2 0 0 0 19 9a2 2 0 0 0 2 1.4v3.2A2 2 0 0 0 19 15Z" />
+      <circle cx="12" cy="12" r="3.1" />
+      <path d="M12 2.8v2.1M12 19.1v2.1M21.2 12h-2.1M4.9 12H2.8M18.5 5.5 17 7M7 17l-1.5 1.5M18.5 18.5 17 17M7 7 5.5 5.5" />
+      <circle cx="12" cy="12" r="7.1" />
     </>
   ),
-  chevron: <path d="m8 10 4 4 4-4" />,
+  chevron: <path d="m7.5 9.5 4.5 4.5 4.5-4.5" />,
   logout: (
     <>
-      <path d="m10 17 5-5-5-5M15 12H3" />
-      <path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5" />
+      <path d="m14 8 4 4-4 4M18 12H8" />
+      <path d="M10 4H5.5A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20H10" />
     </>
   ),
-  arrow: (
+  arrow: <path d="M4.5 12h15M14.5 7l5 5-5 5" />,
+  shield: (
     <>
-      <path d="M5 12h14M14 7l5 5-5 5" />
+      <path d="M12 21.25c5-2.1 7.5-5.4 7.5-9.9V5.6L12 2.75 4.5 5.6v5.75c0 4.5 2.5 7.8 7.5 9.9Z" />
+      <path d="m8.75 12 2.1 2.1 4.4-4.4" />
     </>
   ),
-  shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />,
   calendar: (
     <>
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <path d="M16 3v4M8 3v4M3 10h18" />
+      <rect x="3.5" y="5.25" width="17" height="15.25" rx="2.25" />
+      <path d="M8 3.5v3.25M16 3.5v3.25M3.5 9.25h17" />
     </>
   ),
   photo: (
     <>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <circle cx="8.5" cy="9" r="1.5" />
-      <path d="m21 15-5-5L5 20" />
+      <rect x="3.5" y="4" width="17" height="16" rx="2.25" />
+      <circle cx="8.25" cy="8.75" r="1.5" />
+      <path d="m4.25 17 4.75-4.5 3.25 3 2.5-2.25 5 4.75" />
     </>
   ),
-  check: <path d="m5 12 4 4L19 6" />,
+  check: <path d="m5 12.25 4.2 4.2L19 6.75" />,
   warning: (
     <>
-      <path d="M12 3 2 21h20L12 3Z" />
-      <path d="M12 9v5M12 18h.01" />
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.25v6.25M12 17.25h.01" />
+    </>
+  ),
+  clock: (
+    <>
+      <path d="M4.5 7.25V3.75M4.5 3.75H8" />
+      <path d="M4.8 4.2A9 9 0 1 1 3.25 15" />
+      <path d="M12 7.25V12l3.25 2" />
+    </>
+  ),
+  edit: (
+    <>
+      <path d="m14.6 5.15 4.25 4.25M5 19l2.9-.65L19.15 7.1a1.5 1.5 0 0 0 0-2.1L19 4.85a1.5 1.5 0 0 0-2.1 0L5.65 16.1 5 19Z" />
+      <path d="m14.75 7 2.25 2.25" />
+    </>
+  ),
+  status: (
+    <>
+      <path d="M6 3.75h12v16.5l-2-1.25-2 1.25L12 19l-2 1.25L8 19l-2 1.25V3.75Z" />
+      <path d="M9 8h6M9 12h6M9 16h3.5" />
+    </>
+  ),
+  yard: (
+    <>
+      <path d="M4 10.25h16v10H4v-10ZM3 10.25l1.5-5.5h15l1.5 5.5" />
+      <path d="M7.5 10.25v-5.5M12 10.25v-5.5M16.5 10.25v-5.5M9 20.25v-5.5h6v5.5" />
     </>
   ),
 };
@@ -84,22 +118,25 @@ const paths: Record<IconName, ReactNode> = {
 export function Icon({
   name,
   size = 22,
+  weight = "regular",
   ...props
-}: SVGProps<SVGSVGElement> & {
+}: Omit<SVGProps<SVGSVGElement>, "width" | "height"> & {
   readonly name: IconName;
   readonly size?: number;
+  readonly weight?: IconWeight;
 }) {
   return (
     <svg
       aria-hidden="true"
       fill="none"
+      focusable="false"
       height={size}
       viewBox="0 0 24 24"
       width={size}
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
-      strokeWidth="1.8"
+      strokeWidth={weight === "fill" ? 2.2 : 1.8}
       {...props}
     >
       {paths[name]}

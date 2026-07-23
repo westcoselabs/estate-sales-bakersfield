@@ -157,26 +157,18 @@ export function DashboardShell({
       key: "create",
       icon: "plus",
     },
-    {
-      href: "/dashboard/profile",
-      label: "Profile",
-      key: "profile",
-      icon: "user",
-    },
-    {
-      href: "/dashboard/settings",
-      label: "Settings",
-      key: "settings",
-      icon: "settings",
-    },
   ];
   const nav = destinations.map((destination) => (
     <Link
       key={destination.key}
+      className={`dashboard-nav-link dashboard-nav-link--${destination.key}`}
       href={destination.href}
       aria-current={active === destination.key ? "page" : undefined}
     >
-      <Icon name={destination.icon} />
+      <Icon
+        name={destination.icon}
+        weight={active === destination.key ? "fill" : "regular"}
+      />
       <span>{destination.label}</span>
     </Link>
   ));

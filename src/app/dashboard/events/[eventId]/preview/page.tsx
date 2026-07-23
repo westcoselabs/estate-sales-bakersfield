@@ -58,7 +58,7 @@ export default async function EventPreviewPage({ params }: Props) {
     >
       <div className="preview-toolbar">
         <strong>
-          Exact future listing preview · revision {editor.contentRevision}
+          Exact future listing preview, revision {editor.contentRevision}
         </strong>
         {editor.publication ? (
           <Link className="button-link" href={editor.publication.canonicalPath}>
@@ -83,7 +83,7 @@ export default async function EventPreviewPage({ params }: Props) {
           </p>
           <h2>{preview.title}</h2>
           <p className="listing-date">
-            {dateFormat.format(new Date(preview.startsAt))} –{" "}
+            {dateFormat.format(new Date(preview.startsAt))} to{" "}
             {dateFormat.format(new Date(preview.endsAt))}
           </p>
           <h2>Location</h2>

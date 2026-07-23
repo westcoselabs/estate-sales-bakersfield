@@ -199,25 +199,35 @@ export function ListingCollection({
     <div className="dashboard-listing-grid">
       {visible.map((listing) => {
         const action = listingPrimaryAction(listing);
+        const isEstateSale = listing.event.eventType === "ESTATE_SALE";
         return (
           <article className="dashboard-listing-card" key={listing.event.id}>
-            <div className="dashboard-listing-card__top">
+            <header className="dashboard-listing-card__header">
+              <span className="dashboard-listing-card__mark" aria-hidden="true">
+                <Icon
+                  name={isEstateSale ? "estate" : "yard"}
+                  size={26}
+                  weight="regular"
+                />
+              </span>
+              <div className="dashboard-listing-card__identity">
+                <span className="dashboard-listing-card__type">
+                  {isEstateSale ? "Estate sale" : "Yard sale"}
+                </span>
+                <h2>{listing.event.title ?? "Untitled sale"}</h2>
+              </div>
               <span className={`status-badge status-badge--${tone(listing)}`}>
                 {statusLabel(listing)}
               </span>
-              <span className="dashboard-listing-card__type">
-                {listing.event.eventType === "ESTATE_SALE"
-                  ? "Estate sale"
-                  : "Yard sale"}
-              </span>
-            </div>
-            <div>
-              <h2>{listing.event.title ?? "Untitled sale"}</h2>
-              <p>{listing.payment.message}</p>
-            </div>
+            </header>
+            <p className="dashboard-listing-card__message">
+              {listing.payment.message}
+            </p>
             <dl className="dashboard-listing-card__meta">
               <div>
-                <dt>Schedule</dt>
+                <dt>
+                  <Icon name="calendar" size={17} /> Schedule
+                </dt>
                 <dd>
                   {listing.event.startsAt
                     ? formatDate(
@@ -228,14 +238,18 @@ export function ListingCollection({
                 </dd>
               </div>
               <div>
-                <dt>Photos</dt>
+                <dt>
+                  <Icon name="photo" size={17} /> Photos
+                </dt>
                 <dd>
                   {listing.event.readyPhotoCount} ready
                   {listing.event.hasReadyCover ? ", cover set" : ""}
                 </dd>
               </div>
               <div>
-                <dt>Updated</dt>
+                <dt>
+                  <Icon name="clock" size={17} /> Updated
+                </dt>
                 <dd>{formatDate(listing.event.updatedAt)}</dd>
               </div>
             </dl>
@@ -243,20 +257,22 @@ export function ListingCollection({
               <Link className="ui-button ui-button--primary" href={action.href}>
                 {action.label} <Icon name="arrow" size={18} />
               </Link>
-              {listing.payment.displayState !== "PUBLISHED" ? (
+              <div className="dashboard-listing-card__secondary-actions">
+                {listing.payment.displayState !== "PUBLISHED" ? (
+                  <Link
+                    className="ui-text-link"
+                    href={`/dashboard/events/${listing.event.id}/edit`}
+                  >
+                    <Icon name="edit" size={18} /> Edit
+                  </Link>
+                ) : null}
                 <Link
                   className="ui-text-link"
-                  href={`/dashboard/events/${listing.event.id}/edit`}
+                  href={`/dashboard/events/${listing.event.id}/payment`}
                 >
-                  Edit
+                  <Icon name="status" size={18} /> Status
                 </Link>
-              ) : null}
-              <Link
-                className="ui-text-link"
-                href={`/dashboard/events/${listing.event.id}/payment`}
-              >
-                Status
-              </Link>
+              </div>
             </div>
           </article>
         );

@@ -64,12 +64,16 @@ export default async function DashboardPage({
             <h1>Welcome, {user.displayName}</h1>
             <p>Manage each sale from first draft through publication.</p>
           </div>
-          <Link
-            className="ui-button ui-button--primary"
-            href="/dashboard/events/new"
-          >
-            <Icon name="plus" /> Create listing
-          </Link>
+          <dl className="dashboard-summary-chips" aria-label="Listing summary">
+            <div>
+              <dt>Listings</dt>
+              <dd>{listings.length}</dd>
+            </div>
+            <div>
+              <dt>Need attention</dt>
+              <dd>{attentionCount}</dd>
+            </div>
+          </dl>
         </header>
 
         {query.verified === "1" ? (
@@ -117,7 +121,7 @@ export default async function DashboardPage({
             </div>
             <Link
               className="ui-button ui-button--primary"
-              href="/dashboard/organizer"
+              href="/dashboard/profile"
             >
               Continue onboarding <Icon name="arrow" size={18} />
             </Link>
@@ -151,44 +155,6 @@ export default async function DashboardPage({
         <p className="dashboard-onboarding-status">
           Organizer onboarding: {organizer?.status ?? "Not started"}.
         </p>
-
-        <section
-          className="dashboard-quick-links"
-          aria-labelledby="quick-links-title"
-        >
-          <div className="dashboard-section-heading">
-            <div>
-              <p className="eyebrow">Shortcuts</p>
-              <h2 id="quick-links-title">Get things done</h2>
-            </div>
-          </div>
-          <div className="quick-link-grid">
-            <Link href="/dashboard/events">
-              <Icon name="list" />
-              <span>
-                <strong>Manage listings</strong>
-                <small>Drafts, ready, published, and recovery</small>
-              </span>
-              <Icon name="arrow" />
-            </Link>
-            <Link href="/dashboard/profile">
-              <Icon name="user" />
-              <span>
-                <strong>Public profile</strong>
-                <small>Organizer and contact information</small>
-              </span>
-              <Icon name="arrow" />
-            </Link>
-            <Link href="/dashboard/settings">
-              <Icon name="shield" />
-              <span>
-                <strong>Account security</strong>
-                <small>Verification and active sessions</small>
-              </span>
-              <Icon name="arrow" />
-            </Link>
-          </div>
-        </section>
 
         {organizer?.status === "COMPLETE" ? (
           <>

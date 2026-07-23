@@ -1102,8 +1102,8 @@ export function EventBuilder({
       </nav>
 
       <p className="wizard-version">
-        <Icon name="check" size={16} /> Draft version {draft.version} · changes
-        count only after server confirmation
+        <Icon name="check" size={16} /> Draft version {draft.version}. Changes
+        count after server confirmation.
       </p>
       {confirmation ? (
         <p className="success-box" role="status">
@@ -1403,7 +1403,7 @@ export function EventBuilder({
                       )}
                       <div>
                         <strong>
-                          Photo {index + 1} {photo.isCover ? "— Cover" : ""}
+                          Photo {index + 1} {photo.isCover ? "- Cover" : ""}
                         </strong>
                         <p>Status: {photo.status}</p>
                         {photo.errorCode ? (
