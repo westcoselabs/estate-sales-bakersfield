@@ -273,15 +273,18 @@ export function StatusPanel({
 export function Skeleton({
   className = "",
   label = "Loading content",
+  decorative = false,
 }: {
   readonly className?: string;
   readonly label?: string;
+  readonly decorative?: boolean;
 }) {
   return (
     <span
       className={`ui-skeleton ${className}`.trim()}
-      role="status"
-      aria-label={label}
+      role={decorative ? undefined : "status"}
+      aria-label={decorative ? undefined : label}
+      aria-hidden={decorative || undefined}
     />
   );
 }

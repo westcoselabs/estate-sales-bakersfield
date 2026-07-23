@@ -22,13 +22,16 @@ export default async function OrganizerPage() {
   );
 
   return (
-    <DashboardShell active="organizer">
+    <DashboardShell
+      active="profile"
+      account={{ displayName: user.displayName }}
+    >
       <div className="dashboard-content">
         <section>
           <p>
             <Link href="/dashboard">Account</Link>
           </p>
-          <h1>Organizer profile</h1>
+          <h1>Profile</h1>
           <p>
             Save partial information and return later. Name, contact name, and
             contact email complete onboarding.

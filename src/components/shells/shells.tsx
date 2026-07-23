@@ -2,6 +2,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { ExternalLink, TextLink } from "@/components/ui/primitives";
+import { Icon, type IconName } from "@/components/ui/icons";
+
+import { AccountMenu, type ShellAccount } from "./account-menu";
 
 export function Brand() {
   return (
@@ -123,40 +126,75 @@ export function AuthShell({
   );
 }
 
+type DashboardDestination =
+  "overview" | "listings" | "create" | "profile" | "settings";
+
 export function DashboardShell({
   children,
   active = "overview",
+  account,
 }: {
   readonly children: ReactNode;
-  readonly active?: "overview" | "organizer";
+  readonly active?: DashboardDestination;
+  readonly account?: ShellAccount;
 }) {
-  const nav = (
-    <>
-      <Link
-        href="/dashboard"
-        aria-current={active === "overview" ? "page" : undefined}
-      >
-        <span aria-hidden="true">⌂</span> Overview
-      </Link>
-      <Link
-        href="/dashboard/organizer"
-        aria-current={active === "organizer" ? "page" : undefined}
-      >
-        <span aria-hidden="true">◇</span> Organizer
-      </Link>
-    </>
-  );
+  const destinations: ReadonlyArray<{
+    href: string;
+    label: string;
+    key: DashboardDestination;
+    icon: IconName;
+  }> = [
+    { href: "/dashboard", label: "Overview", key: "overview", icon: "home" },
+    {
+      href: "/dashboard/events",
+      label: "Listings",
+      key: "listings",
+      icon: "list",
+    },
+    {
+      href: "/dashboard/events/new",
+      label: "Create",
+      key: "create",
+      icon: "plus",
+    },
+    {
+      href: "/dashboard/profile",
+      label: "Profile",
+      key: "profile",
+      icon: "user",
+    },
+    {
+      href: "/dashboard/settings",
+      label: "Settings",
+      key: "settings",
+      icon: "settings",
+    },
+  ];
+  const nav = destinations.map((destination) => (
+    <Link
+      key={destination.key}
+      href={destination.href}
+      aria-current={active === destination.key ? "page" : undefined}
+    >
+      <Icon name={destination.icon} />
+      <span>{destination.label}</span>
+    </Link>
+  ));
   return (
     <div className="dashboard-app">
       <SkipLink />
       <aside className="dashboard-sidebar">
         <Brand />
-        <nav aria-label="Organizer">{nav}</nav>
+        <nav aria-label="Organizer dashboard">{nav}</nav>
         <TextLink href="/">Public site</TextLink>
       </aside>
       <header className="dashboard-topbar">
         <Brand />
-        <TextLink href="/">Public site</TextLink>
+        {account ? (
+          <AccountMenu account={account} />
+        ) : (
+          <TextLink href="/">Public site</TextLink>
+        )}
       </header>
       <main id="main-content" className="dashboard-main">
         {children}
@@ -177,6 +215,7 @@ export function BuilderShell({
   children,
   progress,
   actions,
+  account,
 }: {
   readonly eyebrow: string;
   readonly title: string;
@@ -186,6 +225,7 @@ export function BuilderShell({
   readonly children: ReactNode;
   readonly progress?: ReactNode;
   readonly actions?: ReactNode;
+  readonly account?: ShellAccount;
 }) {
   return (
     <div className="builder-app">
@@ -194,9 +234,13 @@ export function BuilderShell({
         <div className="shell-container builder-app__header-inner">
           <TextLink href={backHref}>← {backLabel}</TextLink>
           <Brand />
-          <span className="builder-app__save-region" aria-hidden="true">
-            Draft workspace
-          </span>
+          {account ? (
+            <AccountMenu account={account} />
+          ) : (
+            <span className="builder-app__save-region" aria-hidden="true">
+              Draft workspace
+            </span>
+          )}
         </div>
       </header>
       <main id="main-content" className="builder-app__main shell-container">

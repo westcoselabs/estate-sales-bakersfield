@@ -23,6 +23,7 @@ export default async function PaymentSuccessPage({ params }: Props) {
   ]);
   return (
     <BuilderShell
+      account={{ displayName: user.displayName }}
       eyebrow="Checkout return"
       title={event.title ?? "Payment status"}
     >

@@ -29,6 +29,7 @@ export default async function EventPaymentPage({ params }: Props) {
   ].includes(payment.displayState);
   return (
     <BuilderShell
+      account={{ displayName: user.displayName }}
       eyebrow={
         payment.displayState === "PUBLISHED"
           ? "Published listing"

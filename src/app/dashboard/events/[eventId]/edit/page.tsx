@@ -28,6 +28,7 @@ export default async function EventEditPage({ params }: Props) {
     });
   return (
     <BuilderShell
+      account={{ displayName: user.displayName }}
       eyebrow={`${event.eventType === "ESTATE_SALE" ? "Estate sale" : "Yard sale"} draft`}
       title={event.title ?? "Build your event"}
       meta={

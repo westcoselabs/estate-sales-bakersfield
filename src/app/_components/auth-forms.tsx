@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
 import {
@@ -615,6 +616,7 @@ export function OrganizerForm({
   readonly initial: OrganizerData | null;
 }) {
   const submission = useSubmission();
+  const router = useRouter();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -633,6 +635,7 @@ export function OrganizerForm({
         "PUT",
       );
       submission.setMessage("Organizer profile saved.");
+      router.refresh();
     } catch (error) {
       submission.setMessage(
         error instanceof Error ? error.message : "Profile save failed.",

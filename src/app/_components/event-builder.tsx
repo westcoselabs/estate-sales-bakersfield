@@ -9,6 +9,7 @@ import {
   type FormEvent,
 } from "react";
 
+import { Icon } from "@/components/ui/icons";
 import type {
   AddressPrivacyMode,
   EventEditorDto,
@@ -62,12 +63,45 @@ const PHOTO_RECONCILIATION_ATTEMPTS = 3;
 const PHOTO_RECONCILIATION_DELAY_MS = 750;
 const PHOTO_RECONCILIATION_REQUEST_TIMEOUT_MS = 5_000;
 
+function formatListingDate(
+  startsAt: string | null,
+  localStartsAt: string | null,
+  timeZone: string | null,
+): string {
+  if (startsAt) {
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: timeZone ?? "America/Los_Angeles",
+    }).format(new Date(startsAt));
+  }
+  const date = localStartsAt?.split("T")[0];
+  if (!date) return "Not set";
+  const [year, month, day] = date.split("-").map(Number);
+  if (!year || !month || !day) return "Not set";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
 const STEP_LABELS: Readonly<Record<EventWizardStep, string>> = {
   details: "Details",
   schedule: "Schedule",
   location: "Address and privacy",
   photos: "Photos",
   review: "Review, approval and payment",
+};
+
+const STEP_DESCRIPTIONS: Readonly<Record<EventWizardStep, string>> = {
+  details: "Sale basics",
+  schedule: "Dates and times",
+  location: "Location settings",
+  photos: "Images and cover",
+  review: "Approve and publish",
 };
 
 const ACCEPTED_PHOTO_TYPES = new Set([
@@ -261,6 +295,8 @@ export function EventBuilder({
   const uploadActiveRef = useRef(false);
   const operationActiveRef = useRef(false);
   const previewUrls = useRef(new Set<string>());
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+  const previousStepRef = useRef(step);
 
   useEffect(
     () => () => {
@@ -271,6 +307,12 @@ export function EventBuilder({
     },
     [],
   );
+
+  useEffect(() => {
+    if (previousStepRef.current === step) return;
+    previousStepRef.current = step;
+    stepHeadingRef.current?.focus();
+  }, [step]);
 
   function syncForms(event: EventEditorDto) {
     setTitle(event.title ?? "");
@@ -835,6 +877,25 @@ export function EventBuilder({
     );
   }
 
+  function movePhoto(photoId: string, direction: -1 | 1) {
+    const photoIds = draftRef.current.photos.map((photo) => photo.id);
+    const currentIndex = photoIds.indexOf(photoId);
+    const nextIndex = currentIndex + direction;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= photoIds.length) {
+      return;
+    }
+    const reordered = [...photoIds];
+    const [moved] = reordered.splice(currentIndex, 1);
+    if (!moved) return;
+    reordered.splice(nextIndex, 0, moved);
+    void mutatePhoto(
+      "photo-order",
+      `/api/events/${draftRef.current.id}/photos/order`,
+      "PUT",
+      { expectedVersion: draftRef.current.version, photoIds: reordered },
+    );
+  }
+
   function dismissUpload(item: UploadItem) {
     setUploads((current) =>
       current.filter((candidate) => candidate.id !== item.id),
@@ -964,6 +1025,25 @@ export function EventBuilder({
       draft.termsVersion &&
       draft.termsAcceptedAt,
     );
+  const coverPhoto = draft.photos.find(
+    (photo) => photo.status === "READY" && photo.isCover,
+  );
+  const completionItems = [
+    { label: "Add sale details", complete: draft.steps.detailsComplete },
+    { label: "Set the schedule", complete: draft.steps.scheduleComplete },
+    {
+      label: "Confirm location privacy",
+      complete: draft.steps.locationComplete,
+    },
+    {
+      label: "Upload and select a cover",
+      complete: draft.steps.photosComplete,
+    },
+    {
+      label: "Review and approve",
+      complete: approvalIsCurrent || Boolean(draft.publication),
+    },
+  ];
 
   function persistedUploadPhoto(item: UploadItem) {
     return item.photoId
@@ -1009,492 +1089,628 @@ export function EventBuilder({
               aria-current={current ? "step" : undefined}
               onClick={() => setStep(item)}
             >
-              <span aria-hidden="true">
-                {completed[item] ? "✓" : index + 1}
+              <span className="wizard-step-number" aria-hidden="true">
+                {completed[item] ? <Icon name="check" size={16} /> : index + 1}
               </span>
-              {STEP_LABELS[item]}
+              <span className="wizard-step-copy">
+                <strong>{STEP_LABELS[item]}</strong>
+                <small>{STEP_DESCRIPTIONS[item]}</small>
+              </span>
             </button>
           );
         })}
       </nav>
 
-      <p className="wizard-version">Server draft version {draft.version}</p>
+      <p className="wizard-version">
+        <Icon name="check" size={16} /> Draft version {draft.version} · changes
+        count only after server confirmation
+      </p>
       {confirmation ? (
         <p className="success-box" role="status">
           {confirmation}
         </p>
       ) : null}
 
-      {step === "details" ? (
-        <section className="builder-card" aria-labelledby="details-title">
-          <p className="eyebrow">Step 1 of 5</p>
-          <h2 id="details-title">Event details</h2>
-          <form onSubmit={saveDetails}>
-            <label>
-              Public title
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                minLength={3}
-                maxLength={120}
-                required
-              />
-            </label>
-            <label>
-              Public description
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                minLength={20}
-                maxLength={5000}
-                rows={7}
-                required
-              />
-            </label>
-            <StepFeedback feedback={currentFeedback} />
-            <div className="wizard-actions">
-              <span />
-              <button disabled={Boolean(pending)} type="submit">
-                {pending === "details" ? "Saving…" : "Save and continue"}
-              </button>
-            </div>
-          </form>
-        </section>
+      {approvalIsCurrent ? (
+        <div className="warning-box builder-approval-warning" role="status">
+          <strong>This exact revision is approved.</strong> Saving new details,
+          schedule, location, or photo changes creates a new revision that must
+          be reviewed and approved again.
+        </div>
       ) : null}
 
-      {step === "schedule" ? (
-        <section className="builder-card" aria-labelledby="schedule-title">
-          <p className="eyebrow">Step 2 of 5</p>
-          <h2 id="schedule-title">Local schedule</h2>
-          <p>
-            Times are validated on the server, including daylight-saving gaps
-            and overlaps.
-          </p>
-          <form onSubmit={saveSchedule}>
-            <label>
-              Starts
-              <input
-                value={localStartsAt}
-                onChange={(e) => setLocalStartsAt(e.target.value)}
-                type="datetime-local"
-                required
-              />
-            </label>
-            <label>
-              Ends
-              <input
-                value={localEndsAt}
-                onChange={(e) => setLocalEndsAt(e.target.value)}
-                type="datetime-local"
-                required
-              />
-            </label>
-            <label>
-              IANA timezone
-              <input
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                required
-              />
-            </label>
-            <StepFeedback feedback={currentFeedback} />
-            <WizardActions
-              back={() => setStep("details")}
-              pending={pending === "schedule"}
-            />
-          </form>
-        </section>
-      ) : null}
-
-      {step === "location" ? (
-        <section className="builder-card" aria-labelledby="location-title">
-          <p className="eyebrow">Step 3 of 5</p>
-          <h2 id="location-title">Address and privacy</h2>
-          <form onSubmit={saveLocation}>
-            <label>
-              Street address
-              <input
-                value={addressLine1}
-                onChange={(e) => setAddressLine1(e.target.value)}
-                autoComplete="street-address"
-                required
-              />
-            </label>
-            <label>
-              Unit or suite (optional)
-              <input
-                value={addressLine2}
-                onChange={(e) => setAddressLine2(e.target.value)}
-              />
-            </label>
-            <div className="form-grid">
-              <label>
-                City
-                <input
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  required
-                />
-              </label>
-              <label>
-                State
-                <input
-                  value={region}
-                  onChange={(e) => setRegion(e.target.value)}
-                  required
-                />
-              </label>
-              <label>
-                Postal code
-                <input
-                  value={postalCode}
-                  onChange={(e) => setPostalCode(e.target.value)}
-                  required
-                />
-              </label>
-              <label>
-                Country
-                <input
-                  value={countryCode}
-                  onChange={(e) => setCountryCode(e.target.value)}
-                  required
-                />
-              </label>
-            </div>
-            <label>
-              Address timezone
-              <input
-                value={locationTimezone}
-                onChange={(e) => setLocationTimezone(e.target.value)}
-                required
-              />
-            </label>
-            <fieldset>
-              <legend>Address privacy</legend>
-              {(
-                [
-                  ["EXACT_ADDRESS", "Show exact address"],
-                  [
-                    "APPROXIMATE_LOCATION",
-                    "Show only an approximate Bakersfield-area label",
-                  ],
-                  [
-                    "HIDDEN_UNTIL_START",
-                    "Hide exact address until the event starts",
-                  ],
-                ] as const
-              ).map(([value, label]) => (
-                <label className="radio-label" key={value}>
+      <div className="builder-workspace">
+        <div className="builder-step-column">
+          {step === "details" ? (
+            <section className="builder-card" aria-labelledby="details-title">
+              <p className="eyebrow">Step 1 of 5</p>
+              <h2 id="details-title" ref={stepHeadingRef} tabIndex={-1}>
+                Event details
+              </h2>
+              <form onSubmit={saveDetails}>
+                <label>
+                  Public title
                   <input
-                    type="radio"
-                    name="privacyMode"
-                    value={value}
-                    checked={privacyMode === value}
-                    onChange={() => setPrivacyMode(value)}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    minLength={3}
+                    maxLength={120}
+                    required
                   />
-                  {label}
                 </label>
-              ))}
-            </fieldset>
-            <StepFeedback feedback={currentFeedback} />
-            <WizardActions
-              back={() => setStep("schedule")}
-              pending={pending === "location"}
-              loadingLabel="Validating…"
-            />
-          </form>
-        </section>
-      ) : null}
+                <label>
+                  Public description
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    minLength={20}
+                    maxLength={5000}
+                    rows={7}
+                    required
+                  />
+                </label>
+                <StepFeedback feedback={currentFeedback} />
+                <div className="wizard-actions">
+                  <span />
+                  <button disabled={Boolean(pending)} type="submit">
+                    {pending === "details" ? "Saving…" : "Save and continue"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          ) : null}
 
-      {step === "photos" ? (
-        <section className="builder-card" aria-labelledby="photos-title">
-          <p className="eyebrow">Step 4 of 5</p>
-          <h2 id="photos-title">Photos</h2>
-          <p>
-            Select several images at once. Every file is validated before its
-            private reservation, then sanitized and finalized independently.
-          </p>
-          <label>
-            Event photos (JPEG, PNG, WebP, HEIC, or HEIF; maximum 15 MB each)
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-              multiple
-              onChange={choosePhotos}
-              disabled={Boolean(pending) || uploadActive}
-            />
-          </label>
-          {uploads.length ? (
-            <ul className="upload-queue" aria-label="Selected photo uploads">
-              {uploads.map((item) => (
-                <li key={item.id}>
-                  <UploadPreview item={item} />
-                  <div className="upload-queue-details">
-                    <strong>{item.fileName}</strong>
-                    <span>
-                      {UPLOAD_STATUS_LABELS[item.status]} · {item.progress}%
-                    </span>
-                    {item.error ? <small>{item.error}</small> : null}
-                  </div>
-                  <progress
-                    aria-label={`Upload progress for ${item.fileName}`}
-                    max={100}
-                    value={item.progress}
-                  >
-                    {item.progress}%
-                  </progress>
-                  <div className="button-row">
-                    {uploadCanRetry(item) ? (
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        disabled={Boolean(pending) || uploadActive}
-                        onClick={() => void uploadSelected([item])}
-                      >
-                        Retry
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className={
-                        uploadDismissesLocally(item)
-                          ? "secondary-button"
-                          : "danger-button"
-                      }
-                      aria-busy={pending === `remove-upload:${item.id}`}
-                      disabled={Boolean(pending) || uploadActive}
-                      onClick={() => void removeUpload(item)}
-                    >
-                      {pending === `remove-upload:${item.id}`
-                        ? "Removingâ€¦"
-                        : uploadDismissesLocally(item)
-                          ? "Dismiss"
-                          : "Remove"}
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+          {step === "schedule" ? (
+            <section className="builder-card" aria-labelledby="schedule-title">
+              <p className="eyebrow">Step 2 of 5</p>
+              <h2 id="schedule-title" ref={stepHeadingRef} tabIndex={-1}>
+                Local schedule
+              </h2>
+              <p>
+                Times are validated on the server, including daylight-saving
+                gaps and overlaps.
+              </p>
+              <form onSubmit={saveSchedule}>
+                <label>
+                  Starts
+                  <input
+                    value={localStartsAt}
+                    onChange={(e) => setLocalStartsAt(e.target.value)}
+                    type="datetime-local"
+                    required
+                  />
+                </label>
+                <label>
+                  Ends
+                  <input
+                    value={localEndsAt}
+                    onChange={(e) => setLocalEndsAt(e.target.value)}
+                    type="datetime-local"
+                    required
+                  />
+                </label>
+                <label>
+                  IANA timezone
+                  <input
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    required
+                  />
+                </label>
+                <StepFeedback feedback={currentFeedback} />
+                <WizardActions
+                  back={() => setStep("details")}
+                  pending={pending === "schedule"}
+                />
+              </form>
+            </section>
           ) : null}
-          {uploadActive ? (
-            <p role="status">Uploading and processing selected photos…</p>
-          ) : null}
-          {draft.photos.length ? (
-            <ol className="photo-list" aria-label="Event photo order">
-              {draft.photos.map((photo, index) => (
-                <li key={photo.id}>
-                  {photo.status === "READY" ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={photo.urls.thumbnail}
-                      alt={`Event photo ${index + 1}`}
+
+          {step === "location" ? (
+            <section className="builder-card" aria-labelledby="location-title">
+              <p className="eyebrow">Step 3 of 5</p>
+              <h2 id="location-title" ref={stepHeadingRef} tabIndex={-1}>
+                Address and privacy
+              </h2>
+              <form onSubmit={saveLocation}>
+                <label>
+                  Street address
+                  <input
+                    value={addressLine1}
+                    onChange={(e) => setAddressLine1(e.target.value)}
+                    autoComplete="street-address"
+                    required
+                  />
+                </label>
+                <label>
+                  Unit or suite (optional)
+                  <input
+                    value={addressLine2}
+                    onChange={(e) => setAddressLine2(e.target.value)}
+                  />
+                </label>
+                <div className="form-grid">
+                  <label>
+                    City
+                    <input
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      required
                     />
-                  ) : (
-                    <div className="photo-placeholder">{photo.status}</div>
-                  )}
-                  <div>
-                    <strong>
-                      Photo {index + 1} {photo.isCover ? "— Cover" : ""}
-                    </strong>
-                    <p>Status: {photo.status}</p>
-                    {photo.errorCode ? (
-                      <p>Safe error: {photo.errorCode}</p>
-                    ) : null}
-                    <div className="button-row">
-                      {photo.status === "READY" && !photo.isCover ? (
+                  </label>
+                  <label>
+                    State
+                    <input
+                      value={region}
+                      onChange={(e) => setRegion(e.target.value)}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Postal code
+                    <input
+                      value={postalCode}
+                      onChange={(e) => setPostalCode(e.target.value)}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Country
+                    <input
+                      value={countryCode}
+                      onChange={(e) => setCountryCode(e.target.value)}
+                      required
+                    />
+                  </label>
+                </div>
+                <label>
+                  Address timezone
+                  <input
+                    value={locationTimezone}
+                    onChange={(e) => setLocationTimezone(e.target.value)}
+                    required
+                  />
+                </label>
+                <fieldset>
+                  <legend>Address privacy</legend>
+                  {(
+                    [
+                      ["EXACT_ADDRESS", "Show exact address"],
+                      [
+                        "APPROXIMATE_LOCATION",
+                        "Show only an approximate Bakersfield-area label",
+                      ],
+                      [
+                        "HIDDEN_UNTIL_START",
+                        "Hide exact address until the event starts",
+                      ],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <label className="radio-label" key={value}>
+                      <input
+                        type="radio"
+                        name="privacyMode"
+                        value={value}
+                        checked={privacyMode === value}
+                        onChange={() => setPrivacyMode(value)}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </fieldset>
+                <StepFeedback feedback={currentFeedback} />
+                <WizardActions
+                  back={() => setStep("schedule")}
+                  pending={pending === "location"}
+                  loadingLabel="Validating…"
+                />
+              </form>
+            </section>
+          ) : null}
+
+          {step === "photos" ? (
+            <section className="builder-card" aria-labelledby="photos-title">
+              <p className="eyebrow">Step 4 of 5</p>
+              <h2 id="photos-title" ref={stepHeadingRef} tabIndex={-1}>
+                Photos
+              </h2>
+              <p>
+                Select several images at once. Every file is validated before
+                its private reservation, then sanitized and finalized
+                independently.
+              </p>
+              <label>
+                Event photos (JPEG, PNG, WebP, HEIC, or HEIF; maximum 15 MB
+                each)
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                  multiple
+                  onChange={choosePhotos}
+                  disabled={Boolean(pending) || uploadActive}
+                />
+              </label>
+              {uploads.length ? (
+                <ul
+                  className="upload-queue"
+                  aria-label="Selected photo uploads"
+                >
+                  {uploads.map((item) => (
+                    <li key={item.id}>
+                      <UploadPreview item={item} />
+                      <div className="upload-queue-details">
+                        <strong>{item.fileName}</strong>
+                        <span>
+                          {UPLOAD_STATUS_LABELS[item.status]} · {item.progress}%
+                        </span>
+                        {item.error ? <small>{item.error}</small> : null}
+                      </div>
+                      <progress
+                        aria-label={`Upload progress for ${item.fileName}`}
+                        max={100}
+                        value={item.progress}
+                      >
+                        {item.progress}%
+                      </progress>
+                      <div className="button-row">
+                        {uploadCanRetry(item) ? (
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={Boolean(pending) || uploadActive}
+                            onClick={() => void uploadSelected([item])}
+                          >
+                            Retry
+                          </button>
+                        ) : null}
                         <button
                           type="button"
-                          className="secondary-button"
-                          aria-label={`Make photo ${index + 1} cover`}
+                          className={
+                            uploadDismissesLocally(item)
+                              ? "secondary-button"
+                              : "danger-button"
+                          }
+                          aria-busy={pending === `remove-upload:${item.id}`}
                           disabled={Boolean(pending) || uploadActive}
-                          onClick={() => selectCover(photo.id)}
+                          onClick={() => void removeUpload(item)}
                         >
-                          Make cover
+                          {pending === `remove-upload:${item.id}`
+                            ? "Removing…"
+                            : uploadDismissesLocally(item)
+                              ? "Dismiss"
+                              : "Remove"}
                         </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="danger-button"
-                        disabled={Boolean(pending) || uploadActive}
-                        onClick={() => removePhoto(photo.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p>No server-stored photos yet.</p>
-          )}
-          <p className="photo-readiness" role="status">
-            {readyPhotoCount === 0
-              ? "No photos are READY yet. Uploaded files count only after server image processing succeeds."
-              : !hasReadyCover
-                ? `${String(readyPhotoCount)} ${readyPhotoCount === 1 ? "photo is" : "photos are"} READY. Select a READY photo as the cover to continue.`
-                : `${String(readyPhotoCount)} ${readyPhotoCount === 1 ? "photo is" : "photos are"} READY and the cover is selected.`}
-          </p>
-          <StepFeedback feedback={currentFeedback} />
-          <div className="wizard-actions">
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={Boolean(pending) || uploadActive}
-              onClick={() => setStep("location")}
-            >
-              Back
-            </button>
-            <button
-              type="button"
-              aria-busy={pending === "photos-continue"}
-              disabled={
-                Boolean(pending) || uploadActive || !draft.steps.photosComplete
-              }
-              onClick={() => void continueFromPhotos()}
-            >
-              {pending === "photos-continue"
-                ? "Checking…"
-                : readyPhotoCount === 0
-                  ? "Waiting for a READY photo"
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {uploadActive ? (
+                <p role="status">Uploading and processing selected photos…</p>
+              ) : null}
+              {draft.photos.length ? (
+                <ol className="photo-list" aria-label="Event photo order">
+                  {draft.photos.map((photo, index) => (
+                    <li key={photo.id}>
+                      {photo.status === "READY" ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={photo.urls.thumbnail}
+                          alt={`Event photo ${index + 1}`}
+                        />
+                      ) : (
+                        <div className="photo-placeholder">{photo.status}</div>
+                      )}
+                      <div>
+                        <strong>
+                          Photo {index + 1} {photo.isCover ? "— Cover" : ""}
+                        </strong>
+                        <p>Status: {photo.status}</p>
+                        {photo.errorCode ? (
+                          <p>Safe error: {photo.errorCode}</p>
+                        ) : null}
+                        <div className="button-row">
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            aria-label={`Move photo ${index + 1} earlier`}
+                            disabled={
+                              index === 0 || Boolean(pending) || uploadActive
+                            }
+                            onClick={() => movePhoto(photo.id, -1)}
+                          >
+                            Move earlier
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            aria-label={`Move photo ${index + 1} later`}
+                            disabled={
+                              index === draft.photos.length - 1 ||
+                              Boolean(pending) ||
+                              uploadActive
+                            }
+                            onClick={() => movePhoto(photo.id, 1)}
+                          >
+                            Move later
+                          </button>
+                          {photo.status === "READY" && !photo.isCover ? (
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              aria-label={`Make photo ${index + 1} cover`}
+                              disabled={Boolean(pending) || uploadActive}
+                              onClick={() => selectCover(photo.id)}
+                            >
+                              Make cover
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="danger-button"
+                            disabled={Boolean(pending) || uploadActive}
+                            onClick={() => removePhoto(photo.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p>No server-stored photos yet.</p>
+              )}
+              <p className="photo-readiness" role="status">
+                {readyPhotoCount === 0
+                  ? "No photos are READY yet. Uploaded files count only after server image processing succeeds."
                   : !hasReadyCover
-                    ? "Select a cover to continue"
-                    : "Save and continue"}
-            </button>
-          </div>
-        </section>
-      ) : null}
-
-      {step === "review" ? (
-        <section className="builder-card" aria-labelledby="review-title">
-          <p className="eyebrow">Step 5 of 5</p>
-          <h2 id="review-title">Review, approval and payment</h2>
-          <dl className="status-list">
-            <div>
-              <dt>Draft state</dt>
-              <dd>{draft.workflowState.replaceAll("_", " ")}</dd>
-            </div>
-            <div>
-              <dt>Content revision</dt>
-              <dd>{draft.contentRevision}</dd>
-            </div>
-            <div>
-              <dt>Approval</dt>
-              <dd>{draft.approvalStatus.replaceAll("_", " ")}</dd>
-            </div>
-          </dl>
-          {!draft.steps.reviewReady ? (
-            <div className="warning-box">
-              <h3>Still needed</h3>
-              <ul>
-                {draft.readiness.missing.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setStep(resumeEventWizardStep(draft.steps))}
-              >
-                Return to incomplete step
-              </button>
-            </div>
-          ) : (
-            <p className="success-box">
-              All server requirements are complete. Review the exact listing
-              before approval.
-            </p>
-          )}
-          {draft.steps.reviewReady ? (
-            <p>
-              <Link
-                className="button-link"
-                href={`/dashboard/events/${draft.id}/preview`}
-              >
-                Open exact listing preview
-              </Link>
-            </p>
-          ) : (
-            <p>
-              Exact preview is unavailable until the incomplete steps above are
-              saved.
-            </p>
-          )}
-          {draft.publication ? (
-            <div className="success-box" role="status">
-              <strong>This listing is published.</strong>
-              <p>
-                Payment was confirmed and the approved revision is live. The
-                published listing is no longer awaiting payment.
+                    ? `${String(readyPhotoCount)} ${readyPhotoCount === 1 ? "photo is" : "photos are"} READY. Select a READY photo as the cover to continue.`
+                    : `${String(readyPhotoCount)} ${readyPhotoCount === 1 ? "photo is" : "photos are"} READY and the cover is selected.`}
               </p>
-              <Link
-                className="button-link"
-                href={draft.publication.canonicalPath}
-              >
-                View live listing
-              </Link>
-            </div>
-          ) : approvalIsCurrent ? (
-            <div>
-              <div className="success-box" role="status">
-                <strong>Revision {draft.approvedRevision} is approved.</strong>
-                <p>
-                  Approval is saved, and this listing remains a private draft
-                  until payment is confirmed. You can leave and come back to
-                  make the payment later.
-                </p>
-                <p>
-                  Editing saved listing content creates a new revision that must
-                  be reviewed and approved again.
-                </p>
-              </div>
-              <div className="wizard-actions">
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={Boolean(pending)}
-                  onClick={() => setStep("photos")}
-                >
-                  Back
-                </button>
-                <Link
-                  className="button-link"
-                  href={`/dashboard/events/${draft.id}/payment`}
-                >
-                  Make payment
-                </Link>
-              </div>
-            </div>
-          ) : (
-            <form onSubmit={approve}>
-              <label className="checkbox-label">
-                <input type="checkbox" name="acceptedTerms" value="yes" />I
-                accept publishing terms version {termsVersion} and approve this
-                exact event revision for payment.
-              </label>
               <StepFeedback feedback={currentFeedback} />
               <div className="wizard-actions">
                 <button
                   type="button"
                   className="secondary-button"
-                  disabled={Boolean(pending)}
-                  onClick={() => setStep("photos")}
+                  disabled={Boolean(pending) || uploadActive}
+                  onClick={() => setStep("location")}
                 >
                   Back
                 </button>
                 <button
-                  disabled={!draft.steps.reviewReady || Boolean(pending)}
-                  type="submit"
+                  type="button"
+                  aria-busy={pending === "photos-continue"}
+                  disabled={
+                    Boolean(pending) ||
+                    uploadActive ||
+                    !draft.steps.photosComplete
+                  }
+                  onClick={() => void continueFromPhotos()}
                 >
-                  {pending === "approval"
-                    ? "Approving…"
-                    : "Approve exact revision"}
+                  {pending === "photos-continue"
+                    ? "Checking…"
+                    : readyPhotoCount === 0
+                      ? "Waiting for a READY photo"
+                      : !hasReadyCover
+                        ? "Select a cover to continue"
+                        : "Save and continue"}
                 </button>
               </div>
-            </form>
-          )}
-        </section>
-      ) : null}
+            </section>
+          ) : null}
+
+          {step === "review" ? (
+            <section className="builder-card" aria-labelledby="review-title">
+              <p className="eyebrow">Step 5 of 5</p>
+              <h2 id="review-title" ref={stepHeadingRef} tabIndex={-1}>
+                Review, approval and payment
+              </h2>
+              <dl className="status-list">
+                <div>
+                  <dt>Draft state</dt>
+                  <dd>{draft.workflowState.replaceAll("_", " ")}</dd>
+                </div>
+                <div>
+                  <dt>Content revision</dt>
+                  <dd>{draft.contentRevision}</dd>
+                </div>
+                <div>
+                  <dt>Approval</dt>
+                  <dd>{draft.approvalStatus.replaceAll("_", " ")}</dd>
+                </div>
+              </dl>
+              {!draft.steps.reviewReady ? (
+                <div className="warning-box">
+                  <h3>Still needed</h3>
+                  <ul>
+                    {draft.readiness.missing.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setStep(resumeEventWizardStep(draft.steps))}
+                  >
+                    Return to incomplete step
+                  </button>
+                </div>
+              ) : (
+                <p className="success-box">
+                  All server requirements are complete. Review the exact listing
+                  before approval.
+                </p>
+              )}
+              {draft.steps.reviewReady ? (
+                <p>
+                  <Link
+                    className="button-link"
+                    href={`/dashboard/events/${draft.id}/preview`}
+                  >
+                    Open exact listing preview
+                  </Link>
+                </p>
+              ) : (
+                <p>
+                  Exact preview is unavailable until the incomplete steps above
+                  are saved.
+                </p>
+              )}
+              {draft.publication ? (
+                <div className="success-box" role="status">
+                  <strong>This listing is published.</strong>
+                  <p>
+                    Payment was confirmed and the approved revision is live. The
+                    published listing is no longer awaiting payment.
+                  </p>
+                  <Link
+                    className="button-link"
+                    href={draft.publication.canonicalPath}
+                  >
+                    View live listing
+                  </Link>
+                </div>
+              ) : approvalIsCurrent ? (
+                <div>
+                  <div className="success-box" role="status">
+                    <strong>
+                      Revision {draft.approvedRevision} is approved.
+                    </strong>
+                    <p>
+                      Approval is saved, and this listing remains a private
+                      draft until payment is confirmed. You can leave and come
+                      back to make the payment later.
+                    </p>
+                    <p>
+                      Editing saved listing content creates a new revision that
+                      must be reviewed and approved again.
+                    </p>
+                  </div>
+                  <div className="wizard-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={Boolean(pending)}
+                      onClick={() => setStep("photos")}
+                    >
+                      Back
+                    </button>
+                    <Link
+                      className="button-link"
+                      href={`/dashboard/events/${draft.id}/payment`}
+                    >
+                      Make payment
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={approve}>
+                  <label className="checkbox-label">
+                    <input type="checkbox" name="acceptedTerms" value="yes" />I
+                    accept publishing terms version {termsVersion} and approve
+                    this exact event revision for payment.
+                  </label>
+                  <StepFeedback feedback={currentFeedback} />
+                  <div className="wizard-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={Boolean(pending)}
+                      onClick={() => setStep("photos")}
+                    >
+                      Back
+                    </button>
+                    <button
+                      disabled={!draft.steps.reviewReady || Boolean(pending)}
+                      type="submit"
+                    >
+                      {pending === "approval"
+                        ? "Approving…"
+                        : "Approve exact revision"}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </section>
+          ) : null}
+        </div>
+        <aside
+          className="builder-rail"
+          aria-label="Listing progress and preview"
+        >
+          <section
+            className="builder-preview-card"
+            aria-labelledby="builder-preview-title"
+          >
+            <div className="builder-rail-heading">
+              <p className="eyebrow">Listing preview</p>
+              <Icon name="photo" />
+            </div>
+            {coverPhoto ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={coverPhoto.urls.card} alt="Selected listing cover" />
+            ) : (
+              <div className="builder-preview-placeholder">
+                <Icon name="photo" />
+                <span>Your cover photo will appear here</span>
+              </div>
+            )}
+            <span className="status-badge status-badge--neutral">
+              {draft.eventType === "ESTATE_SALE" ? "Estate sale" : "Yard sale"}
+            </span>
+            <h2 id="builder-preview-title">{draft.title ?? "Untitled sale"}</h2>
+            <dl>
+              <div>
+                <dt>
+                  <Icon name="calendar" size={17} /> Schedule
+                </dt>
+                <dd>
+                  {formatListingDate(
+                    draft.startsAt,
+                    draft.localStartsAt,
+                    draft.timezone,
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>
+                  <Icon name="shield" size={17} /> Privacy
+                </dt>
+                <dd>
+                  {draft.privacyMode
+                    ? draft.privacyMode.replaceAll("_", " ").toLowerCase()
+                    : "Not set"}
+                </dd>
+              </div>
+            </dl>
+          </section>
+          <section
+            className="builder-checklist"
+            aria-labelledby="builder-checklist-title"
+          >
+            <div className="builder-rail-heading">
+              <h2 id="builder-checklist-title">What’s left</h2>
+              <span>
+                {completionItems.filter((item) => item.complete).length}/5
+              </span>
+            </div>
+            <ul>
+              {completionItems.map((item) => (
+                <li
+                  className={item.complete ? "is-complete" : ""}
+                  key={item.label}
+                >
+                  <span aria-hidden="true">
+                    {item.complete ? <Icon name="check" size={14} /> : null}
+                  </span>
+                  {item.label}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </aside>
+      </div>
     </div>
   );
 }

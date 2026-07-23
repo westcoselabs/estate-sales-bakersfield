@@ -1,18 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { createConfiguredSessionService, getCurrentUser } from "@/modules/auth";
-import { createConfiguredEventService } from "@/modules/events";
-import { createConfiguredOrganizerService } from "@/modules/organizers";
-import { createConfiguredPaymentService } from "@/modules/payments";
+import { EmailRequestForm, LogoutButton } from "@/app/_components/auth-forms";
+import { CreateEventForm } from "@/app/_components/event-builder";
 import { DashboardShell } from "@/components/shells/shells";
+import { Icon } from "@/components/ui/icons";
+import { getCurrentUser } from "@/modules/auth";
+import { createConfiguredOrganizerService } from "@/modules/organizers";
 
-import {
-  EmailRequestForm,
-  LogoutButton,
-  SessionManager,
-} from "../_components/auth-forms";
-import { CreateEventForm } from "../_components/event-builder";
+import { ListingCollection } from "./_components/listing-views";
+import { loadDashboardListings } from "./_lib/listings";
 
 export const dynamic = "force-dynamic";
 
@@ -23,13 +20,16 @@ export default async function DashboardPage({
 }) {
   const query = await searchParams;
   const user = await getCurrentUser();
-  if (!user || user.status === "DISABLED") {
-    redirect("/login?next=/dashboard");
-  }
+  if (!user || user.status === "DISABLED") redirect("/login?next=/dashboard");
+  const account = { displayName: user.displayName };
   if (user.status === "RESTRICTED") {
     return (
-      <DashboardShell>
-        <section>
+      <DashboardShell account={account}>
+        <section className="dashboard-state-panel">
+          <span className="dashboard-state-panel__icon">
+            <Icon name="warning" />
+          </span>
+          <p className="eyebrow">Account status</p>
           <h1>Account restricted</h1>
           <p>
             This account cannot access organizer tools. Contact support for
@@ -40,164 +40,187 @@ export default async function DashboardPage({
       </DashboardShell>
     );
   }
-  const sessions = await createConfiguredSessionService().list(user.id);
   const organizer = await createConfiguredOrganizerService().getForUser(
     user.id,
   );
-  const events =
-    organizer?.status === "COMPLETE"
-      ? await createConfiguredEventService().list(user)
-      : [];
-  const paymentStatuses = new Map(
-    await Promise.all(
-      events.map(
-        async (event) =>
-          [
-            event.id,
-            await createConfiguredPaymentService().status(user, event.id),
-          ] as const,
-      ),
-    ),
-  );
+  const listings =
+    organizer?.status === "COMPLETE" ? await loadDashboardListings(user) : [];
+  const attentionCount = listings.filter((item) =>
+    [
+      "PAYMENT_CANCELED",
+      "CHECKOUT_EXPIRED",
+      "PAID_PUBLICATION_BLOCKED",
+      "FULFILLMENT_RETRYING",
+      "MANUAL_REVIEW_REQUIRED",
+    ].includes(item.payment.displayState),
+  ).length;
 
   return (
-    <DashboardShell>
-      <div className="dashboard-content">
-        <section className="dashboard-panel">
-          {query.verified === "1" ? (
-            <div className="success-box" role="status">
-              Email verified. Your publishing tools are now available when the
-              event is ready.
-            </div>
-          ) : null}
-          <p>Account</p>
-          <h1>Welcome, {user.displayName}</h1>
-          <p>
-            Email status:{" "}
-            {user.emailVerifiedAt ? "Verified" : "Verification required"}
-          </p>
-          {!user.emailVerifiedAt ? (
-            <aside
-              className="verification-banner"
-              aria-labelledby="verify-title"
-            >
-              <h2 id="verify-title">Email verification required</h2>
-              <p>Status: Not verified</p>
+    <DashboardShell account={account}>
+      <div className="dashboard-content dashboard-overview">
+        <header className="dashboard-page-header">
+          <div>
+            <p className="eyebrow">Organizer workspace</p>
+            <h1>Welcome, {user.displayName}</h1>
+            <p>Manage each sale from first draft through publication.</p>
+          </div>
+          <Link
+            className="ui-button ui-button--primary"
+            href="/dashboard/events/new"
+          >
+            <Icon name="plus" /> Create listing
+          </Link>
+        </header>
+
+        {query.verified === "1" ? (
+          <div className="success-box" role="status">
+            Email verified. Publishing tools are now available when a listing is
+            ready.
+          </div>
+        ) : null}
+
+        {!user.emailVerifiedAt ? (
+          <section
+            className="dashboard-priority dashboard-priority--warning"
+            aria-labelledby="verify-title"
+          >
+            <span className="dashboard-priority__icon">
+              <Icon name="shield" />
+            </span>
+            <div>
+              <p className="eyebrow">Your next step</p>
+              <h2 id="verify-title">Verify your email</h2>
               <p>
-                Verify your email before uploading photos, approving, paying, or
-                publishing.
+                Draft now, then verify before photos, approval, payment, or
+                publication.
               </p>
-              <EmailRequestForm
-                endpoint="/api/auth/resend-verification"
-                buttonLabel="Resend verification"
-                initialEmail={user.email}
-                hideEmailInput
-              />
-            </aside>
-          ) : null}
-          <p>
-            Organizer onboarding: {organizer?.status ?? "Not started"}.{" "}
-            <Link href="/dashboard/organizer">
-              {organizer?.status === "COMPLETE"
-                ? "Review organizer profile"
-                : "Continue onboarding"}
+            </div>
+            <EmailRequestForm
+              endpoint="/api/auth/resend-verification"
+              buttonLabel="Resend verification"
+              initialEmail={user.email}
+              hideEmailInput
+            />
+          </section>
+        ) : organizer?.status !== "COMPLETE" ? (
+          <section
+            className="dashboard-priority"
+            aria-labelledby="profile-title"
+          >
+            <span className="dashboard-priority__icon">
+              <Icon name="user" />
+            </span>
+            <div>
+              <p className="eyebrow">Your next step</p>
+              <h2 id="profile-title">Complete your organizer profile</h2>
+              <p>Add the contact details required before creating a listing.</p>
+            </div>
+            <Link
+              className="ui-button ui-button--primary"
+              href="/dashboard/organizer"
+            >
+              Continue onboarding <Icon name="arrow" size={18} />
             </Link>
-          </p>
-          {organizer?.status === "COMPLETE" ? (
-            <>
-              <div className="dashboard-heading">
-                <div>
-                  <p className="eyebrow">Organizer workspace</p>
-                  <h2>Your event drafts</h2>
-                </div>
-                <CreateEventForm />
-              </div>
-              {events.length ? (
-                <div className="event-grid">
-                  {events.map((event) => (
-                    <article className="event-card" key={event.id}>
-                      <p className="eyebrow">
-                        {event.eventType === "ESTATE_SALE"
-                          ? "Estate sale"
-                          : "Yard sale"}
-                      </p>
-                      <h3>{event.title ?? "Untitled event"}</h3>
-                      <p>State: {event.workflowState.replaceAll("_", " ")}</p>
-                      <p>
-                        Schedule:{" "}
-                        {event.startsAt
-                          ? new Date(event.startsAt).toLocaleString()
-                          : "Not set"}
-                      </p>
-                      <p>
-                        Photos: {event.readyPhotoCount} ready; cover{" "}
-                        {event.hasReadyCover ? "ready" : "needed"}
-                      </p>
-                      <p>
-                        Approval readiness:{" "}
-                        {event.approvalReady ? "Ready" : "Incomplete"}
-                      </p>
-                      <p>
-                        Payment/publication:{" "}
-                        {paymentStatuses
-                          .get(event.id)
-                          ?.displayState.replaceAll("_", " ")}
-                      </p>
-                      <p>
-                        Updated {new Date(event.updatedAt).toLocaleString()}
-                      </p>
-                      <p>
-                        <Link href={`/dashboard/events/${event.id}/edit`}>
-                          Continue editing
-                        </Link>
-                        {" · "}
-                        <Link href={`/dashboard/events/${event.id}/preview`}>
-                          Preview
-                        </Link>
-                        {" · "}
-                        <Link href={`/dashboard/events/${event.id}/payment`}>
-                          {paymentStatuses.get(event.id)?.displayState ===
-                          "READY_FOR_PAYMENT"
-                            ? "Make payment"
-                            : paymentStatuses.get(event.id)?.displayState ===
-                                  "CHECKOUT_CREATED" ||
-                                paymentStatuses.get(event.id)?.displayState ===
-                                  "PAYMENT_CANCELED" ||
-                                paymentStatuses.get(event.id)?.displayState ===
-                                  "CHECKOUT_EXPIRED"
-                              ? "Continue payment"
-                              : "Payment status"}
-                        </Link>
-                        {paymentStatuses.get(event.id)?.canonicalPath ? (
-                          <>
-                            {" · "}
-                            <Link
-                              href={
-                                paymentStatuses.get(event.id)!.canonicalPath!
-                              }
-                            >
-                              Live listing
-                            </Link>
-                          </>
-                        ) : null}
-                      </p>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p>No event drafts yet.</p>
-              )}
-            </>
-          ) : null}
-          <SessionManager
-            initialSessions={sessions.map((session) => ({
-              ...session,
-              createdAt: session.createdAt.toISOString(),
-              expiresAt: session.expiresAt.toISOString(),
-            }))}
-          />
-          <LogoutButton />
+          </section>
+        ) : attentionCount > 0 ? (
+          <section className="dashboard-priority dashboard-priority--error">
+            <span className="dashboard-priority__icon">
+              <Icon name="warning" />
+            </span>
+            <div>
+              <p className="eyebrow">Needs attention</p>
+              <h2>
+                {attentionCount}{" "}
+                {attentionCount === 1 ? "listing needs" : "listings need"} a
+                decision
+              </h2>
+              <p>
+                Review payment or publication recovery guidance before
+                continuing.
+              </p>
+            </div>
+            <Link
+              className="ui-button ui-button--primary"
+              href="/dashboard/events?view=attention"
+            >
+              Review listings <Icon name="arrow" size={18} />
+            </Link>
+          </section>
+        ) : null}
+
+        <p className="dashboard-onboarding-status">
+          Organizer onboarding: {organizer?.status ?? "Not started"}.
+        </p>
+
+        <section
+          className="dashboard-quick-links"
+          aria-labelledby="quick-links-title"
+        >
+          <div className="dashboard-section-heading">
+            <div>
+              <p className="eyebrow">Shortcuts</p>
+              <h2 id="quick-links-title">Get things done</h2>
+            </div>
+          </div>
+          <div className="quick-link-grid">
+            <Link href="/dashboard/events">
+              <Icon name="list" />
+              <span>
+                <strong>Manage listings</strong>
+                <small>Drafts, ready, published, and recovery</small>
+              </span>
+              <Icon name="arrow" />
+            </Link>
+            <Link href="/dashboard/profile">
+              <Icon name="user" />
+              <span>
+                <strong>Public profile</strong>
+                <small>Organizer and contact information</small>
+              </span>
+              <Icon name="arrow" />
+            </Link>
+            <Link href="/dashboard/settings">
+              <Icon name="shield" />
+              <span>
+                <strong>Account security</strong>
+                <small>Verification and active sessions</small>
+              </span>
+              <Icon name="arrow" />
+            </Link>
+          </div>
         </section>
+
+        {organizer?.status === "COMPLETE" ? (
+          <>
+            <section
+              className="dashboard-create-strip"
+              aria-labelledby="quick-create-title"
+            >
+              <div>
+                <p className="eyebrow">New sale</p>
+                <h2 id="quick-create-title">Start a fresh draft</h2>
+                <p>
+                  Choose the real sale type. You can add details on the next
+                  screen.
+                </p>
+              </div>
+              <CreateEventForm />
+            </section>
+            <section
+              className="dashboard-recent"
+              aria-labelledby="recent-title"
+            >
+              <div className="dashboard-section-heading">
+                <div>
+                  <p className="eyebrow">Latest updates</p>
+                  <h2 id="recent-title">Recent listings</h2>
+                </div>
+                <Link href="/dashboard/events">View all</Link>
+              </div>
+              <ListingCollection listings={listings.slice(0, 3)} view="all" />
+            </section>
+          </>
+        ) : null}
       </div>
     </DashboardShell>
   );

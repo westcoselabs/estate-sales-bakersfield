@@ -22,6 +22,7 @@ export default async function EventPreviewPage({ params }: Props) {
   if (!editor.readiness.ready) {
     return (
       <BuilderShell
+        account={{ displayName: user.displayName }}
         eyebrow="Listing preview"
         title="Preview is not ready"
         backHref={`/dashboard/events/${eventId}/edit`}
@@ -48,6 +49,7 @@ export default async function EventPreviewPage({ params }: Props) {
 
   return (
     <BuilderShell
+      account={{ displayName: user.displayName }}
       eyebrow="Exact future listing preview"
       title={preview.title}
       backHref={`/dashboard/events/${eventId}/edit`}

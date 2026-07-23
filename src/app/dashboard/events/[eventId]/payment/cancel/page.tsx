@@ -31,6 +31,7 @@ export default async function PaymentCancelPage({
   ]);
   return (
     <BuilderShell
+      account={{ displayName: user.displayName }}
       eyebrow="Checkout canceled"
       title={event.title ?? "Payment canceled"}
     >
