@@ -78,8 +78,14 @@ Create/confirm an isolated Preview Neon/Blob/Resend/Mapbox set and a regular Str
 
 Then deploy a non-Production Preview, run `prisma migrate deploy` against Preview Neon only, and execute the checklist in `docs/operations/preview-verification.md`: account email, Blob upload, Mapbox location, successful/canceled test-card Checkout, webhook delivery and duplicate replay, delayed-webhook reconciliation, stale paid revision, public privacy/metadata/media, and scheduled job execution. All of those live provider/deployment checks are **BLOCKED / NOT RUN**, not passing.
 
+## Production-beta promotion addendum
+
+The post-Phase-4 promotion path introduces an explicit server-only `PRODUCTION_BETA_MODE` gate. Production with the gate enabled accepts only Stripe test mode and an `sk_test_...` key while retaining the real hosted Checkout provider, signed webhook authority, and inaccessible fake-control routes. Production without the gate retains the existing live-only protection. The stable Production endpoint requires a newly created Stripe test webhook signing secret; Preview secrets and variables remain unchanged.
+
+Production-beta deployment, Production migration execution, and hosted payment/webhook evidence are operational gates and must be recorded separately after completion. A successful redirect is not payment evidence; acceptance requires a signed test webhook response and exactly-once publication.
+
 ## Deferred work
 
-Final business price/currency, Production Stripe Product/Price/key/webhook, Production resource validation/migration/deployment, legal/tax/refund decisions, refund UI, coupons/packages, subscriptions, Connect/marketplace payouts, custom/embedded Checkout, paid editing/relocation, search/maps/discovery, imports, favorites, advanced administration, and launch are explicitly deferred.
+Final live business price/currency, live Production Stripe Product/Price/key/webhook, legal/tax/refund decisions, refund UI, coupons/packages, subscriptions, Connect/marketplace payouts, custom/embedded Checkout, paid editing/relocation, search/maps/discovery, imports, favorites, advanced administration, and final live launch remain explicitly deferred.
 
 No secret values were printed or committed. Production resources were not accessed. Nothing was pushed, merged, opened as a pull request, or deployed.

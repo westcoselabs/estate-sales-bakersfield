@@ -9,6 +9,11 @@ const providerEnvironmentSchema = z.enum([
   "production",
 ]);
 
+const optionalBooleanFlag = z.preprocess(
+  (value) => (value === "" || value === undefined ? "false" : value),
+  z.enum(["true", "false"]).transform((value) => value === "true"),
+);
+
 const optionalUrl = z.preprocess(
   (value) => (value === "" ? undefined : value),
   z.url().optional(),
@@ -50,6 +55,7 @@ export const serverEnvironmentSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]),
     APP_ENV: appEnvironmentSchema,
+    PRODUCTION_BETA_MODE: optionalBooleanFlag,
     APP_URL: applicationUrl,
     LOG_LEVEL: z.enum([
       "silent",
@@ -181,6 +187,17 @@ export const serverEnvironmentSchema = z
     SENTRY_DSN: optionalUrl,
   })
   .superRefine((environment, context) => {
+    if (
+      environment.PRODUCTION_BETA_MODE &&
+      environment.APP_ENV !== "production"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "PRODUCTION_BETA_MODE may be enabled only in production",
+        path: ["PRODUCTION_BETA_MODE"],
+      });
+    }
+
     if (["preview", "production"].includes(environment.APP_ENV)) {
       if (new URL(environment.APP_URL).protocol !== "https:") {
         context.addIssue({
@@ -276,6 +293,20 @@ export const serverEnvironmentSchema = z
       }
       if (
         environment.APP_ENV === "production" &&
+        environment.PRODUCTION_BETA_MODE &&
+        (environment.STRIPE_MODE !== "test" ||
+          !environment.STRIPE_SECRET_KEY?.startsWith("sk_test_"))
+      ) {
+        context.addIssue({
+          code: "custom",
+          message:
+            "Production beta Stripe configuration must use test mode and a test secret key",
+          path: ["STRIPE_MODE"],
+        });
+      }
+      if (
+        environment.APP_ENV === "production" &&
+        !environment.PRODUCTION_BETA_MODE &&
         (environment.STRIPE_MODE !== "live" ||
           !environment.STRIPE_SECRET_KEY?.startsWith("sk_live_"))
       ) {

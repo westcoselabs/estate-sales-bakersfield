@@ -205,6 +205,94 @@ describe("server environment validation", () => {
     ).toThrow(/STRIPE_RESOURCE_ENV/);
   });
 
+  it("allows only Stripe test credentials in explicitly gated Production beta", () => {
+    const productionBeta = {
+      ...base,
+      NODE_ENV: "production",
+      APP_ENV: "production",
+      PRODUCTION_BETA_MODE: "true",
+      APP_URL: "https://production.example.test",
+      DATABASE_URL: "postgresql://example.test/database",
+      DIRECT_URL: "postgresql://example.test/database",
+      DATABASE_RESOURCE_ENV: "production",
+      CRON_SECRET: "x".repeat(32),
+      STRIPE_SECRET_KEY: `sk_test_${"x".repeat(24)}`,
+      STRIPE_WEBHOOK_SECRET: `whsec_${"y".repeat(24)}`,
+      STRIPE_PRICE_ID: "price_production_beta",
+      STRIPE_EXPECTED_AMOUNT: "2000",
+      STRIPE_EXPECTED_CURRENCY: "USD",
+      STRIPE_MODE: "test",
+      STRIPE_RESOURCE_ENV: "production",
+    };
+
+    expect(parseServerEnvironment(productionBeta)).toMatchObject({
+      APP_ENV: "production",
+      PRODUCTION_BETA_MODE: true,
+      STRIPE_MODE: "test",
+    });
+    expect(() =>
+      parseServerEnvironment({
+        ...productionBeta,
+        STRIPE_MODE: "live",
+        STRIPE_SECRET_KEY: `sk_live_${"x".repeat(24)}`,
+      }),
+    ).toThrow(/Production beta Stripe configuration/);
+    expect(() =>
+      parseServerEnvironment({
+        ...productionBeta,
+        STRIPE_SECRET_KEY: `sk_live_${"x".repeat(24)}`,
+      }),
+    ).toThrow(/Production beta Stripe configuration/);
+  });
+
+  it("retains live-only Stripe protection for normal Production", () => {
+    const production = {
+      ...base,
+      NODE_ENV: "production",
+      APP_ENV: "production",
+      APP_URL: "https://production.example.test",
+      DATABASE_URL: "postgresql://example.test/database",
+      DIRECT_URL: "postgresql://example.test/database",
+      DATABASE_RESOURCE_ENV: "production",
+      CRON_SECRET: "x".repeat(32),
+      STRIPE_SECRET_KEY: `sk_live_${"x".repeat(24)}`,
+      STRIPE_WEBHOOK_SECRET: `whsec_${"y".repeat(24)}`,
+      STRIPE_PRICE_ID: "price_production_live",
+      STRIPE_EXPECTED_AMOUNT: "2000",
+      STRIPE_EXPECTED_CURRENCY: "usd",
+      STRIPE_MODE: "live",
+      STRIPE_RESOURCE_ENV: "production",
+    };
+
+    expect(parseServerEnvironment(production)).toMatchObject({
+      APP_ENV: "production",
+      PRODUCTION_BETA_MODE: false,
+      STRIPE_MODE: "live",
+    });
+    expect(() =>
+      parseServerEnvironment({
+        ...production,
+        STRIPE_MODE: "test",
+        STRIPE_SECRET_KEY: `sk_test_${"x".repeat(24)}`,
+      }),
+    ).toThrow(/explicitly live/);
+    expect(() =>
+      parseServerEnvironment({
+        ...production,
+        STRIPE_SECRET_KEY: `sk_test_${"x".repeat(24)}`,
+      }),
+    ).toThrow(/explicitly live/);
+  });
+
+  it("rejects the Production beta flag outside Production", () => {
+    expect(() =>
+      parseServerEnvironment({
+        ...base,
+        PRODUCTION_BETA_MODE: "true",
+      }),
+    ).toThrow(/only in production/);
+  });
+
   it("keeps Test credential-free and on its deterministic Stripe adapter", () => {
     expect(() =>
       parseServerEnvironment({

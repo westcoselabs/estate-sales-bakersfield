@@ -20,6 +20,7 @@ import {
   fakeCheckoutDetails,
 } from "./fake-stripe-provider";
 import { PrismaPaymentRepository } from "./prisma-payment-repository";
+import { usesDeterministicStripe } from "./payment-environment";
 import { StripeCheckoutProvider } from "./stripe-checkout-provider";
 
 export const FIXTURE_PUBLICATION_PRICE: PublicationPrice = {
@@ -39,7 +40,7 @@ class NextPublicationCache implements PublicationCache {
 function configuredPrice(
   environment: ServerEnvironment,
 ): PublicationPrice | null {
-  if (environment.APP_ENV === "local" || environment.APP_ENV === "test") {
+  if (usesDeterministicStripe(environment)) {
     return FIXTURE_PUBLICATION_PRICE;
   }
   if (
@@ -61,10 +62,7 @@ function configuredProvider(
   environment: ServerEnvironment,
   price: PublicationPrice | null,
 ): StripeProvider | null {
-  if (
-    (environment.APP_ENV === "local" || environment.APP_ENV === "test") &&
-    price
-  ) {
+  if (usesDeterministicStripe(environment) && price) {
     return new FakeStripeProvider(getServerApplicationUrl(), price);
   }
   if (
@@ -100,7 +98,7 @@ export function createConfiguredPaymentService(): PaymentService {
 }
 
 function requireFakeEnvironment(): void {
-  if (!["local", "test"].includes(getServerEnvironment().APP_ENV)) {
+  if (!usesDeterministicStripe(getServerEnvironment())) {
     throw new Error("The fake Stripe workflow is unavailable");
   }
 }
