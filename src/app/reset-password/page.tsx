@@ -1,8 +1,17 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
-import { ResetPasswordForm } from "../_components/auth-forms";
+import { ResetPasswordForm } from "@/app/_components/auth-forms";
+import { AuthShell } from "@/components/shells/shells";
+import { Alert } from "@/components/ui/primitives";
+import { sensitiveMetadata } from "@/platform/seo/indexing-policy";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  ...sensitiveMetadata,
+  title: "Choose a new password",
+  referrer: "no-referrer",
+};
 
 export default async function ResetPasswordPage({
   searchParams,
@@ -11,18 +20,23 @@ export default async function ResetPasswordPage({
 }) {
   const { token } = await searchParams;
   return (
-    <main>
-      <section>
-        <h1>Choose a new password</h1>
-        {token ? (
-          <ResetPasswordForm token={token} />
-        ) : (
-          <p>This reset link is incomplete or invalid.</p>
-        )}
+    <AuthShell
+      eyebrow="Account recovery"
+      title="Choose a new password"
+      description="Use a strong, unique password. Completing this step securely signs out every existing session."
+      secondary={
         <p>
-          <Link href="/forgot-password">Request another reset link</Link>
+          Need another link? <Link href="/forgot-password">Request one</Link>
         </p>
-      </section>
-    </main>
+      }
+    >
+      {token ? (
+        <ResetPasswordForm token={token} />
+      ) : (
+        <Alert tone="error" title="This link cannot be used">
+          This reset link is invalid or incomplete.
+        </Alert>
+      )}
+    </AuthShell>
   );
 }

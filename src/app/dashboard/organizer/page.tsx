@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/modules/auth";
 import { createConfiguredOrganizerService } from "@/modules/organizers";
+import { DashboardShell } from "@/components/shells/shells";
 
 import { OrganizerForm } from "../../_components/auth-forms";
 
@@ -21,19 +22,21 @@ export default async function OrganizerPage() {
   );
 
   return (
-    <main>
-      <section>
-        <p>
-          <Link href="/dashboard">Account</Link>
-        </p>
-        <h1>Organizer profile</h1>
-        <p>
-          Save partial information and return later. Name, contact name, and
-          contact email complete onboarding.
-        </p>
-        <p>Current status: {organizer?.status ?? "INCOMPLETE"}</p>
-        <OrganizerForm initial={organizer} />
-      </section>
-    </main>
+    <DashboardShell active="organizer">
+      <div className="dashboard-content">
+        <section>
+          <p>
+            <Link href="/dashboard">Account</Link>
+          </p>
+          <h1>Organizer profile</h1>
+          <p>
+            Save partial information and return later. Name, contact name, and
+            contact email complete onboarding.
+          </p>
+          <p>Current status: {organizer?.status ?? "INCOMPLETE"}</p>
+          <OrganizerForm initial={organizer} />
+        </section>
+      </div>
+    </DashboardShell>
   );
 }

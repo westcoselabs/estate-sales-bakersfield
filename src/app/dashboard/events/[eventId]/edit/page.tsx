@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/modules/auth";
@@ -7,6 +6,7 @@ import {
   EventNotFoundError,
   PUBLISHING_TERMS_VERSION,
 } from "@/modules/events";
+import { BuilderShell } from "@/components/shells/shells";
 
 import { EventBuilder } from "../../../../_components/event-builder";
 
@@ -27,25 +27,20 @@ export default async function EventEditPage({ params }: Props) {
       throw error;
     });
   return (
-    <main className="builder-shell">
-      <header className="builder-header">
-        <p>
-          <Link href="/dashboard">← Back to dashboard</Link>
-        </p>
-        <p className="eyebrow">
-          {event.eventType === "ESTATE_SALE" ? "Estate sale" : "Yard sale"}{" "}
-          draft
-        </p>
-        <h1>{event.title ?? "Build your event"}</h1>
+    <BuilderShell
+      eyebrow={`${event.eventType === "ESTATE_SALE" ? "Estate sale" : "Yard sale"} draft`}
+      title={event.title ?? "Build your event"}
+      meta={
         <p>
           Draft version {event.version}. Saves use optimistic conflict
           protection.
         </p>
-      </header>
+      }
+    >
       <EventBuilder
         initialEvent={event}
         termsVersion={PUBLISHING_TERMS_VERSION}
       />
-    </main>
+    </BuilderShell>
   );
 }

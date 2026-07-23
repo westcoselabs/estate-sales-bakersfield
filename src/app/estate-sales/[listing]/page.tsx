@@ -6,6 +6,7 @@ import {
   publicListingMetadata,
 } from "@/app/_components/public-event-listing";
 import { loadPublishedListing } from "@/app/_components/published-listing-loader";
+import { PublicShell } from "@/components/shells/shells";
 
 export const dynamic = "force-dynamic";
 
@@ -28,5 +29,9 @@ export default async function EstateSaleListingPage({ params }: Props) {
   if (listing.canonicalPath !== `/estate-sales/${value}`) {
     permanentRedirect(listing.canonicalPath);
   }
-  return <PublicEventListing listing={listing} />;
+  return (
+    <PublicShell>
+      <PublicEventListing listing={listing} />
+    </PublicShell>
+  );
 }

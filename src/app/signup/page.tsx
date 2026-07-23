@@ -1,23 +1,29 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
-import { SignupForm } from "../_components/auth-forms";
+import { SignupForm } from "@/app/_components/auth-forms";
+import { AuthShell } from "@/components/shells/shells";
+import { sensitiveMetadata } from "@/platform/seo/indexing-policy";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  ...sensitiveMetadata,
+  title: "Create your account",
+};
 
 export default function SignupPage() {
   return (
-    <main>
-      <section>
-        <h1>Create your account</h1>
+    <AuthShell
+      eyebrow="Organizer account"
+      title="Create your account"
+      description="Start your organizer profile and draft now. Verify your email before photos, approval, payment, or publication."
+      secondary={
         <p>
-          You can start an organizer profile before verification. Email
-          verification is required before photo uploads and publishing.
+          Already registered? <Link href="/login">Log in</Link>
         </p>
-        <SignupForm />
-        <p>
-          Already have an account? <Link href="/login">Log in</Link>.
-        </p>
-      </section>
-    </main>
+      }
+    >
+      <SignupForm />
+    </AuthShell>
   );
 }

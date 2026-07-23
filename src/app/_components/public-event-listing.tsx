@@ -87,7 +87,7 @@ export function PublicEventListing({
     },
   };
   return (
-    <main className="preview-shell">
+    <div className="preview-shell">
       <nav className="listing-breadcrumb" aria-label="Breadcrumb">
         <Link href="/">Bakersfield, CA</Link>
         <span aria-hidden="true"> / </span>
@@ -180,6 +180,6 @@ export function PublicEventListing({
           __html: JSON.stringify(structuredData).replaceAll("<", "\\u003c"),
         }}
       />
-    </main>
+    </div>
   );
 }

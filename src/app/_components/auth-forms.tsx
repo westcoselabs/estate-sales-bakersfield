@@ -3,11 +3,31 @@
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 
+import {
+  Alert,
+  Button,
+  ErrorSummary,
+  Field,
+  Input,
+  PasswordInput,
+  type FormIssue,
+} from "@/components/ui/primitives";
+
 interface ApiResponse {
   readonly error?: string;
   readonly message?: string;
   readonly authenticated?: boolean;
   readonly alreadyVerified?: boolean;
+}
+
+class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
 }
 
 const PASSWORD_MIN_CHARACTERS = 12;
@@ -43,7 +63,10 @@ async function submitJson(
   });
   const payload = (await response.json()) as ApiResponse;
   if (!response.ok) {
-    throw new Error(payload.error ?? "The request could not be completed.");
+    throw new ApiError(
+      payload.error ?? "The request could not be completed.",
+      response.status,
+    );
   }
   return payload;
 }
@@ -54,9 +77,45 @@ function useSubmission() {
   return { message, setMessage, pending, setPending };
 }
 
+function focusFirstIssue(issues: readonly FormIssue[]) {
+  const first = issues[0];
+  if (!first) return;
+  window.requestAnimationFrame(() => {
+    document.getElementById(first.fieldId)?.focus();
+  });
+}
+
+function emailIssue(id: string, value: string): FormIssue | null {
+  if (!value.trim()) {
+    return { fieldId: id, label: "Email", message: "Enter your email address" };
+  }
+  const probe = document.createElement("input");
+  probe.type = "email";
+  probe.value = value;
+  if (!probe.checkValidity()) {
+    return {
+      fieldId: id,
+      label: "Email",
+      message: "Enter a valid email address",
+    };
+  }
+  return null;
+}
+
+function requestFailure(error: unknown, fallback: string) {
+  if (error instanceof ApiError && error.status === 429) {
+    return "Too many attempts. Please wait before trying again.";
+  }
+  if (error instanceof ApiError && error.status >= 500) {
+    return "Authentication is temporarily unavailable. Please try again later.";
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
 export function SignupForm() {
   const submission = useSubmission();
   const [accepted, setAccepted] = useState(false);
+  const [issues, setIssues] = useState<readonly FormIssue[]>([]);
 
   useEffect(() => {
     if (!accepted) return;
@@ -71,21 +130,44 @@ export function SignupForm() {
     const form = event.currentTarget;
     submission.setMessage("");
     const data = new FormData(form);
+    const displayName = String(data.get("displayName") ?? "");
+    const email = String(data.get("email") ?? "");
     const password = String(data.get("password") ?? "");
     const passwordConfirmation = String(data.get("passwordConfirmation") ?? "");
-    const validationMessage = newPasswordValidationMessage(
+    const nextIssues: FormIssue[] = [];
+    if (displayName.trim().length < 2 || displayName.trim().length > 100) {
+      nextIssues.push({
+        fieldId: "signup-display-name",
+        label: "Display name",
+        message: "Enter 2 to 100 characters",
+      });
+    }
+    const invalidEmail = emailIssue("signup-email", email);
+    if (invalidEmail) nextIssues.push(invalidEmail);
+    const passwordMessage = newPasswordValidationMessage(
       password,
       passwordConfirmation,
     );
-    if (validationMessage) {
-      submission.setMessage(validationMessage);
+    if (passwordMessage) {
+      const confirmation = passwordMessage === "Passwords do not match";
+      nextIssues.push({
+        fieldId: confirmation
+          ? "signup-password-confirmation"
+          : "signup-password",
+        label: confirmation ? "Confirm password" : "Password",
+        message: passwordMessage,
+      });
+    }
+    setIssues(nextIssues);
+    if (nextIssues.length) {
+      focusFirstIssue(nextIssues);
       return;
     }
     submission.setPending(true);
     try {
       const result = await submitJson("/api/auth/signup", {
-        displayName: String(data.get("displayName") ?? ""),
-        email: String(data.get("email") ?? ""),
+        displayName,
+        email,
         password,
         passwordConfirmation,
       });
@@ -96,9 +178,7 @@ export function SignupForm() {
       setAccepted(true);
       form.reset();
     } catch (error) {
-      submission.setMessage(
-        error instanceof Error ? error.message : "Registration failed.",
-      );
+      submission.setMessage(requestFailure(error, "Registration failed."));
     } finally {
       submission.setPending(false);
     }
@@ -106,8 +186,7 @@ export function SignupForm() {
 
   if (accepted) {
     return (
-      <div className="success-box" role="status" aria-live="polite">
-        <h2>Check your email</h2>
+      <Alert tone="success" title="Check your email">
         <p>
           {submission.message ||
             "Check your email for verification instructions. You can sign in now."}
@@ -116,92 +195,174 @@ export function SignupForm() {
         <Link className="button-link" href="/login?registered=1">
           Continue to login
         </Link>
-      </div>
+      </Alert>
     );
   }
 
   return (
-    <form onSubmit={submit}>
-      <label>
-        Display name
-        <input name="displayName" minLength={2} maxLength={100} required />
-      </label>
-      <label>
-        Email
-        <input name="email" type="email" autoComplete="email" required />
-      </label>
-      <label>
-        Password
-        <input
+    <form onSubmit={submit} noValidate>
+      <ErrorSummary issues={issues} />
+      <Field
+        id="signup-display-name"
+        label="Display name"
+        error={
+          issues.find((item) => item.fieldId === "signup-display-name")?.message
+        }
+      >
+        <Input
+          id="signup-display-name"
+          name="displayName"
+          autoComplete="name"
+          minLength={2}
+          maxLength={100}
+          invalid={issues.some(
+            (item) => item.fieldId === "signup-display-name",
+          )}
+          required
+        />
+      </Field>
+      <Field
+        id="signup-email"
+        label="Email"
+        error={issues.find((item) => item.fieldId === "signup-email")?.message}
+      >
+        <Input
+          id="signup-email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          invalid={issues.some((item) => item.fieldId === "signup-email")}
+          required
+        />
+      </Field>
+      <Field
+        id="signup-password"
+        label="Password"
+        hint="Use 12 to 128 characters."
+        error={
+          issues.find((item) => item.fieldId === "signup-password")?.message
+        }
+      >
+        <PasswordInput
+          id="signup-password"
           name="password"
-          type="password"
           autoComplete="new-password"
           minLength={12}
           maxLength={128}
+          invalid={issues.some((item) => item.fieldId === "signup-password")}
           required
         />
-      </label>
-      <label>
-        Confirm password
-        <input
+      </Field>
+      <Field
+        id="signup-password-confirmation"
+        label="Confirm password"
+        error={
+          issues.find((item) => item.fieldId === "signup-password-confirmation")
+            ?.message
+        }
+      >
+        <PasswordInput
+          id="signup-password-confirmation"
           name="passwordConfirmation"
-          type="password"
           autoComplete="new-password"
           minLength={12}
           maxLength={128}
+          invalid={issues.some(
+            (item) => item.fieldId === "signup-password-confirmation",
+          )}
           required
         />
-      </label>
-      <button disabled={submission.pending} type="submit">
+      </Field>
+      <Button loading={submission.pending} type="submit">
         {submission.pending ? "Creating account…" : "Create account"}
-      </button>
-      <p aria-live="polite">{submission.message}</p>
+      </Button>
+      {submission.message ? (
+        <Alert tone="error">{submission.message}</Alert>
+      ) : null}
     </form>
   );
 }
 
 export function LoginForm({ nextPath }: { readonly nextPath: string }) {
   const submission = useSubmission();
+  const [issues, setIssues] = useState<readonly FormIssue[]>([]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    submission.setPending(true);
     submission.setMessage("");
     const data = new FormData(event.currentTarget);
-    try {
-      await submitJson("/api/auth/login", {
-        email: String(data.get("email") ?? ""),
-        password: String(data.get("password") ?? ""),
+    const email = String(data.get("email") ?? "");
+    const password = String(data.get("password") ?? "");
+    const nextIssues: FormIssue[] = [];
+    const invalidEmail = emailIssue("login-email", email);
+    if (invalidEmail) nextIssues.push(invalidEmail);
+    if (!password) {
+      nextIssues.push({
+        fieldId: "login-password",
+        label: "Password",
+        message: "Enter your password",
       });
+    }
+    setIssues(nextIssues);
+    if (nextIssues.length) {
+      focusFirstIssue(nextIssues);
+      return;
+    }
+    submission.setPending(true);
+    try {
+      await submitJson("/api/auth/login", { email, password });
       window.location.assign(nextPath);
-    } catch {
+    } catch (error) {
       submission.setMessage(
-        "The email or password was not accepted. Please try again.",
+        error instanceof ApiError && error.status === 429
+          ? "Too many sign-in attempts. Please wait before trying again."
+          : error instanceof ApiError && error.status >= 500
+            ? "Authentication is temporarily unavailable. Please try again later."
+            : "The email or password was not accepted. Please try again.",
       );
       submission.setPending(false);
     }
   }
 
   return (
-    <form onSubmit={submit}>
-      <label>
-        Email
-        <input name="email" type="email" autoComplete="email" required />
-      </label>
-      <label>
-        Password
-        <input
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          maxLength={128}
+    <form onSubmit={submit} noValidate>
+      <ErrorSummary issues={issues} />
+      <Field
+        id="login-email"
+        label="Email"
+        error={issues.find((item) => item.fieldId === "login-email")?.message}
+      >
+        <Input
+          id="login-email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          invalid={issues.some((item) => item.fieldId === "login-email")}
           required
         />
-      </label>
-      <button disabled={submission.pending} type="submit">
+      </Field>
+      <Field
+        id="login-password"
+        label="Password"
+        error={
+          issues.find((item) => item.fieldId === "login-password")?.message
+        }
+      >
+        <PasswordInput
+          id="login-password"
+          name="password"
+          autoComplete="current-password"
+          maxLength={128}
+          invalid={issues.some((item) => item.fieldId === "login-password")}
+          required
+        />
+      </Field>
+      <Button loading={submission.pending} type="submit">
         {submission.pending ? "Signing in…" : "Log in"}
-      </button>
-      <p aria-live="polite">{submission.message}</p>
+      </Button>
+      {submission.message ? (
+        <Alert tone="error">{submission.message}</Alert>
+      ) : null}
     </form>
   );
 }
@@ -219,47 +380,67 @@ export function EmailRequestForm({
   readonly hideEmailInput?: boolean;
 }) {
   const submission = useSubmission();
+  const [issue, setIssue] = useState<FormIssue | null>(null);
+  const [succeeded, setSucceeded] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    submission.setPending(true);
+    submission.setMessage("");
     const data = new FormData(event.currentTarget);
+    const email = String(data.get("email") ?? "");
+    if (!hideEmailInput) {
+      const invalidEmail = emailIssue("request-email", email);
+      setIssue(invalidEmail);
+      if (invalidEmail) {
+        focusFirstIssue([invalidEmail]);
+        return;
+      }
+    }
+    submission.setPending(true);
     try {
       const result = await submitJson(endpoint, {
-        email: String(data.get("email") ?? ""),
+        email,
       });
       submission.setMessage(
         result.message ?? "If eligible, instructions have been sent.",
       );
+      setSucceeded(true);
     } catch (error) {
-      submission.setMessage(
-        error instanceof Error ? error.message : "Please try again later.",
-      );
+      submission.setMessage(requestFailure(error, "Please try again later."));
+      setSucceeded(false);
     } finally {
       submission.setPending(false);
     }
   }
 
   return (
-    <form onSubmit={submit}>
+    <form onSubmit={submit} noValidate>
       {hideEmailInput ? (
         <input name="email" type="hidden" value={initialEmail} />
       ) : (
-        <label>
-          Email
-          <input
-            name="email"
-            type="email"
-            autoComplete="email"
-            defaultValue={initialEmail}
-            required
-          />
-        </label>
+        <>
+          <ErrorSummary issues={issue ? [issue] : []} />
+          <Field id="request-email" label="Email" error={issue?.message}>
+            <Input
+              id="request-email"
+              invalid={Boolean(issue)}
+              name="email"
+              type="email"
+              autoComplete="email"
+              defaultValue={initialEmail}
+              required
+            />
+          </Field>
+        </>
       )}
-      <button disabled={submission.pending} type="submit">
+      <Button loading={submission.pending} type="submit">
         {submission.pending ? "Sending…" : buttonLabel}
-      </button>
-      <p aria-live="polite">{submission.message}</p>
+      </Button>
+      {submission.message ? (
+        <Alert tone={succeeded ? "success" : "error"}>
+          {submission.message}
+        </Alert>
+      ) : null}
     </form>
   );
 }
@@ -287,16 +468,19 @@ export function VerifyEmailForm({ token }: { readonly token: string }) {
 
   return (
     <form onSubmit={submit}>
-      <button disabled={submission.pending} type="submit">
+      <Button loading={submission.pending} type="submit">
         {submission.pending ? "Verifying…" : "Verify email"}
-      </button>
-      <p aria-live="polite">{submission.message}</p>
+      </Button>
+      {submission.message ? (
+        <Alert tone="error">{submission.message}</Alert>
+      ) : null}
     </form>
   );
 }
 
 export function ResetPasswordForm({ token }: { readonly token: string }) {
   const submission = useSubmission();
+  const [issues, setIssues] = useState<readonly FormIssue[]>([]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -308,9 +492,21 @@ export function ResetPasswordForm({ token }: { readonly token: string }) {
       passwordConfirmation,
     );
     if (validationMessage) {
-      submission.setMessage(validationMessage);
+      const confirmation = validationMessage === "Passwords do not match";
+      const nextIssues = [
+        {
+          fieldId: confirmation
+            ? "reset-password-confirmation"
+            : "reset-password",
+          label: confirmation ? "Confirm new password" : "New password",
+          message: validationMessage,
+        },
+      ];
+      setIssues(nextIssues);
+      focusFirstIssue(nextIssues);
       return;
     }
+    setIssues([]);
     submission.setPending(true);
     try {
       await submitJson("/api/auth/reset-password", {
@@ -321,42 +517,59 @@ export function ResetPasswordForm({ token }: { readonly token: string }) {
       window.location.replace("/login?reset=1");
     } catch (error) {
       submission.setMessage(
-        error instanceof Error
-          ? error.message
-          : "This reset link cannot be used.",
+        requestFailure(error, "This reset link cannot be used."),
       );
       submission.setPending(false);
     }
   }
 
   return (
-    <form onSubmit={submit}>
-      <label>
-        New password
-        <input
+    <form onSubmit={submit} noValidate>
+      <ErrorSummary issues={issues} />
+      <Field
+        id="reset-password"
+        label="New password"
+        hint="Use 12 to 128 characters."
+        error={
+          issues.find((item) => item.fieldId === "reset-password")?.message
+        }
+      >
+        <PasswordInput
+          id="reset-password"
           name="password"
-          type="password"
           autoComplete="new-password"
           minLength={12}
           maxLength={128}
+          invalid={issues.some((item) => item.fieldId === "reset-password")}
           required
         />
-      </label>
-      <label>
-        Confirm new password
-        <input
+      </Field>
+      <Field
+        id="reset-password-confirmation"
+        label="Confirm new password"
+        error={
+          issues.find((item) => item.fieldId === "reset-password-confirmation")
+            ?.message
+        }
+      >
+        <PasswordInput
+          id="reset-password-confirmation"
           name="passwordConfirmation"
-          type="password"
           autoComplete="new-password"
           minLength={12}
           maxLength={128}
+          invalid={issues.some(
+            (item) => item.fieldId === "reset-password-confirmation",
+          )}
           required
         />
-      </label>
-      <button disabled={submission.pending} type="submit">
+      </Field>
+      <Button loading={submission.pending} type="submit">
         {submission.pending ? "Resetting…" : "Reset password"}
-      </button>
-      <p aria-live="polite">{submission.message}</p>
+      </Button>
+      {submission.message ? (
+        <Alert tone="error">{submission.message}</Alert>
+      ) : null}
     </form>
   );
 }

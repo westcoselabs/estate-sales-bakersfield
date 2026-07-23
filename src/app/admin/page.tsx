@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import {
@@ -5,8 +6,10 @@ import {
   getCurrentUser,
   requireAdminPrincipal,
 } from "@/modules/auth";
+import { sensitiveMetadata } from "@/platform/seo/indexing-policy";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = sensitiveMetadata;
 
 export default async function AdminPage() {
   const current = await getCurrentUser();

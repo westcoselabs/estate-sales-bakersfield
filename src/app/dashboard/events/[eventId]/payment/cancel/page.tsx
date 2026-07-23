@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import {
   PaymentCancelRecorder,
   PaymentPanel,
 } from "@/app/_components/payment-panel";
+import { BuilderShell } from "@/components/shells/shells";
 import { getCurrentUser } from "@/modules/auth";
 import { createConfiguredEventService } from "@/modules/events";
 import { createConfiguredPaymentService } from "@/modules/payments";
@@ -30,15 +30,11 @@ export default async function PaymentCancelPage({
     createConfiguredPaymentService().status(user, eventId),
   ]);
   return (
-    <main className="builder-shell">
+    <BuilderShell
+      eyebrow="Checkout canceled"
+      title={event.title ?? "Payment canceled"}
+    >
       <PaymentCancelRecorder eventId={eventId} attemptId={attemptId} />
-      <header className="builder-header">
-        <p>
-          <Link href="/dashboard">← Dashboard</Link>
-        </p>
-        <p className="eyebrow">Checkout canceled</p>
-        <h1>{event.title ?? "Payment canceled"}</h1>
-      </header>
       <PaymentPanel
         eventId={eventId}
         expectedVersion={event.version}
@@ -55,6 +51,6 @@ export default async function PaymentCancelPage({
         }}
         returnContext="cancel"
       />
-    </main>
+    </BuilderShell>
   );
 }

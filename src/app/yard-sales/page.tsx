@@ -1,8 +1,10 @@
 import Link from "next/link";
 
+import { PublicShell } from "@/components/shells/shells";
+
 export default function YardSalesHubPage() {
   return (
-    <main>
+    <PublicShell>
       <section>
         <p>Yard Sales Bakersfield</p>
         <h1>Upcoming yard sales</h1>
@@ -12,6 +14,6 @@ export default function YardSalesHubPage() {
         </p>
         <Link href="/">Return home</Link>
       </section>
-    </main>
+    </PublicShell>
   );
 }

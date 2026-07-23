@@ -1,8 +1,10 @@
 import Link from "next/link";
 
+import { PublicShell } from "@/components/shells/shells";
+
 export default function HomePage() {
   return (
-    <main>
+    <PublicShell>
       <section aria-labelledby="foundation-title">
         <p>Estate &amp; Yard Sale Directory</p>
         <h1 id="foundation-title">Build your Bakersfield sale listing.</h1>
@@ -15,6 +17,6 @@ export default function HomePage() {
           <Link href="/login">log in</Link>.
         </p>
       </section>
-    </main>
+    </PublicShell>
   );
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { PaymentPanel } from "@/app/_components/payment-panel";
+import { BuilderShell } from "@/components/shells/shells";
 import { getCurrentUser } from "@/modules/auth";
 import { createConfiguredEventService } from "@/modules/events";
 import { createConfiguredPaymentService } from "@/modules/payments";
@@ -27,46 +28,47 @@ export default async function EventPaymentPage({ params }: Props) {
     "CHECKOUT_EXPIRED",
   ].includes(payment.displayState);
   return (
-    <main className="builder-shell">
-      <header className="builder-header">
-        <p>
-          <Link href="/dashboard">← Back to dashboard</Link>
-          {" · "}
-          <Link href={`/dashboard/events/${eventId}/edit`}>
-            Return to approved draft
-          </Link>
-          {" · "}
-          <Link href={`/dashboard/events/${eventId}/preview`}>
-            Review listing preview
-          </Link>
-        </p>
-        <p className="eyebrow">
-          {payment.displayState === "PUBLISHED"
-            ? "Published listing"
-            : paymentCanBeResumed
-              ? "Approved listing publication"
-              : "Payment and publication status"}
-        </p>
-        <h1>{event.title ?? "Event payment"}</h1>
-        {payment.displayState === "PUBLISHED" ? (
-          <p>This listing is published and no further payment is required.</p>
-        ) : paymentCanBeResumed ? (
+    <BuilderShell
+      eyebrow={
+        payment.displayState === "PUBLISHED"
+          ? "Published listing"
+          : paymentCanBeResumed
+            ? "Approved listing publication"
+            : "Payment and publication status"
+      }
+      title={event.title ?? "Event payment"}
+      meta={
+        <>
           <p>
-            Your approval is saved. You can leave this page and return to pay
-            later as long as you do not edit the approved listing revision.
+            <Link href={`/dashboard/events/${eventId}/edit`}>
+              Return to approved draft
+            </Link>
+            {" · "}
+            <Link href={`/dashboard/events/${eventId}/preview`}>
+              Review listing preview
+            </Link>
           </p>
-        ) : (
-          <p>
-            Review the current payment and publication status below. Payment is
-            available only for the exact approved listing revision.
-          </p>
-        )}
-      </header>
+          {payment.displayState === "PUBLISHED" ? (
+            <p>This listing is published and no further payment is required.</p>
+          ) : paymentCanBeResumed ? (
+            <p>
+              Your approval is saved. You can leave this page and return to pay
+              later as long as you do not edit the approved listing revision.
+            </p>
+          ) : (
+            <p>
+              Review the current payment and publication status below. Payment
+              is available only for the exact approved listing revision.
+            </p>
+          )}
+        </>
+      }
+    >
       <PaymentPanel
         eventId={eventId}
         expectedVersion={event.version}
         initialStatus={payment}
       />
-    </main>
+    </BuilderShell>
   );
 }

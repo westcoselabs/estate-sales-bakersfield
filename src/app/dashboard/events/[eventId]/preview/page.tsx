@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/modules/auth";
 import { createConfiguredEventService } from "@/modules/events";
+import { BuilderShell } from "@/components/shells/shells";
 
 export const dynamic = "force-dynamic";
 export const metadata = { referrer: "no-referrer" };
@@ -20,14 +21,13 @@ export default async function EventPreviewPage({ params }: Props) {
 
   if (!editor.readiness.ready) {
     return (
-      <main>
+      <BuilderShell
+        eyebrow="Listing preview"
+        title="Preview is not ready"
+        backHref={`/dashboard/events/${eventId}/edit`}
+        backLabel="Return to editor"
+      >
         <section>
-          <p>
-            <Link href={`/dashboard/events/${eventId}/edit`}>
-              ← Return to editor
-            </Link>
-          </p>
-          <h1>Preview is not ready</h1>
           <p>Complete these server-validated requirements:</p>
           <ul>
             {editor.readiness.missing.map((item) => (
@@ -35,7 +35,7 @@ export default async function EventPreviewPage({ params }: Props) {
             ))}
           </ul>
         </section>
-      </main>
+      </BuilderShell>
     );
   }
 
@@ -47,13 +47,14 @@ export default async function EventPreviewPage({ params }: Props) {
   });
 
   return (
-    <main className="preview-shell">
+    <BuilderShell
+      eyebrow="Exact future listing preview"
+      title={preview.title}
+      backHref={`/dashboard/events/${eventId}/edit`}
+      backLabel="Return to editor"
+      meta={<p>Revision {editor.contentRevision}</p>}
+    >
       <div className="preview-toolbar">
-        <p>
-          <Link href={`/dashboard/events/${eventId}/edit`}>
-            ← Return to editor
-          </Link>
-        </p>
         <strong>
           Exact future listing preview · revision {editor.contentRevision}
         </strong>
@@ -78,7 +79,7 @@ export default async function EventPreviewPage({ params }: Props) {
           <p className="eyebrow">
             {preview.eventType === "ESTATE_SALE" ? "Estate sale" : "Yard sale"}
           </p>
-          <h1>{preview.title}</h1>
+          <h2>{preview.title}</h2>
           <p className="listing-date">
             {dateFormat.format(new Date(preview.startsAt))} –{" "}
             {dateFormat.format(new Date(preview.endsAt))}
@@ -133,6 +134,6 @@ export default async function EventPreviewPage({ params }: Props) {
           <p className="future-path">Future public URL: {preview.path}</p>
         </div>
       </article>
-    </main>
+    </BuilderShell>
   );
 }

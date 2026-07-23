@@ -1,10 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
+import { LoginForm } from "@/app/_components/auth-forms";
+import { AuthShell } from "@/components/shells/shells";
+import { Alert } from "@/components/ui/primitives";
 import { safeApplicationPath } from "@/modules/auth";
-
-import { LoginForm } from "../_components/auth-forms";
+import { sensitiveMetadata } from "@/platform/seo/indexing-policy";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { ...sensitiveMetadata, title: "Log in" };
 
 export default async function LoginPage({
   searchParams,
@@ -18,33 +22,34 @@ export default async function LoginPage({
 }) {
   const query = await searchParams;
   return (
-    <main>
-      <section>
-        <h1>Log in</h1>
-        {query.registered === "1" ? (
-          <div className="success-box" role="status">
-            Check your email for verification instructions. You can sign in now
-            and verify before uploading photos or publishing.
-          </div>
-        ) : null}
-        {query.verified === "1" ? (
-          <div className="success-box" role="status">
-            Email verified. Continue to login.
-          </div>
-        ) : null}
-        {query.reset === "1" ? (
-          <div className="success-box" role="status">
-            Password reset. Log in with your new password.
-          </div>
-        ) : null}
-        <LoginForm nextPath={safeApplicationPath(query.next)} />
+    <AuthShell
+      eyebrow="Welcome back"
+      title="Log in"
+      description="Continue your organizer profile, sale drafts, and publication steps."
+      secondary={
         <p>
-          <Link href="/forgot-password">Forgot your password?</Link>
+          New here? <Link href="/signup">Create an account</Link>
         </p>
-        <p>
-          Need an account? <Link href="/signup">Sign up</Link>.
-        </p>
-      </section>
-    </main>
+      }
+    >
+      {query.registered === "1" ? (
+        <Alert tone="success">
+          Check your email for verification instructions. You can sign in now
+          and verify before uploading photos or publishing.
+        </Alert>
+      ) : null}
+      {query.verified === "1" ? (
+        <Alert tone="success">Email verified. Continue to login.</Alert>
+      ) : null}
+      {query.reset === "1" ? (
+        <Alert tone="success">
+          Password reset. Log in with your new password.
+        </Alert>
+      ) : null}
+      <LoginForm nextPath={safeApplicationPath(query.next)} />
+      <p>
+        <Link href="/forgot-password">Forgot your password?</Link>
+      </p>
+    </AuthShell>
   );
 }
