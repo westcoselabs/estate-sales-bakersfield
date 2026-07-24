@@ -36,6 +36,14 @@ export function wizardStepAvailable(
   target: EventWizardStep,
   steps: EventStepReadiness,
 ): boolean {
+  if (target === "photos") {
+    return steps.detailsComplete && steps.scheduleComplete;
+  }
+  if (target === "review") {
+    return (
+      steps.detailsComplete && steps.scheduleComplete && steps.photosComplete
+    );
+  }
   const index = EVENT_WIZARD_STEPS.indexOf(target);
   const complete = completedWizardSteps(steps);
   return EVENT_WIZARD_STEPS.slice(0, index).every((step) => complete[step]);

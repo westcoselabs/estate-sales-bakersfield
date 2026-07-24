@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   useEffect,
   useRef,
@@ -10,6 +11,10 @@ import {
 } from "react";
 
 import { Icon } from "@/components/ui/icons";
+import {
+  AddressAutocomplete,
+  type ClientAddressSuggestion,
+} from "@/features/location/address-autocomplete";
 import type {
   AddressPrivacyMode,
   EventEditorDto,
@@ -112,6 +117,17 @@ const ACCEPTED_PHOTO_TYPES = new Set([
   "image/heif",
 ]);
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
+const LocationConfirmationMap = dynamic(
+  () => import("@/features/location/location-confirmation-map"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="location-map-fallback" role="status">
+        Loading confirmation map...
+      </div>
+    ),
+  },
+);
 
 const UPLOAD_STATUS_LABELS: Readonly<Record<UploadStatus, string>> = {
   selected: "Selected",
@@ -290,6 +306,31 @@ export function EventBuilder({
   const [privacyMode, setPrivacyMode] = useState<AddressPrivacyMode>(
     initialEvent.privacyMode ?? "HIDDEN_UNTIL_START",
   );
+  const [addressQuery, setAddressQuery] = useState(
+    initialEvent.location?.normalizedAddress ??
+      initialEvent.location?.addressLine1 ??
+      "",
+  );
+  const [selectionToken, setSelectionToken] = useState<string | null>(null);
+  const [selectedAddress, setSelectedAddress] =
+    useState<ClientAddressSuggestion | null>(null);
+  const [selectedCoordinates, setSelectedCoordinates] = useState<{
+    readonly latitude: number;
+    readonly longitude: number;
+  } | null>(
+    initialEvent.location?.latitude !== null &&
+      initialEvent.location?.latitude !== undefined &&
+      initialEvent.location.longitude !== null &&
+      initialEvent.location.longitude !== undefined
+      ? {
+          latitude: initialEvent.location.latitude,
+          longitude: initialEvent.location.longitude,
+        }
+      : null,
+  );
+  const [locationConfirmed, setLocationConfirmed] = useState(
+    initialEvent.location?.confirmationStatus === "CONFIRMED",
+  );
   const [uploads, setUploads] = useState<readonly UploadItem[]>([]);
   const [uploadActive, setUploadActive] = useState(false);
   const uploadActiveRef = useRef(false);
@@ -326,6 +367,23 @@ export function EventBuilder({
     setRegion(event.location?.region ?? "California");
     setPostalCode(event.location?.postalCode ?? "");
     setCountryCode(event.location?.countryCode ?? "US");
+    setAddressQuery(
+      event.location?.normalizedAddress ?? event.location?.addressLine1 ?? "",
+    );
+    setSelectionToken(null);
+    setSelectedAddress(null);
+    setSelectedCoordinates(
+      event.location?.latitude !== null &&
+        event.location?.latitude !== undefined &&
+        event.location.longitude !== null &&
+        event.location.longitude !== undefined
+        ? {
+            latitude: event.location.latitude,
+            longitude: event.location.longitude,
+          }
+        : null,
+    );
+    setLocationConfirmed(event.location?.confirmationStatus === "CONFIRMED");
     setLocationTimezone(
       event.location?.timezone ?? event.timezone ?? "America/Los_Angeles",
     );
@@ -385,6 +443,7 @@ export function EventBuilder({
     body: Record<string, unknown>,
     complete: (event: EventEditorDto) => boolean,
     next: EventWizardStep,
+    allowIncompleteAdvance = false,
   ) {
     if (!beginOperation(target)) return;
     setConfirmation("");
@@ -394,9 +453,18 @@ export function EventBuilder({
       acceptEvent(response.event);
       if (!complete(response.event)) {
         setStepFeedback(target, {
-          kind: "error",
-          text: "The server saved the values but this step is still incomplete.",
+          kind: allowIncompleteAdvance ? "success" : "error",
+          text:
+            response.event.readiness.missing.find((message) =>
+              target === "details"
+                ? message.includes("private street address")
+                : false,
+            ) ??
+            (allowIncompleteAdvance
+              ? "Draft saved. Confirm the address before approval or payment."
+              : "The server saved the values but this step is still incomplete."),
         });
+        if (allowIncompleteAdvance) setStep(next);
         return;
       }
       setStepFeedback(target, {
@@ -446,6 +514,31 @@ export function EventBuilder({
     );
   }
 
+  function changeAddressQuery(value: string) {
+    setAddressQuery(value);
+    setAddressLine1(value);
+    setSelectionToken(null);
+    setSelectedAddress(null);
+    setSelectedCoordinates(null);
+    setLocationConfirmed(false);
+  }
+
+  function selectAddress(suggestion: ClientAddressSuggestion) {
+    setSelectedAddress(suggestion);
+    setAddressQuery(suggestion.formattedAddress);
+    setAddressLine1(`${suggestion.houseNumber} ${suggestion.street}`);
+    setCity(suggestion.city);
+    setRegion(suggestion.state);
+    setPostalCode(suggestion.postalCode);
+    setCountryCode(suggestion.countryCode);
+    setSelectionToken(suggestion.selectionToken);
+    setSelectedCoordinates({
+      latitude: suggestion.latitude,
+      longitude: suggestion.longitude,
+    });
+    setLocationConfirmed(false);
+  }
+
   function saveLocation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void saveStep(
@@ -462,9 +555,12 @@ export function EventBuilder({
         countryCode,
         timezone: locationTimezone,
         privacyMode,
+        selectionToken,
+        confirmed: locationConfirmed,
       },
       (saved) => saved.steps.locationComplete,
       "photos",
+      true,
     );
   }
 
@@ -1225,56 +1321,108 @@ export function EventBuilder({
                 Address and privacy
               </h2>
               <form onSubmit={saveLocation}>
-                <label>
-                  Street address
-                  <input
-                    value={addressLine1}
-                    onChange={(e) => setAddressLine1(e.target.value)}
-                    autoComplete="street-address"
-                    required
-                  />
-                </label>
+                <AddressAutocomplete
+                  value={addressQuery}
+                  onChange={changeAddressQuery}
+                  onSelect={selectAddress}
+                />
+                {selectedAddress || selectedCoordinates ? (
+                  <section
+                    className="selected-address-review"
+                    aria-labelledby="selected-address-title"
+                  >
+                    <div>
+                      <p className="eyebrow">Selected address</p>
+                      <h3 id="selected-address-title">
+                        {selectedAddress?.formattedAddress ??
+                          initialEvent.location?.normalizedAddress ??
+                          addressQuery}
+                      </h3>
+                      <p>
+                        Review the structured address and non-draggable pin
+                        before confirming.
+                      </p>
+                    </div>
+                    {selectedCoordinates ? (
+                      <LocationConfirmationMap
+                        latitude={selectedCoordinates.latitude}
+                        longitude={selectedCoordinates.longitude}
+                        label={
+                          selectedAddress?.formattedAddress ?? addressQuery
+                        }
+                      />
+                    ) : null}
+                    <label className="location-confirmation-check">
+                      <input
+                        type="checkbox"
+                        checked={locationConfirmed}
+                        onChange={(event) =>
+                          setLocationConfirmed(event.target.checked)
+                        }
+                      />
+                      I confirm that this pin represents the sale property.
+                    </label>
+                    <p className="location-attribution">
+                      {selectedAddress?.provider.attribution ??
+                        initialEvent.location?.providerAttribution}
+                    </p>
+                  </section>
+                ) : (
+                  <section className="unconfirmed-address-draft">
+                    <p>
+                      If address search is unavailable, save an unconfirmed
+                      draft. Approval, payment, and publication stay blocked
+                      until you select and confirm an address.
+                    </p>
+                    <div className="form-grid">
+                      <label>
+                        City
+                        <input
+                          value={city}
+                          onChange={(event) => setCity(event.target.value)}
+                          required
+                        />
+                      </label>
+                      <label>
+                        State
+                        <input
+                          value={region}
+                          onChange={(event) => setRegion(event.target.value)}
+                          required
+                        />
+                      </label>
+                      <label>
+                        Postal code (optional for draft)
+                        <input
+                          value={postalCode}
+                          onChange={(event) =>
+                            setPostalCode(event.target.value)
+                          }
+                        />
+                      </label>
+                      <label>
+                        Country
+                        <input
+                          value={countryCode}
+                          onChange={(event) =>
+                            setCountryCode(event.target.value)
+                          }
+                          required
+                        />
+                      </label>
+                    </div>
+                  </section>
+                )}
                 <label>
                   Unit or suite (optional)
                   <input
                     value={addressLine2}
-                    onChange={(e) => setAddressLine2(e.target.value)}
+                    onChange={(event) => {
+                      setAddressLine2(event.target.value);
+                      setLocationConfirmed(false);
+                    }}
                   />
                 </label>
-                <div className="form-grid">
-                  <label>
-                    City
-                    <input
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      required
-                    />
-                  </label>
-                  <label>
-                    State
-                    <input
-                      value={region}
-                      onChange={(e) => setRegion(e.target.value)}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Postal code
-                    <input
-                      value={postalCode}
-                      onChange={(e) => setPostalCode(e.target.value)}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Country
-                    <input
-                      value={countryCode}
-                      onChange={(e) => setCountryCode(e.target.value)}
-                      required
-                    />
-                  </label>
-                </div>
                 <label>
                   Address timezone
                   <input

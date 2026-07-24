@@ -92,8 +92,13 @@ async function buildApprovedEvent(
     .getByLabel("IANA timezone", { exact: true })
     .fill("America/Los_Angeles");
   await page.getByRole("button", { name: "Save and continue" }).click();
-  await page.getByLabel("Street address").fill("123 Main Street");
-  await page.getByLabel("Postal code").fill("93301");
+  await page
+    .getByLabel("Search the sale property address")
+    .fill("123 Baker Street");
+  await page.getByRole("option").getByRole("button").click();
+  await page
+    .getByLabel("I confirm that this pin represents the sale property.")
+    .check();
   await page.getByLabel("Hide exact address until the event starts").check();
   await page.getByRole("button", { name: "Save and continue" }).click();
 
@@ -180,7 +185,7 @@ test("pays and publishes from a fake signed webhook while stale paid revisions r
     page.getByRole("heading", { name: "Seven Oaks Phase Four Sale" }),
   ).toBeVisible();
   await expect(page.getByText(/exact address will be released/i)).toBeVisible();
-  await expect(page.getByText("123 Main Street")).toHaveCount(0);
+  await expect(page.getByText("123 Baker Street")).toHaveCount(0);
 
   await page.goto(`/dashboard/events/${publishable.id}/edit`);
   await expect(page.getByText("This listing is published.")).toBeVisible();

@@ -58,4 +58,20 @@ describe("event wizard server-owned resume state", () => {
     expect(wizardStepAvailable("schedule", steps)).toBe(true);
     expect(wizardStepAvailable("location", steps)).toBe(false);
   });
+
+  it("allows photo work and review while an address remains unconfirmed", () => {
+    const unconfirmedLocation = readiness({
+      detailsComplete: true,
+      scheduleComplete: true,
+      locationComplete: false,
+    });
+    expect(wizardStepAvailable("photos", unconfirmedLocation)).toBe(true);
+    expect(wizardStepAvailable("review", unconfirmedLocation)).toBe(false);
+    expect(
+      wizardStepAvailable("review", {
+        ...unconfirmedLocation,
+        photosComplete: true,
+      }),
+    ).toBe(true);
+  });
 });
