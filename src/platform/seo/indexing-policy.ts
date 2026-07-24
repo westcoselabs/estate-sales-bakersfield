@@ -28,3 +28,17 @@ export const sensitiveRobots: NonNullable<Metadata["robots"]> = {
 export const sensitiveMetadata: Metadata = {
   robots: sensitiveRobots,
 };
+
+/**
+ * Search/filter URLs remain utility pages even after a future public launch.
+ */
+export const searchRobots: NonNullable<Metadata["robots"]> = {
+  index: false,
+  follow: true,
+  noarchive: true,
+  googleBot: {
+    index: false,
+    follow: true,
+    noimageindex: false,
+  },
+};

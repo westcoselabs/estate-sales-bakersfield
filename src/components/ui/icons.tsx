@@ -18,7 +18,14 @@ export type IconName =
   | "edit"
   | "status"
   | "estate"
-  | "yard";
+  | "yard"
+  | "search"
+  | "map"
+  | "pin"
+  | "menu"
+  | "close"
+  | "external"
+  | "info";
 
 type IconWeight = "regular" | "fill";
 
@@ -111,6 +118,38 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M4 10.25h16v10H4v-10ZM3 10.25l1.5-5.5h15l1.5 5.5" />
       <path d="M7.5 10.25v-5.5M12 10.25v-5.5M16.5 10.25v-5.5M9 20.25v-5.5h6v5.5" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="10.75" cy="10.75" r="6.5" />
+      <path d="m15.5 15.5 4.25 4.25" />
+    </>
+  ),
+  map: (
+    <>
+      <path d="m3.75 5.5 5-2 6.5 2 5-2v15l-5 2-6.5-2-5 2v-15Z" />
+      <path d="M8.75 3.5v15M15.25 5.5v15" />
+    </>
+  ),
+  pin: (
+    <>
+      <path d="M19 10.25c0 5-7 11-7 11s-7-6-7-11a7 7 0 1 1 14 0Z" />
+      <circle cx="12" cy="10.25" r="2.25" />
+    </>
+  ),
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  close: <path d="m5 5 14 14M19 5 5 19" />,
+  external: (
+    <>
+      <path d="M13 4h7v7M20 4l-9 9" />
+      <path d="M18.5 13.5v5a1.5 1.5 0 0 1-1.5 1.5H5.5A1.5 1.5 0 0 1 4 18.5V7a1.5 1.5 0 0 1 1.5-1.5h5" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10.75v6M12 7.25h.01" />
     </>
   ),
 };

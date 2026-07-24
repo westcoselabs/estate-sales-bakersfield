@@ -25,6 +25,8 @@ import {
   fakeWebhookEvent,
 } from "@/modules/payments/infrastructure/fake-stripe-provider";
 import { PrismaPaymentRepository } from "@/modules/payments/infrastructure/prisma-payment-repository";
+import { PublicSearchService } from "@/modules/public-search/application/public-search-service";
+import { PrismaPublicSearchRepository } from "@/modules/public-search/infrastructure/prisma-public-search-repository";
 
 import { createIntegrationClient } from "./support/database";
 import { testEmail } from "./support/test-run";
@@ -39,6 +41,13 @@ const price: PublicationPrice = {
   currency: "usd",
   fixture: true,
 };
+
+interface SearchSchedule {
+  readonly localStartsAt: string;
+  readonly localEndsAt: string;
+  readonly startsAt: Date;
+  readonly endsAt: Date;
+}
 
 function paymentService(
   provider = new FakeStripeProvider(applicationUrl, price),
@@ -95,6 +104,13 @@ async function createPrincipal(label: string): Promise<{
 async function createApprovedEvent(
   label: string,
   privacyMode: AddressPrivacyMode = "EXACT_ADDRESS",
+  eventType: EventRecord["eventType"] = "ESTATE_SALE",
+  schedule: SearchSchedule = {
+    localStartsAt: "2027-08-25T09:00",
+    localEndsAt: "2027-08-25T15:00",
+    startsAt: new Date("2027-08-25T16:00:00.000Z"),
+    endsAt: new Date("2027-08-25T22:00:00.000Z"),
+  },
 ): Promise<{ principal: AuthPrincipal; event: EventRecord }> {
   const { principal, organizerId } = await createPrincipal(label);
   const publicId = randomUUID().replaceAll("-", "").slice(0, 12);
@@ -106,12 +122,12 @@ async function createApprovedEvent(
       title: `${label} Estate Sale`,
       description:
         "A fully approved integration listing with furniture, art, homewares, and collectible pieces.",
-      eventType: "ESTATE_SALE",
+      eventType,
       origin: "OWNER_CREATED",
-      localStartsAt: "2027-08-25T09:00",
-      localEndsAt: "2027-08-25T15:00",
-      startsAt: new Date("2027-08-25T16:00:00.000Z"),
-      endsAt: new Date("2027-08-25T22:00:00.000Z"),
+      localStartsAt: schedule.localStartsAt,
+      localEndsAt: schedule.localEndsAt,
+      startsAt: schedule.startsAt,
+      endsAt: schedule.endsAt,
       timezone: "America/Los_Angeles",
       privacyMode,
       workflowState: "PREVIEW_READY",
@@ -191,8 +207,18 @@ async function createApprovedEvent(
   };
 }
 
-async function checkout(label: string, privacyMode?: AddressPrivacyMode) {
-  const fixture = await createApprovedEvent(label, privacyMode);
+async function checkout(
+  label: string,
+  privacyMode?: AddressPrivacyMode,
+  eventType: EventRecord["eventType"] = "ESTATE_SALE",
+  schedule?: SearchSchedule,
+) {
+  const fixture = await createApprovedEvent(
+    label,
+    privacyMode,
+    eventType,
+    schedule,
+  );
   const service = paymentService();
   const redirect = await service.createCheckout(
     fixture.principal,
@@ -522,6 +548,145 @@ describe("Phase 4 paid publication against isolated Test Neon", () => {
       fulfillmentState: "NOT_STARTED",
     });
     expect(await payments.findPublicationForEvent(fixture.event.id)).toBeNull();
+  });
+
+  it("projects only active paid publications into the shared public search", async () => {
+    async function publish(
+      label: string,
+      eventType: EventRecord["eventType"] = "ESTATE_SALE",
+      schedule?: SearchSchedule,
+    ) {
+      const fixture = await checkout(label, undefined, eventType, schedule);
+      const webhook = completeFakeCheckout(fixture.sessionId);
+      await expect(
+        fixture.service.handleWebhook(webhook.body, webhook.signature),
+      ).resolves.toMatchObject({
+        fulfillment: { disposition: "FULFILLED" },
+      });
+      return fixture;
+    }
+
+    const visibleEstate = await publish("Search Visible Estate");
+    const visibleYard = await publish("Search Visible Yard", "YARD_SALE");
+    const canceled = await publish("Search Canceled");
+    const removed = await publish("Search Removed");
+    const immutableSnapshot = await publish("Search Immutable Snapshot");
+    const expired = await publish("Search Expired", "ESTATE_SALE", {
+      localStartsAt: "2027-08-22T09:00",
+      localEndsAt: "2027-08-22T15:00",
+      startsAt: new Date("2027-08-22T16:00:00.000Z"),
+      endsAt: new Date("2027-08-22T22:00:00.000Z"),
+    });
+    const unpaid = await checkout("Search Unpaid");
+
+    const draftOwner = await createPrincipal("Search Draft");
+    const draftPublicId = randomUUID().replaceAll("-", "").slice(0, 12);
+    const draft = await prisma.event.create({
+      data: {
+        organizerId: draftOwner.organizerId,
+        publicId: draftPublicId,
+        slug: `search-draft-${draftPublicId}`,
+        title: "Search Draft Estate Sale",
+        description:
+          "A private draft that must never appear in the public search.",
+        eventType: "ESTATE_SALE",
+        origin: "OWNER_CREATED",
+        localStartsAt: "2027-08-25T09:00",
+        localEndsAt: "2027-08-25T15:00",
+        startsAt: new Date("2027-08-25T16:00:00.000Z"),
+        endsAt: new Date("2027-08-25T22:00:00.000Z"),
+        timezone: "America/Los_Angeles",
+        privacyMode: "EXACT_ADDRESS",
+        workflowState: "INCOMPLETE_DRAFT",
+      },
+    });
+
+    await prisma.event.update({
+      where: { id: canceled.event.id },
+      data: {
+        canceledAt: new Date("2027-08-24T12:00:00.000Z"),
+        cancellationReason: "integration search fixture",
+      },
+    });
+    await prisma.event.update({
+      where: { id: removed.event.id },
+      data: {
+        removedAt: new Date("2027-08-24T12:00:00.000Z"),
+        removalReason: "integration search fixture",
+      },
+    });
+    await prisma.event.update({
+      where: { id: immutableSnapshot.event.id },
+      data: {
+        eventType: "YARD_SALE",
+        localStartsAt: "2027-08-22T09:00",
+        localEndsAt: "2027-08-22T15:00",
+        startsAt: new Date("2027-08-22T16:00:00.000Z"),
+        endsAt: new Date("2027-08-22T22:00:00.000Z"),
+      },
+    });
+
+    const search = new PublicSearchService(
+      new PrismaPublicSearchRepository(prisma),
+    );
+    const criteria = {
+      date: "all",
+      from: null,
+      to: null,
+      location: "bakersfield-ca",
+      sort: "soonest",
+      view: "list",
+      cursor: null,
+    } as const;
+    const now = new Date("2027-08-25T15:00:00.000Z");
+    const all = await search.search({ ...criteria, sale: "all" }, now, 24);
+    const allIds = new Set(all.items.map((item) => item.id));
+
+    expect(allIds.has(visibleEstate.event.publicId)).toBe(true);
+    expect(allIds.has(visibleYard.event.publicId)).toBe(true);
+    expect(allIds.has(immutableSnapshot.event.publicId)).toBe(true);
+    expect(
+      all.items.find((item) => item.id === immutableSnapshot.event.publicId),
+    ).toMatchObject({
+      saleType: "estate",
+      startsAt: "2027-08-25T16:00:00.000Z",
+      endsAt: "2027-08-25T22:00:00.000Z",
+    });
+    for (const hiddenId of [
+      canceled.event.publicId,
+      removed.event.publicId,
+      expired.event.publicId,
+      unpaid.event.publicId,
+      draft.publicId,
+    ]) {
+      expect(allIds.has(hiddenId)).toBe(false);
+    }
+
+    const estate = await search.search(
+      { ...criteria, sale: "estate" },
+      now,
+      24,
+    );
+    expect(estate.items.map((item) => item.id)).toContain(
+      visibleEstate.event.publicId,
+    );
+    expect(estate.items.map((item) => item.id)).toContain(
+      immutableSnapshot.event.publicId,
+    );
+    expect(estate.items.map((item) => item.id)).not.toContain(
+      visibleYard.event.publicId,
+    );
+
+    const yard = await search.search({ ...criteria, sale: "yard" }, now, 24);
+    expect(yard.items.map((item) => item.id)).toContain(
+      visibleYard.event.publicId,
+    );
+    expect(yard.items.map((item) => item.id)).not.toContain(
+      visibleEstate.event.publicId,
+    );
+    expect(yard.items.map((item) => item.id)).not.toContain(
+      immutableSnapshot.event.publicId,
+    );
   });
 
   it("reconciles a missing webhook and safely records retryable provider failure", async () => {

@@ -15,7 +15,7 @@ export default defineConfig([
         {
           patterns: [
             {
-              group: ["@/modules/*/*"],
+              group: ["@/modules/*/*", "!@/modules/public-search/client"],
               message:
                 "Import another feature through its public module entry point.",
             },

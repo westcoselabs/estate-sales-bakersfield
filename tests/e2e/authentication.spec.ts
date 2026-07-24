@@ -115,7 +115,11 @@ test("completes the Phase 2 account, recovery, session, and organizer lifecycle"
 
   await registerAndVerify(page, email, "Primary owner", password);
   await login(page, email, password);
-  await expect(page.getByText("Email status: Verified")).toBeVisible();
+  await expect(
+    page.request.get("/api/account").then((response) => response.json()),
+  ).resolves.toMatchObject({
+    account: { emailVerified: true },
+  });
 
   await page.getByRole("link", { name: /continue onboarding/i }).click();
   await page.getByLabel("Organizer or business name").fill("Main organizer");
@@ -165,6 +169,7 @@ test("completes the Phase 2 account, recovery, session, and organizer lifecycle"
   expect(revokedResponse.status()).toBe(401);
 
   await login(page, email, replacementPassword);
+  await page.getByLabel("Open account menu for Primary owner").click();
   await page.getByRole("button", { name: "Log out", exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
 
@@ -233,15 +238,15 @@ test("supports unverified onboarding while preserving publishing verification ga
   await page.getByRole("button", { name: "Log in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(
-    page.getByText("Email status: Verification required"),
+    page.getByRole("heading", { name: "Verify your email" }),
   ).toBeVisible();
   await expect(
     page.getByText(
-      "Verify your email before uploading photos, approving, paying, or publishing.",
+      "Draft now, then verify before photos, approval, payment, or publication.",
     ),
   ).toBeVisible();
 
-  await page.getByRole("link", { name: /continue onboarding/i }).click();
+  await page.goto("/dashboard/profile");
   await page
     .getByLabel("Organizer or business name")
     .fill("Unverified Draft Sales");
@@ -309,12 +314,20 @@ test("supports unverified onboarding while preserving publishing verification ga
   await page.getByRole("button", { name: "Verify email" }).click();
   await expect(page).toHaveURL(/\/dashboard\?verified=1$/);
   await expect(page.getByText(/Email verified/).first()).toBeVisible();
-  await expect(page.getByText("Email status: Verified")).toBeVisible();
+  await expect(
+    page.request.get("/api/account").then((response) => response.json()),
+  ).resolves.toMatchObject({
+    account: { emailVerified: true },
+  });
 
   await page.goto(verificationPath);
   await page.getByRole("button", { name: "Verify email" }).click();
   await expect(page).toHaveURL(/\/dashboard\?verified=1$/);
-  await expect(page.getByText("Email status: Verified")).toBeVisible();
+  await expect(
+    page.request.get("/api/account").then((response) => response.json()),
+  ).resolves.toMatchObject({
+    account: { emailVerified: true },
+  });
 });
 
 test("denies anonymous organizer access and retains security headers", async ({
@@ -616,7 +629,7 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
 
   await page.getByRole("link", { name: "Open exact listing preview" }).click();
   await expect(
-    page.getByRole("heading", { name: "Oleander Estate Sale" }),
+    page.getByRole("heading", { name: "Oleander Estate Sale", level: 1 }),
   ).toBeVisible();
   await expect(
     page.getByText(/Exact address hidden until event start/),
@@ -669,15 +682,15 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   );
   await expect(page.getByText(/Your approval is saved/)).toBeVisible();
   await page.goto("/dashboard");
-  await expect(page.getByRole("link", { name: "Make payment" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Continue payment" }),
+  ).toBeVisible();
 
   await page.goto(`/dashboard/events/${eventId}/edit`);
   await page.getByRole("button", { name: "Details" }).click();
   await page.getByLabel("Public title").fill("Oleander Estate Sale Updated");
   await page.getByRole("button", { name: "Save and continue" }).click();
-  await page
-    .getByRole("button", { name: "Review, approval and payment" })
-    .click();
+  await page.getByRole("button", { name: "Review", exact: true }).click();
   await expect(page.getByText("Approval", { exact: true })).toBeVisible();
   await expect(page.getByText("NOT APPROVED", { exact: true })).toBeVisible();
   await page.getByLabel(/I accept publishing terms version/).check();
@@ -709,8 +722,15 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   ).toBeVisible();
   const denied = await otherPage.request.get(`/api/events/${eventId}`);
   expect(denied.status()).toBe(404);
-  const deniedPage = await otherPage.goto(`/dashboard/events/${eventId}/edit`);
-  expect(deniedPage?.status()).toBe(404);
+  await otherPage.goto(`/dashboard/events/${eventId}/edit`);
+  await expect(
+    otherPage.getByText("This page could not be found."),
+  ).toBeVisible();
+  await expect(
+    otherPage.getByRole("heading", {
+      name: "Oleander Estate Sale Updated",
+    }),
+  ).toHaveCount(0);
   await otherContext.close();
 
   expect(browserErrors).toEqual([]);

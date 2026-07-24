@@ -36,24 +36,37 @@ export function PublicShell({ children }: { readonly children: ReactNode }) {
         <div className="shell-container public-header__inner">
           <Brand />
           <nav className="public-nav public-nav--desktop" aria-label="Primary">
-            <TextLink href="/estate-sales">Estate sales</TextLink>
-            <TextLink href="/yard-sales">Yard sales</TextLink>
+            <TextLink href="/search">Explore</TextLink>
+            <TextLink href="/search?view=map">Map preview</TextLink>
+            <TextLink href="/how-it-works">How it works</TextLink>
+            <TextLink href="/about">About</TextLink>
           </nav>
           <div className="public-header__actions">
             <TextLink className="public-login" href="/login">
               Log in
             </TextLink>
-            <Link className="ui-button ui-button--accent" href="/signup">
+            <Link
+              className="ui-button ui-button--accent"
+              href="/list-your-sale"
+            >
               List your sale
             </Link>
           </div>
           <details className="public-menu">
-            <summary aria-label="Open navigation">Menu</summary>
+            <summary aria-label="Open navigation">
+              <Icon name="menu" size={22} />
+              <span>Menu</span>
+            </summary>
             <nav aria-label="Mobile primary">
+              <TextLink href="/search">Explore sales</TextLink>
+              <TextLink href="/search?view=map">Map preview</TextLink>
               <TextLink href="/estate-sales">Estate sales</TextLink>
               <TextLink href="/yard-sales">Yard sales</TextLink>
+              <TextLink href="/how-it-works">How it works</TextLink>
+              <TextLink href="/about">About</TextLink>
+              <TextLink href="/faq">FAQ</TextLink>
               <TextLink href="/login">Log in</TextLink>
-              <TextLink href="/signup">List your sale</TextLink>
+              <TextLink href="/list-your-sale">List your sale</TextLink>
             </nav>
           </details>
         </div>
@@ -61,21 +74,48 @@ export function PublicShell({ children }: { readonly children: ReactNode }) {
       <main id="main-content">{children}</main>
       <footer className="public-footer">
         <div className="shell-container public-footer__grid">
-          <div>
+          <div className="public-footer__brand">
             <Brand />
-            <p>A practical local directory for estate and yard sales.</p>
+            <p>
+              A local marketplace for discovering published estate and yard sale
+              listings in Bakersfield.
+            </p>
           </div>
-          <nav aria-label="Footer">
+          <nav aria-label="Explore">
+            <strong>Explore</strong>
+            <TextLink href="/search">All sales</TextLink>
             <TextLink href="/estate-sales">Estate sales</TextLink>
             <TextLink href="/yard-sales">Yard sales</TextLink>
-            <TextLink href="/signup">List your sale</TextLink>
           </nav>
-          <div>
-            <p>Need help running an estate sale?</p>
-            <ExternalLink href="https://simplydecorated.com/">
-              Visit Simply Decorated
+          <nav aria-label="For sellers">
+            <strong>For sellers</strong>
+            <TextLink href="/list-your-sale">List your sale</TextLink>
+            <TextLink href="/how-it-works">How it works</TextLink>
+            <TextLink href="/faq">FAQ</TextLink>
+          </nav>
+          <nav aria-label="Company and support">
+            <strong>Company</strong>
+            <TextLink href="/about">About</TextLink>
+            <TextLink href="/contact">Contact</TextLink>
+            <TextLink href="/privacy">Privacy</TextLink>
+            <TextLink href="/terms">Terms</TextLink>
+          </nav>
+          <div className="public-footer__service">
+            <strong>Need hands-on help?</strong>
+            <p>
+              Simply Decorated offers separate organizing, pricing, staging, and
+              promotion services.
+            </p>
+            <ExternalLink href="https://decoratedbyriley.com/estate-sale-companies-bakersfield/">
+              Explore professional estate-sale services
+              <Icon name="external" size={17} />
+              <span className="sr-only">(opens in a new tab)</span>
             </ExternalLink>
           </div>
+        </div>
+        <div className="shell-container public-footer__legal">
+          <p>Estate Sales Bakersfield is a self-service listing marketplace.</p>
+          <p>&copy; {new Date().getFullYear()} Estate Sales Bakersfield</p>
         </div>
       </footer>
     </div>

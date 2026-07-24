@@ -7,6 +7,7 @@ import { prelaunchRobots } from "@/platform/seo/indexing-policy";
 
 import "./globals.css";
 import "./foundation.css";
+import "./marketplace.css";
 
 const manrope = Manrope({
   subsets: ["latin"],
