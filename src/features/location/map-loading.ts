@@ -1,8 +1,10 @@
 export const MAP_STYLE_LOAD_TIMEOUT_MS = 12_000;
+export const MAP_BASEMAP_LOAD_TIMEOUT_MS = 12_000;
 
 export type MapFailureCategory =
   | "style"
   | "style-timeout"
+  | "source-timeout"
   | "source"
   | "tile"
   | "webgl"
@@ -27,6 +29,7 @@ type MapLoadMonitorOptions = Readonly<{
   onFallback: (diagnostic: SafeMapDiagnostic) => void;
   onDiagnostic: (diagnostic: SafeMapDiagnostic) => void;
   timeoutMs?: number;
+  basemapTimeoutMs?: number;
 }>;
 
 function recordValue(value: unknown, key: string): unknown {
@@ -89,11 +92,13 @@ export function createMapLoadMonitor({
   onFallback,
   onDiagnostic,
   timeoutMs = MAP_STYLE_LOAD_TIMEOUT_MS,
+  basemapTimeoutMs = MAP_BASEMAP_LOAD_TIMEOUT_MS,
 }: MapLoadMonitorOptions) {
   let styleReady = false;
   let disposed = false;
   let fallbackShown = false;
   let timeout: ReturnType<typeof setTimeout> | null = null;
+  let basemapTimeout: ReturnType<typeof setTimeout> | null = null;
   const reported: SafeMapDiagnostic[] = [];
 
   const report = (diagnostic: SafeMapDiagnostic) => {
@@ -108,6 +113,7 @@ export function createMapLoadMonitor({
     if (disposed || fallbackShown) return;
     fallbackShown = true;
     if (timeout) clearTimeout(timeout);
+    if (basemapTimeout) clearTimeout(basemapTimeout);
     report(diagnostic);
     onFallback(diagnostic);
   };
@@ -128,6 +134,17 @@ export function createMapLoadMonitor({
       styleReady = true;
       if (timeout) clearTimeout(timeout);
       onStyleReady();
+      basemapTimeout = setTimeout(() => {
+        showFallback({
+          category: "source-timeout",
+          host: styleHost,
+          hasSourceOrTileContext: true,
+        });
+      }, basemapTimeoutMs);
+    },
+    basemapLoaded() {
+      if (disposed || !styleReady) return;
+      if (basemapTimeout) clearTimeout(basemapTimeout);
     },
     error(event: MapErrorLike) {
       const diagnostic = classifyMapError(event);
@@ -143,6 +160,7 @@ export function createMapLoadMonitor({
     dispose() {
       disposed = true;
       if (timeout) clearTimeout(timeout);
+      if (basemapTimeout) clearTimeout(basemapTimeout);
     },
   };
 }

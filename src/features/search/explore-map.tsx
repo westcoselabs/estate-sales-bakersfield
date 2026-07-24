@@ -191,6 +191,11 @@ export default function ExploreMap({
     };
     map.on("error", monitor.error);
     map.once("style.load", monitor.styleLoaded);
+    map.on("sourcedata", (event) => {
+      if (event.sourceId === "openmaptiles" && event.isSourceLoaded) {
+        monitor.basemapLoaded();
+      }
+    });
     monitor.start();
     return () => {
       monitor.dispose();

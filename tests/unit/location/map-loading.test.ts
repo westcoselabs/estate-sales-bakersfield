@@ -47,6 +47,31 @@ describe("Explore map loading", () => {
     vi.useRealTimers();
   });
 
+  it("falls back when the Liberty vector source never becomes ready", () => {
+    vi.useFakeTimers();
+    const onFallback = vi.fn();
+    const monitor = createMapLoadMonitor({
+      styleHost: "tiles.openfreemap.org",
+      onStyleReady: vi.fn(),
+      onFallback,
+      onDiagnostic: vi.fn(),
+      timeoutMs: 20,
+      basemapTimeoutMs: 20,
+    });
+
+    monitor.start();
+    monitor.styleLoaded();
+    vi.advanceTimersByTime(20);
+
+    expect(onFallback).toHaveBeenCalledWith({
+      category: "source-timeout",
+      host: "tiles.openfreemap.org",
+      hasSourceOrTileContext: true,
+    });
+    monitor.dispose();
+    vi.useRealTimers();
+  });
+
   it("shows the fallback for a style request failure before style readiness", () => {
     const onFallback = vi.fn();
     const monitor = createMapLoadMonitor({
@@ -90,6 +115,7 @@ describe("Explore map loading", () => {
       sourceId: "openmaptiles",
       error: { message: "Source metadata was unavailable" },
     });
+    monitor.basemapLoaded();
 
     expect(onFallback).not.toHaveBeenCalled();
     expect(onDiagnostic).toHaveBeenCalledWith({
