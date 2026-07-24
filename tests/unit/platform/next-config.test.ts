@@ -19,7 +19,7 @@ describe("sensitive page headers", () => {
     expect(tracingIncludes?.[routePattern]).not.toContain("./**/*");
   });
 
-  it("permits only required provider connections and MapLibre workers", async () => {
+  it("permits every resource used by the current Liberty style and rejects unrelated map hosts", async () => {
     const headers = await nextConfig.headers?.();
     const securityHeaders = headers?.find((entry) => entry.source === "/(.*)");
     const csp = securityHeaders?.headers.find(
@@ -44,6 +44,10 @@ describe("sensitive page headers", () => {
     expect(csp).toContain(
       "img-src 'self' blob: data: https://tiles.openfreemap.org",
     );
+    // MapLibre retrieves glyph PBFs with fetch, so the tiles host belongs in
+    // connect-src rather than broadening font-src for an unused host.
+    expect(csp).toContain("font-src 'self' data:");
+    expect(csp).not.toContain("https://assets.openfreemap.com");
     expect(csp).toContain("worker-src 'self' blob:");
     expect(csp).not.toContain("api.geoapify.com");
     expect(csp).not.toContain("api.mapbox.com");

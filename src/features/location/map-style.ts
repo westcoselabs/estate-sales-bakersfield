@@ -1,5 +1,7 @@
 import type { StyleSpecification } from "maplibre-gl";
 
+export const OPEN_FREE_MAP_LIBERTY_STYLE_URL =
+  "https://tiles.openfreemap.org/styles/liberty";
 export const TEST_MAP_STYLE_URL = "https://map-style.test.invalid/fixture";
 
 const TEST_MAP_STYLE: StyleSpecification = {
@@ -19,5 +21,5 @@ export function configuredMapStyle(): string | StyleSpecification {
   const configured = process.env.NEXT_PUBLIC_MAP_STYLE_URL;
   return configured === TEST_MAP_STYLE_URL
     ? TEST_MAP_STYLE
-    : (configured ?? "https://tiles.openfreemap.org/styles/liberty");
+    : configured || OPEN_FREE_MAP_LIBERTY_STYLE_URL;
 }
