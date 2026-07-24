@@ -27,11 +27,12 @@ function canonicalApprovalPayload(
     privateLocationEvidence: event.location
       ? {
           normalizedAddress: event.location.normalizedAddress,
-          latitude: event.location.latitude.toFixed(6),
-          longitude: event.location.longitude.toFixed(6),
+          latitude: event.location.latitude?.toFixed(6) ?? null,
+          longitude: event.location.longitude?.toFixed(6) ?? null,
           providerName: event.location.providerName,
           providerPlaceId: event.location.providerPlaceId,
           validationStatus: event.location.validationStatus,
+          confirmationStatus: event.location.confirmationStatus,
         }
       : null,
     photoHashes,

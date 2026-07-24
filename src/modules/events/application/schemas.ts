@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { AddressSuggestion } from "@/modules/locations";
+
 const optionalTrimmed = (minimum: number, maximum: number) =>
   z.preprocess(
     (value) =>
@@ -36,7 +38,7 @@ export const eventLocationSchema = z.object({
   addressLine2: optionalTrimmed(1, 100),
   city: z.string().trim().min(2).max(100),
   region: z.string().trim().min(2).max(100),
-  postalCode: z.string().trim().min(3).max(20),
+  postalCode: z.string().trim().max(20),
   countryCode: z
     .string()
     .trim()
@@ -44,6 +46,8 @@ export const eventLocationSchema = z.object({
     .regex(/^[A-Z]{2}$/),
   timezone: z.string().trim().min(1).max(64),
   privacyMode: addressPrivacySchema,
+  selectionToken: z.string().min(40).max(4096).nullable().optional(),
+  confirmed: z.boolean().optional(),
 });
 
 export const photoReservationSchema = z.object({
@@ -87,4 +91,6 @@ export const eventApprovalSchema = z.object({
 
 export type EventDetailsInput = z.infer<typeof eventDetailsSchema>;
 export type EventScheduleInput = z.infer<typeof eventScheduleSchema>;
-export type EventLocationInput = z.infer<typeof eventLocationSchema>;
+export type EventLocationInput = z.infer<typeof eventLocationSchema> & {
+  readonly selectedLocation?: AddressSuggestion;
+};

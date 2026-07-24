@@ -32,6 +32,9 @@ describe("server environment validation", () => {
         DIRECT_URL: "postgresql://example.test/database",
         DATABASE_RESOURCE_ENV: "production",
         CRON_SECRET: "a".repeat(32),
+        GEOAPIFY_API_KEY: "g".repeat(32),
+        NEXT_PUBLIC_MAP_STYLE_URL:
+          "https://tiles.openfreemap.org/styles/liberty",
       }),
     ).toMatchObject({ APP_ENV: "production" });
   });
@@ -108,6 +111,8 @@ describe("server environment validation", () => {
       DIRECT_URL: "postgresql://example.test/database",
       DATABASE_RESOURCE_ENV: "preview",
       CRON_SECRET: "x".repeat(32),
+      GEOAPIFY_API_KEY: "g".repeat(32),
+      NEXT_PUBLIC_MAP_STYLE_URL: "https://tiles.openfreemap.org/styles/liberty",
       RESEND_API_KEY: "preview-key",
       RESEND_FROM: "Preview <preview@example.test>",
     };
@@ -177,6 +182,8 @@ describe("server environment validation", () => {
       DIRECT_URL: "postgresql://example.test/database",
       DATABASE_RESOURCE_ENV: "preview",
       CRON_SECRET: "x".repeat(32),
+      GEOAPIFY_API_KEY: "g".repeat(32),
+      NEXT_PUBLIC_MAP_STYLE_URL: "https://tiles.openfreemap.org/styles/liberty",
       STRIPE_SECRET_KEY: `sk_test_${"x".repeat(24)}`,
       STRIPE_WEBHOOK_SECRET: `whsec_${"y".repeat(24)}`,
       STRIPE_PRICE_ID: "price_preview_fixture",
@@ -223,6 +230,8 @@ describe("server environment validation", () => {
       STRIPE_EXPECTED_CURRENCY: "USD",
       STRIPE_MODE: "test",
       STRIPE_RESOURCE_ENV: "production",
+      GEOAPIFY_API_KEY: "geoapify-production-beta-key",
+      NEXT_PUBLIC_MAP_STYLE_URL: "https://tiles.openfreemap.org/styles/liberty",
     };
 
     expect(parseServerEnvironment(productionBeta)).toMatchObject({
@@ -262,6 +271,8 @@ describe("server environment validation", () => {
       STRIPE_EXPECTED_CURRENCY: "usd",
       STRIPE_MODE: "live",
       STRIPE_RESOURCE_ENV: "production",
+      GEOAPIFY_API_KEY: "geoapify-production-live-key",
+      NEXT_PUBLIC_MAP_STYLE_URL: "https://tiles.openfreemap.org/styles/liberty",
     };
 
     expect(parseServerEnvironment(production)).toMatchObject({

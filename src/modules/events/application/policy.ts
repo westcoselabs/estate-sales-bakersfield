@@ -12,6 +12,65 @@ import type {
 
 export const PUBLISHING_TERMS_VERSION = "2026-07-phase3-v1";
 
+const STREET_SUFFIXES: Readonly<Record<string, string>> = {
+  avenue: "ave",
+  boulevard: "blvd",
+  circle: "cir",
+  court: "ct",
+  drive: "dr",
+  highway: "hwy",
+  lane: "ln",
+  parkway: "pkwy",
+  place: "pl",
+  road: "rd",
+  street: "st",
+  terrace: "ter",
+  trail: "trl",
+  way: "way",
+};
+
+function normalizedAddressText(value: string): string {
+  return value
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}#]+/gu, " ")
+    .trim()
+    .split(/\s+/)
+    .map((part) => STREET_SUFFIXES[part] ?? part)
+    .join(" ")
+    .replace(/\b(?:apartment|apt|unit|suite|ste|#)\s*[a-z0-9-]+\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function privateAddressLeakFields(
+  event: Pick<
+    EventRecord,
+    "title" | "description" | "privacyMode" | "location"
+  >,
+): readonly ("title" | "description")[] {
+  if (event.privacyMode === "EXACT_ADDRESS" || !event.location?.addressLine1) {
+    return [];
+  }
+  const address = normalizedAddressText(event.location.addressLine1);
+  const [houseNumber, ...streetParts] = address.split(" ");
+  if (!/^\d+[a-z]?$/.test(houseNumber ?? "") || streetParts.length === 0) {
+    return [];
+  }
+  const needle = [houseNumber, ...streetParts].join(" ");
+  return (["title", "description"] as const).filter((field) => {
+    const value = event[field];
+    if (!value) return false;
+    const normalized = normalizedAddressText(value);
+    return (
+      normalized === needle ||
+      normalized.startsWith(`${needle} `) ||
+      normalized.endsWith(` ${needle}`) ||
+      normalized.includes(` ${needle} `)
+    );
+  });
+}
+
 function safePublicWebsite(value: string | null): string | null {
   if (!value) return null;
   try {
@@ -30,6 +89,13 @@ export function eventReadiness(event: EventRecord): EventReadiness {
   const missing: string[] = [];
   if (!event.title) missing.push("Add an event title.");
   if (!event.description) missing.push("Add an event description.");
+  for (const field of privateAddressLeakFields(event)) {
+    missing.push(
+      field === "title"
+        ? "Remove the private street address from the title."
+        : "Remove the private street address from the description.",
+    );
+  }
   if (
     !event.localStartsAt ||
     !event.localEndsAt ||
@@ -39,7 +105,11 @@ export function eventReadiness(event: EventRecord): EventReadiness {
   ) {
     missing.push("Add a valid schedule and timezone.");
   }
-  if (!event.location || event.location.validationStatus !== "VERIFIED") {
+  if (
+    !event.location ||
+    event.location.validationStatus !== "VERIFIED" ||
+    event.location.confirmationStatus !== "CONFIRMED"
+  ) {
     missing.push("Validate the event address.");
   }
   if (!event.privacyMode) missing.push("Choose an address-privacy policy.");
@@ -58,7 +128,11 @@ export function eventReadiness(event: EventRecord): EventReadiness {
 }
 
 export function eventStepReadiness(event: EventRecord): EventStepReadiness {
-  const detailsComplete = Boolean(event.title && event.description);
+  const detailsComplete = Boolean(
+    event.title &&
+    event.description &&
+    privateAddressLeakFields(event).length === 0,
+  );
   const scheduleComplete = Boolean(
     event.localStartsAt &&
     event.localEndsAt &&
@@ -67,7 +141,9 @@ export function eventStepReadiness(event: EventRecord): EventStepReadiness {
     event.timezone,
   );
   const locationComplete = Boolean(
-    event.location?.validationStatus === "VERIFIED" && event.privacyMode,
+    event.location?.validationStatus === "VERIFIED" &&
+    event.location.confirmationStatus === "CONFIRMED" &&
+    event.privacyMode,
   );
   const readyPhotos = event.photos.filter((photo) => photo.status === "READY");
   const photosComplete = Boolean(
@@ -157,7 +233,11 @@ export function toEventEditorDto(event: EventRecord): EventEditorDto {
           normalizedAddress: event.location.normalizedAddress,
           timezone: event.location.timezone,
           validationStatus: event.location.validationStatus,
+          confirmationStatus: event.location.confirmationStatus,
           precision: event.location.precision,
+          latitude: event.location.latitude,
+          longitude: event.location.longitude,
+          providerAttribution: event.location.providerAttribution,
         }
       : null,
     photos: photoDto(event),

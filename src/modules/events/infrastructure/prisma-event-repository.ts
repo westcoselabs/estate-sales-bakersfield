@@ -49,11 +49,18 @@ function mapLocation(
     postalCode: location.postalCode,
     countryCode: location.countryCode,
     normalizedAddress: location.normalizedAddress,
-    latitude: Number(location.latitude),
-    longitude: Number(location.longitude),
+    latitude: location.latitude === null ? null : Number(location.latitude),
+    longitude: location.longitude === null ? null : Number(location.longitude),
     timezone: location.timezone,
     providerPlaceId: location.providerPlaceId,
     providerName: location.providerName,
+    providerVersion: location.providerVersion,
+    providerAttribution: location.providerAttribution,
+    resolutionSource: location.resolutionSource,
+    confirmationStatus: location.confirmationStatus,
+    confirmedByUserId: location.confirmedByUserId,
+    confirmedAt: location.confirmedAt,
+    publicZone: location.publicZone,
     precision: location.precision,
     confidence:
       location.confidence === null ? null : Number(location.confidence),
@@ -326,19 +333,31 @@ export class PrismaEventRepository implements EventRepository {
       });
       if (updated.count !== 1) return null;
       const location = input.location;
+      const coordinates =
+        location.latitude === null || location.longitude === null
+          ? null
+          : Prisma.sql`ST_SetSRID(ST_MakePoint(${location.longitude}, ${location.latitude}), 4326)::geography`;
       await transaction.$executeRaw`
         INSERT INTO "event_locations" (
           "event_id", "address_line_1", "address_line_2", "city", "region",
           "postal_code", "country_code", "normalized_address", "latitude",
           "longitude", "coordinates", "timezone", "provider_place_id",
-          "provider_name", "precision", "confidence", "validation_status"
+          "provider_name", "provider_version", "provider_attribution",
+          "resolution_source", "confirmation_status", "confirmed_by_user_id",
+          "confirmed_at", "public_zone", "precision", "confidence",
+          "validation_status"
         ) VALUES (
           ${input.eventId}::uuid, ${location.addressLine1}, ${location.addressLine2},
           ${location.city}, ${location.region}, ${location.postalCode},
           ${location.countryCode}, ${location.normalizedAddress}, ${location.latitude},
           ${location.longitude},
-          ST_SetSRID(ST_MakePoint(${location.longitude}, ${location.latitude}), 4326)::geography,
+          ${coordinates},
           ${location.timezone}, ${location.providerPlaceId}, ${location.providerName},
+          ${location.providerVersion}, ${location.providerAttribution},
+          ${location.resolutionSource}::"location_resolution_source",
+          ${location.confirmationStatus}::"location_confirmation_status",
+          ${location.confirmedByUserId}::uuid, ${location.confirmedAt},
+          ${location.publicZone},
           ${location.precision}, ${location.confidence},
           ${location.validationStatus}::"location_validation_status"
         )
@@ -356,6 +375,13 @@ export class PrismaEventRepository implements EventRepository {
           "timezone" = EXCLUDED."timezone",
           "provider_place_id" = EXCLUDED."provider_place_id",
           "provider_name" = EXCLUDED."provider_name",
+          "provider_version" = EXCLUDED."provider_version",
+          "provider_attribution" = EXCLUDED."provider_attribution",
+          "resolution_source" = EXCLUDED."resolution_source",
+          "confirmation_status" = EXCLUDED."confirmation_status",
+          "confirmed_by_user_id" = EXCLUDED."confirmed_by_user_id",
+          "confirmed_at" = EXCLUDED."confirmed_at",
+          "public_zone" = EXCLUDED."public_zone",
           "precision" = EXCLUDED."precision",
           "confidence" = EXCLUDED."confidence",
           "validation_status" = EXCLUDED."validation_status",

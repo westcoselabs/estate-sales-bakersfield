@@ -10,10 +10,12 @@ import { EventService } from "@/modules/events/application/event-service";
 import { PUBLISHING_TERMS_VERSION } from "@/modules/events/application/policy";
 import { PrismaEventRepository } from "@/modules/events/infrastructure/prisma-event-repository";
 import type {
+  AddressSuggestion,
   LocationInput,
   ValidatedLocation,
 } from "@/modules/locations/domain/types";
 import type { LocationProvider } from "@/modules/locations/application/location-provider";
+import type { AddressAutocompleteProvider } from "@/modules/locations/application/address-autocomplete-provider";
 import { parseMediaObjectKey } from "@/modules/media/domain/object-key";
 import { SharpImageProcessor } from "@/modules/media/infrastructure/sharp-image-processor";
 import { PrismaOrganizerProfileRepository } from "@/modules/organizers/infrastructure/prisma-organizer-profile-repository";
@@ -27,7 +29,9 @@ const repository = new PrismaEventRepository(prisma);
 const organizerRepository = new PrismaOrganizerProfileRepository(prisma);
 const media = new InMemoryMediaStore();
 
-class FixtureLocationProvider implements LocationProvider {
+class FixtureLocationProvider
+  implements LocationProvider, AddressAutocompleteProvider
+{
   validate(input: LocationInput): Promise<ValidatedLocation> {
     return Promise.resolve({
       ...input,
@@ -41,11 +45,38 @@ class FixtureLocationProvider implements LocationProvider {
       validationStatus: "VERIFIED",
     });
   }
+
+  autocomplete(): Promise<readonly AddressSuggestion[]> {
+    return Promise.resolve([
+      {
+        id: "integration-bakersfield-1",
+        formattedAddress:
+          "123 Main Street, Bakersfield, CA 93301, United States",
+        houseNumber: "123",
+        street: "Main Street",
+        city: "Bakersfield",
+        state: "CA",
+        postalCode: "93301",
+        country: "United States",
+        countryCode: "US",
+        latitude: 35.373292,
+        longitude: -119.018712,
+        confidence: 1,
+        matchType: "full_match",
+        provider: {
+          name: "test-fixture",
+          version: "v1",
+          attribution: "Deterministic integration fixture",
+        },
+      },
+    ]);
+  }
 }
 
+const locationProvider = new FixtureLocationProvider();
 const service = new EventService(
   repository,
-  new FixtureLocationProvider(),
+  locationProvider,
   media,
   new SharpImageProcessor(),
   "test",
@@ -107,6 +138,7 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
         "20260717000000_phase2_auth_and_organizers",
         "20260721000000_phase3_event_builder",
         "20260722000000_postgresql_auth_rate_limits",
+        "20260724143000_geoapify_confirmed_locations",
       ]),
     );
     expect(
@@ -133,6 +165,56 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
           "20260722000000_postgresql_auth_rate_limits",
       ),
     );
+    expect(
+      migrations.findIndex(
+        (migration) =>
+          migration.migration_name ===
+          "20260722000000_postgresql_auth_rate_limits",
+      ),
+    ).toBeLessThan(
+      migrations.findIndex(
+        (migration) =>
+          migration.migration_name ===
+          "20260724143000_geoapify_confirmed_locations",
+      ),
+    );
+  });
+
+  it("keeps truthfully marked legacy Mapbox rows readable", async () => {
+    const event = await service.create(owner, "ESTATE_SALE");
+    await prisma.$executeRaw`
+      INSERT INTO "event_locations" (
+        "event_id", "address_line_1", "city", "region", "postal_code",
+        "country_code", "normalized_address", "latitude", "longitude",
+        "coordinates", "timezone", "provider_place_id", "provider_name",
+        "provider_version", "provider_attribution", "resolution_source",
+        "confirmation_status", "confirmed_at", "public_zone", "precision",
+        "confidence", "validation_status"
+      ) VALUES (
+        ${event.id}::uuid, '123 Legacy Street', 'Bakersfield', 'CA', '93301',
+        'US', '123 Legacy Street, Bakersfield, CA 93301, US', 35.373292,
+        -119.018712,
+        ST_SetSRID(ST_MakePoint(-119.018712, 35.373292), 4326)::geography,
+        'America/Los_Angeles', 'legacy-mapbox-id', 'mapbox',
+        'geocoding-v6', 'Legacy Mapbox geocoding result', 'LEGACY_PROVIDER',
+        'CONFIRMED', CURRENT_TIMESTAMP, 'bakersfield', 'exact', 1,
+        'VERIFIED'
+      )
+    `;
+
+    await expect(
+      repository.findOwned(event.id, owner.id),
+    ).resolves.toMatchObject({
+      location: {
+        providerName: "mapbox",
+        providerPlaceId: "legacy-mapbox-id",
+        providerVersion: "geocoding-v6",
+        resolutionSource: "LEGACY_PROVIDER",
+        confirmationStatus: "CONFIRMED",
+        latitude: 35.373292,
+        longitude: -119.018712,
+      },
+    });
   });
 
   it("creates, resumes, validates, previews, approves, and invalidates a private draft", async () => {
@@ -161,6 +243,8 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       localEndsAt: "2026-08-08T15:00",
       timezone: "America/Los_Angeles",
     });
+    const [selectedLocation] = await locationProvider.autocomplete();
+    if (!selectedLocation) throw new Error("Missing location fixture");
     event = await service.updateLocation(owner, event.id, {
       expectedVersion: event.version,
       addressLine1: "123 Main Street",
@@ -171,6 +255,8 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       countryCode: "US",
       timezone: "America/Los_Angeles",
       privacyMode: "APPROXIMATE_LOCATION",
+      confirmed: true,
+      selectedLocation,
     });
     const coordinates = await prisma.$queryRaw<
       Array<{ longitude: number; latitude: number }>
@@ -182,6 +268,43 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
     `;
     expect(Number(coordinates[0]?.longitude)).toBeCloseTo(-119.018712, 5);
     expect(Number(coordinates[0]?.latitude)).toBeCloseTo(35.373292, 5);
+
+    event = await service.updateLocation(owner, event.id, {
+      expectedVersion: event.version,
+      addressLine1: "125 Main Street",
+      addressLine2: null,
+      city: "Bakersfield",
+      region: "CA",
+      postalCode: "93301",
+      countryCode: "US",
+      timezone: "America/Los_Angeles",
+      privacyMode: "APPROXIMATE_LOCATION",
+      confirmed: false,
+    });
+    expect(event.location).toMatchObject({
+      addressLine1: "125 Main Street",
+      confirmationStatus: "UNCONFIRMED",
+      validationStatus: "UNVALIDATED",
+      latitude: null,
+      longitude: null,
+    });
+    await expect(service.preview(owner, event.id)).rejects.toThrow(
+      /incomplete/,
+    );
+
+    event = await service.updateLocation(owner, event.id, {
+      expectedVersion: event.version,
+      addressLine1: "123 Main Street",
+      addressLine2: null,
+      city: "Bakersfield",
+      region: "CA",
+      postalCode: "93301",
+      countryCode: "US",
+      timezone: "America/Los_Angeles",
+      privacyMode: "APPROXIMATE_LOCATION",
+      confirmed: true,
+      selectedLocation,
+    });
 
     const reservation = await service.reservePhoto(owner, event.id, {
       expectedVersion: event.version,

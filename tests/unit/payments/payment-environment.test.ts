@@ -29,6 +29,8 @@ describe("payment provider environment selection", () => {
       STRIPE_EXPECTED_CURRENCY: "usd",
       STRIPE_MODE: "test",
       STRIPE_RESOURCE_ENV: "production",
+      GEOAPIFY_API_KEY: "geoapify-production-beta-key",
+      NEXT_PUBLIC_MAP_STYLE_URL: "https://tiles.openfreemap.org/styles/liberty",
     });
 
     expect(usesDeterministicStripe(environment)).toBe(false);

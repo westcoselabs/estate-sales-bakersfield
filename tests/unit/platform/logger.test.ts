@@ -22,6 +22,9 @@ describe("structured logger", () => {
         stripeSignature: "raw-stripe-signature",
         checkoutUrl: "https://checkout.example.test/raw-session",
         rawBody: "raw-webhook-body",
+        geoapifyApiKey: "raw-geoapify-key",
+        addressQuery: "123 Private Street",
+        coordinates: [-119.1, 35.3],
         safe: "retained",
       });
     } finally {
@@ -39,5 +42,8 @@ describe("structured logger", () => {
     expect(serialized).not.toContain("raw-stripe-signature");
     expect(serialized).not.toContain("raw-session");
     expect(serialized).not.toContain("raw-webhook-body");
+    expect(serialized).not.toContain("raw-geoapify-key");
+    expect(serialized).not.toContain("123 Private Street");
+    expect(serialized).not.toContain("-119.1");
   });
 });

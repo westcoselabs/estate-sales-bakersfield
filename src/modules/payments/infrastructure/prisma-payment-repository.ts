@@ -653,7 +653,12 @@ export class PrismaPaymentRepository implements PaymentRepository {
             approvedRevision: input.attempt.approvedRevision,
             contentRevision: input.attempt.approvedRevision,
             approvalDigest: input.attempt.approvedDigest,
-            location: { is: { validationStatus: "VERIFIED" } },
+            location: {
+              is: {
+                validationStatus: "VERIFIED",
+                confirmationStatus: "CONFIRMED",
+              },
+            },
             photos: {
               some: {
                 id:

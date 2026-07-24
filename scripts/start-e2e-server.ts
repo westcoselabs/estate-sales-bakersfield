@@ -54,6 +54,7 @@ async function main(): Promise<void> {
     TEST_MEDIA_SIGNING_SECRET:
       "phase-three-e2e-media-signing-secret-32-characters",
     TEST_LOCATION_FIXTURES: "bakersfield",
+    NEXT_PUBLIC_MAP_STYLE_URL: "https://map-style.test.invalid/fixture",
     // Keep Next's dotenv loading from reintroducing local, Preview, or
     // Production provider credentials into the isolated test server.
     DATABASE_RESOURCE_ENV: "",
@@ -62,8 +63,7 @@ async function main(): Promise<void> {
     RESEND_API_KEY: "",
     RESEND_FROM: "",
     RESEND_RESOURCE_ENV: "",
-    MAPBOX_ACCESS_TOKEN: "",
-    MAPBOX_RESOURCE_ENV: "",
+    GEOAPIFY_API_KEY: "",
     STRIPE_SECRET_KEY: "",
     STRIPE_WEBHOOK_SECRET: "",
     STRIPE_PRICE_ID: "",

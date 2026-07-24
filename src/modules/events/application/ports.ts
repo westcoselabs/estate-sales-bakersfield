@@ -1,8 +1,8 @@
 import type { AuthPrincipal } from "@/modules/auth";
-import type { ValidatedLocation } from "@/modules/locations";
 
 import type {
   AddressPrivacyMode,
+  EventLocationRecord,
   EventRecord,
   EventType,
 } from "../domain/types";
@@ -81,7 +81,7 @@ export interface EventRepository {
     readonly eventId: string;
     readonly userId: string;
     readonly expectedVersion: number;
-    readonly location: ValidatedLocation;
+    readonly location: Omit<EventLocationRecord, "id" | "eventId">;
     readonly privacyMode: AddressPrivacyMode;
     readonly workflowState: "INCOMPLETE_DRAFT" | "PREVIEW_READY";
     readonly audit: EventAuditContext;

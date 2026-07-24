@@ -138,14 +138,19 @@ async function createApprovedEvent(
       "event_id", "address_line_1", "city", "region", "postal_code",
       "country_code", "normalized_address", "latitude", "longitude",
       "coordinates", "timezone", "provider_place_id", "provider_name",
-      "precision", "confidence", "validation_status", "updated_at"
+      "provider_version", "provider_attribution", "resolution_source",
+      "confirmation_status", "confirmed_by_user_id", "confirmed_at",
+      "public_zone", "precision", "confidence", "validation_status", "updated_at"
     ) VALUES (
       ${event.id}::uuid, '123 Main Street', 'Bakersfield', 'CA', '93301',
       'US', '123 Main Street, Bakersfield, CA 93301, US', 35.373292,
       -119.018712,
       ST_SetSRID(ST_MakePoint(-119.018712, 35.373292), 4326)::geography,
       'America/Los_Angeles', ${`phase4-${publicId}`},
-      'integration-fixture', 'exact', 1, 'VERIFIED', CURRENT_TIMESTAMP
+      'integration-fixture', 'v1', 'Deterministic integration fixture',
+      'ORGANIZER_AUTOCOMPLETE', 'CONFIRMED', ${principal.id}::uuid,
+      CURRENT_TIMESTAMP, 'bakersfield', 'exact', 1, 'VERIFIED',
+      CURRENT_TIMESTAMP
     )
   `;
   const photo = await prisma.eventPhoto.create({

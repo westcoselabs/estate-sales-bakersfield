@@ -6,6 +6,12 @@ export type EventWorkflowState =
 export type EventApprovalStatus = "NOT_APPROVED" | "APPROVED";
 export type LocationValidationStatus =
   "UNVALIDATED" | "VERIFIED" | "LOW_CONFIDENCE";
+export type LocationConfirmationStatus = "UNCONFIRMED" | "CONFIRMED";
+export type LocationResolutionSource =
+  | "ORGANIZER_AUTOCOMPLETE"
+  | "ADMIN_GEOCODING"
+  | "LEGACY_PROVIDER"
+  | "UNCONFIRMED_DRAFT";
 export type EventPhotoStatus =
   "RESERVED" | "UPLOADED" | "PROCESSING" | "READY" | "FAILED";
 export type EventPhotoVariant = "thumbnail" | "card" | "gallery" | "cover";
@@ -21,11 +27,18 @@ export interface EventLocationRecord {
   readonly postalCode: string;
   readonly countryCode: string;
   readonly normalizedAddress: string;
-  readonly latitude: number;
-  readonly longitude: number;
+  readonly latitude: number | null;
+  readonly longitude: number | null;
   readonly timezone: string;
-  readonly providerPlaceId: string;
-  readonly providerName: string;
+  readonly providerPlaceId: string | null;
+  readonly providerName: string | null;
+  readonly providerVersion: string | null;
+  readonly providerAttribution: string | null;
+  readonly resolutionSource: LocationResolutionSource;
+  readonly confirmationStatus: LocationConfirmationStatus;
+  readonly confirmedByUserId: string | null;
+  readonly confirmedAt: Date | null;
+  readonly publicZone: string;
   readonly precision: string | null;
   readonly confidence: number | null;
   readonly validationStatus: LocationValidationStatus;
@@ -194,7 +207,11 @@ export interface EventEditorDto {
     readonly normalizedAddress: string;
     readonly timezone: string;
     readonly validationStatus: LocationValidationStatus;
+    readonly confirmationStatus: LocationConfirmationStatus;
     readonly precision: string | null;
+    readonly latitude: number | null;
+    readonly longitude: number | null;
+    readonly providerAttribution: string | null;
   } | null;
   readonly photos: readonly EventPhotoDto[];
   readonly readiness: EventReadiness;

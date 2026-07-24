@@ -29,6 +29,7 @@ import { validatedSchedule } from "../domain/schedule";
 import type {
   EventEditorDto,
   EventListItemDto,
+  EventLocationRecord,
   EventPhotoReservationDto,
   EventRecord,
   EventType,
@@ -61,6 +62,17 @@ export const EVENT_PHOTO_CONTENT_TYPES = [
 
 function publicId(): string {
   return randomBytes(6).toString("hex");
+}
+
+function selectedLocationIsVerified(
+  location: NonNullable<EventLocationInput["selectedLocation"]>,
+): boolean {
+  return (
+    (location.confidence ?? 0) >= 0.9 &&
+    ["building", "full_match", "match_by_building"].includes(
+      location.matchType ?? "",
+    )
+  );
 }
 
 const DATABASE_ID =
@@ -294,7 +306,92 @@ export class EventService {
         "The address timezone must match the saved schedule timezone.",
       );
     }
-    const location = await this.locations.validate(input);
+    const selected = input.confirmed ? input.selectedLocation : undefined;
+    const currentLocation = current.location;
+    const addressUnchanged = Boolean(
+      currentLocation &&
+      currentLocation.addressLine1 === input.addressLine1.trim() &&
+      (currentLocation.addressLine2 ?? "") ===
+        (input.addressLine2?.trim() ?? "") &&
+      currentLocation.city === input.city.trim() &&
+      currentLocation.region === input.region.trim() &&
+      currentLocation.postalCode === input.postalCode.trim() &&
+      currentLocation.countryCode === input.countryCode.trim().toUpperCase() &&
+      currentLocation.timezone === input.timezone &&
+      currentLocation.confirmationStatus === "CONFIRMED",
+    );
+    if (input.confirmed && !selected && !addressUnchanged) {
+      throw new EventValidationError(
+        "Choose an address suggestion and confirm the marker.",
+      );
+    }
+    const reusableLocation = (() => {
+      if (!addressUnchanged || !currentLocation) return null;
+      const { id, eventId: locationEventId, ...value } = currentLocation;
+      void id;
+      void locationEventId;
+      return value;
+    })();
+    const location: Omit<EventLocationRecord, "id" | "eventId"> = selected
+      ? {
+          addressLine1: `${selected.houseNumber} ${selected.street}`,
+          addressLine2: input.addressLine2,
+          city: selected.city,
+          region: selected.state,
+          postalCode: selected.postalCode,
+          countryCode: selected.countryCode,
+          normalizedAddress: selected.formattedAddress,
+          latitude: selected.latitude,
+          longitude: selected.longitude,
+          timezone: input.timezone,
+          providerPlaceId: selected.id,
+          providerName: selected.provider.name,
+          providerVersion: selected.provider.version,
+          providerAttribution: selected.provider.attribution,
+          resolutionSource: "ORGANIZER_AUTOCOMPLETE",
+          confirmationStatus: "CONFIRMED",
+          confirmedByUserId: user.id,
+          confirmedAt: new Date(),
+          publicZone: "bakersfield",
+          precision: selected.matchType,
+          confidence: selected.confidence,
+          validationStatus: selectedLocationIsVerified(selected)
+            ? "VERIFIED"
+            : "LOW_CONFIDENCE",
+        }
+      : (reusableLocation ?? {
+          addressLine1: input.addressLine1,
+          addressLine2: input.addressLine2,
+          city: input.city,
+          region: input.region,
+          postalCode: input.postalCode,
+          countryCode: input.countryCode,
+          normalizedAddress: [
+            input.addressLine1,
+            input.addressLine2,
+            input.city,
+            input.region,
+            input.postalCode,
+            input.countryCode,
+          ]
+            .filter(Boolean)
+            .join(", "),
+          latitude: null,
+          longitude: null,
+          timezone: input.timezone,
+          providerPlaceId: null,
+          providerName: null,
+          providerVersion: null,
+          providerAttribution: null,
+          resolutionSource: "UNCONFIRMED_DRAFT",
+          confirmationStatus: "UNCONFIRMED",
+          confirmedByUserId: null,
+          confirmedAt: null,
+          publicZone: "bakersfield",
+          precision: null,
+          confidence: null,
+          validationStatus: "UNVALIDATED",
+        });
     const hypothetical = withChanges(current, {
       location: { id: "pending", eventId, ...location },
       privacyMode: input.privacyMode,

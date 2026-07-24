@@ -68,6 +68,9 @@ describe("security and observability boundaries", () => {
         safe: "value",
         href: `/verify-email?token=${opaqueToken}`,
         opaqueCredential: opaqueToken,
+        geoapifyApiKey: "raw-geoapify-key",
+        addressLine1: "123 Private Street",
+        coordinates: [-119.1, 35.3],
       },
       user: {
         id: "user-1",
@@ -90,6 +93,9 @@ describe("security and observability boundaries", () => {
         safe: "value",
         href: "/verify-email?token=[REDACTED]",
         opaqueCredential: "[REDACTED]",
+        geoapifyApiKey: "[REDACTED]",
+        addressLine1: "[REDACTED]",
+        coordinates: "[REDACTED]",
       },
       user: { id: "user-1" },
     });

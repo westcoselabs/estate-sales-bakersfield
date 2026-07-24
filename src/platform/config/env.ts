@@ -141,14 +141,11 @@ export const serverEnvironmentSchema = z
       (value) => (value === "" ? undefined : value),
       z.string().min(1).max(100).optional(),
     ),
-    MAPBOX_ACCESS_TOKEN: z.preprocess(
+    GEOAPIFY_API_KEY: z.preprocess(
       (value) => (value === "" ? undefined : value),
-      z.string().min(1).optional(),
+      z.string().min(16).max(255).optional(),
     ),
-    MAPBOX_RESOURCE_ENV: z.preprocess(
-      (value) => (value === "" ? undefined : value),
-      providerEnvironmentSchema.optional(),
-    ),
+    NEXT_PUBLIC_MAP_STYLE_URL: optionalUrl,
     STRIPE_SECRET_KEY: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z.string().min(16).optional(),
@@ -221,6 +218,32 @@ export const serverEnvironmentSchema = z
       }
     }
 
+    if (environment.APP_ENV === "production") {
+      for (const key of [
+        "GEOAPIFY_API_KEY",
+        "NEXT_PUBLIC_MAP_STYLE_URL",
+      ] as const) {
+        if (!environment[key]) {
+          context.addIssue({
+            code: "custom",
+            message: `${key} is required in production`,
+            path: [key],
+          });
+        }
+      }
+    }
+
+    if (
+      environment.NEXT_PUBLIC_MAP_STYLE_URL &&
+      new URL(environment.NEXT_PUBLIC_MAP_STYLE_URL).protocol !== "https:"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "NEXT_PUBLIC_MAP_STYLE_URL must use HTTPS",
+        path: ["NEXT_PUBLIC_MAP_STYLE_URL"],
+      });
+    }
+
     for (const [left, right] of [["RESEND_API_KEY", "RESEND_FROM"]] as const) {
       if (Boolean(environment[left]) !== Boolean(environment[right])) {
         context.addIssue({
@@ -236,7 +259,6 @@ export const serverEnvironmentSchema = z
         ["DATABASE_URL", "DATABASE_RESOURCE_ENV"],
         ["BLOB_READ_WRITE_TOKEN", "BLOB_RESOURCE_ENV"],
         ["RESEND_API_KEY", "RESEND_RESOURCE_ENV"],
-        ["MAPBOX_ACCESS_TOKEN", "MAPBOX_RESOURCE_ENV"],
         ["STRIPE_SECRET_KEY", "STRIPE_RESOURCE_ENV"],
       ] as const;
       for (const [credential, marker] of configuredProviders) {

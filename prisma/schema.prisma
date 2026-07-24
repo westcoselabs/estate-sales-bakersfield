@@ -101,6 +101,22 @@ enum LocationValidationStatus {
   @@map("location_validation_status")
 }
 
+enum LocationConfirmationStatus {
+  UNCONFIRMED
+  CONFIRMED
+
+  @@map("location_confirmation_status")
+}
+
+enum LocationResolutionSource {
+  ORGANIZER_AUTOCOMPLETE
+  ADMIN_GEOCODING
+  LEGACY_PROVIDER
+  UNCONFIRMED_DRAFT
+
+  @@map("location_resolution_source")
+}
+
 enum EventPhotoStatus {
   RESERVED
   UPLOADED
@@ -312,12 +328,19 @@ model EventLocation {
   postalCode        String                                 @map("postal_code") @db.VarChar(20)
   countryCode       String                                 @map("country_code") @db.Char(2)
   normalizedAddress String                                 @map("normalized_address") @db.VarChar(500)
-  latitude          Decimal                                @db.Decimal(9, 6)
-  longitude         Decimal                                @db.Decimal(9, 6)
+  latitude          Decimal?                               @db.Decimal(9, 6)
+  longitude         Decimal?                               @db.Decimal(9, 6)
   coordinates       Unsupported("geography(Point, 4326)")?
   timezone          String                                 @db.VarChar(64)
-  providerPlaceId   String                                 @map("provider_place_id") @db.VarChar(255)
-  providerName      String                                 @map("provider_name") @db.VarChar(50)
+  providerPlaceId   String?                                @map("provider_place_id") @db.VarChar(255)
+  providerName      String?                                @map("provider_name") @db.VarChar(50)
+  providerVersion   String?                                @map("provider_version") @db.VarChar(50)
+  providerAttribution String?                              @map("provider_attribution") @db.VarChar(255)
+  resolutionSource  LocationResolutionSource               @default(UNCONFIRMED_DRAFT) @map("resolution_source")
+  confirmationStatus LocationConfirmationStatus             @default(UNCONFIRMED) @map("confirmation_status")
+  confirmedByUserId String?                                @map("confirmed_by_user_id") @db.Uuid
+  confirmedAt       DateTime?                              @map("confirmed_at") @db.Timestamptz(3)
+  publicZone        String                                 @default("bakersfield") @map("public_zone") @db.VarChar(50)
   precision         String?                                @db.VarChar(50)
   confidence        Decimal?                               @db.Decimal(5, 4)
   validationStatus  LocationValidationStatus               @map("validation_status")
@@ -328,6 +351,7 @@ model EventLocation {
 
   @@index([city, region])
   @@index([validationStatus])
+  @@index([confirmationStatus])
   @@map("event_locations")
 }
 

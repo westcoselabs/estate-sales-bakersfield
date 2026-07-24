@@ -27,6 +27,50 @@ describe("event publication policy", () => {
         }),
       ).missing,
     ).toContain("Validate the event address.");
+    expect(
+      eventReadiness(
+        readyEvent({
+          location: {
+            ...readyEvent().location!,
+            confirmationStatus: "UNCONFIRMED",
+            latitude: null,
+            longitude: null,
+          },
+        }),
+      ).missing,
+    ).toContain("Validate the event address.");
+  });
+
+  it("blocks normalized private-address leaks in protected public text", () => {
+    const titleLeak = readyEvent({
+      privacyMode: "APPROXIMATE_LOCATION",
+      title: "Sale at 123 MAIN ST.",
+    });
+    const unitLeak = readyEvent({
+      privacyMode: "HIDDEN_UNTIL_START",
+      description:
+        "Collectibles available at 123 Main St., apartment 4, this weekend.",
+    });
+    const genericStreet = readyEvent({
+      privacyMode: "APPROXIMATE_LOCATION",
+      description: "Serving neighbors around Main Street this weekend.",
+    });
+
+    expect(eventReadiness(titleLeak).missing).toContain(
+      "Remove the private street address from the title.",
+    );
+    expect(eventReadiness(unitLeak).missing).toContain(
+      "Remove the private street address from the description.",
+    );
+    expect(eventReadiness(genericStreet).ready).toBe(true);
+    expect(
+      eventReadiness(
+        readyEvent({
+          privacyMode: "EXACT_ADDRESS",
+          title: "Sale at 123 Main Street",
+        }),
+      ).ready,
+    ).toBe(true);
   });
 
   it("exposes structured server-owned wizard readiness", () => {
