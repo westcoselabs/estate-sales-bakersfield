@@ -1,31 +1,79 @@
 # Live Provider Verification
 
-Live verification is intentionally excluded from normal pull-request CI. It must use isolated Preview resources and `APP_ENV=preview`; the runner refuses local, test, and Production.
+Live-provider checks are separate from deterministic local and CI
+verification. The active hosted acceptance workflow is the stable
+[Production-beta checklist](./production-beta-verification.md), not a Vercel
+Preview deployment.
 
-## Neon
+## Retained legacy command
 
-Provide `DATABASE_URL` and `DIRECT_URL` for the isolated Preview Neon branch and set `DATABASE_RESOURCE_ENV=preview`. `pnpm verify:live` deploys real migrations, checks PostGIS, inserts a uniquely named transaction fixture, forces rollback, proves the row is absent, and performs best-effort cleanup. The operator is responsible for confirming the branch identity because the repository has no Neon management authority and the scope marker is not cryptographic proof of a vendor resource.
+`pnpm verify:live` is retained for source compatibility and historical
+evidence. Its current guard requires `APP_ENV=preview` and refuses Local, Test,
+and Production. It expects isolated Preview resources.
 
-## Vercel Argon2 runtime
+That command cannot validate the main-only Production-beta workflow and must
+not be pointed at Production. Do not create the Preview deployment, providers,
+or webhook it expects merely to make the legacy command pass. Until the
+command is redesigned through a separately approved change, report it as
+`NOT APPLICABLE` to Production-beta acceptance.
 
-Deploy the app to a non-production Vercel environment with a 32+ character `CRON_SECRET`, then set `VERCEL_BENCHMARK_URL` to that deployment. The protected benchmark endpoint is unavailable in `APP_ENV=production`. The live runner verifies hashing and comparison in the actual Node function runtime and enforces a resource envelope around the roadmap's 200–350 ms target. If Vercel Deployment Protection intercepts the request, the benchmark client uses the authenticated local Vercel CLI to obtain a Preview protection bypass while curl imports the application bearer secret from the child process environment rather than command-line arguments.
+The retained command's exit semantics remain:
 
-## Vercel Private Blob
+- Exit 0: every configured legacy live check passed.
+- Exit 1: a configured check failed.
+- Exit 2: resources were unavailable and reported as `BLOCKED`.
 
-Provide `BLOB_READ_WRITE_TOKEN` for an isolated Preview private store and set `BLOB_RESOURCE_ENV=preview`. The test uses only generated `test/live-contract/...` keys and always attempts deletion in `finally`.
+No result replaces `pnpm verify` or hosted Production-beta smoke testing.
 
-## Stripe test-mode Preview
+## Current verification layers
 
-The ordinary suite uses no Stripe network access. Preview live acceptance requires a regular Stripe account in test mode, a Preview-only one-time Price, and an endpoint-specific webhook secret. Set all seven server-only `STRIPE_*` variables documented in `preview-verification.md`; `STRIPE_MODE=test` and `STRIPE_RESOURCE_ENV=preview` are mandatory. Confirm the Price ID, expected minor-unit amount, and currency against the Stripe dashboard before Checkout. Exercise successful and canceled hosted Checkout, duplicate replay, delayed-webhook reconciliation, stale-revision blocking, and the stable public route. Do not report this `PASS` from fake-adapter evidence.
+### Local and CI
 
-## Phase 2 authentication providers
+Run `pnpm verify` before promotion. Use the guarded Test environment for
+database integration and Playwright. Fake and capture adapters are expected in
+normal automated tests; no Production provider call is required to pass.
 
-Preview authentication requires Preview Neon with the PostgreSQL rate-limit migration, a Preview-only `AUTH_FINGERPRINT_SECRET`, and a Preview Resend key/sender. Confirm variable names and environment scope without printing values. Exercise email only through a provider test mode or an explicitly approved controlled recipient. Verify rate-limit thresholds, expiry, concurrency, and the sanitized fail-closed response without substituting Production credentials or a process-memory authority. If Resend or the controlled delivery target is unavailable, only delivery-dependent checks are `BLOCKED`.
+### Stable Production beta
 
-The authenticated `/api/internal/jobs/run` endpoint deletes expired authentication buckets from the current environment's Neon database before processing durable jobs. Run it at least hourly in deployed environments and retain sanitized evidence of `rateLimitBucketsDeleted`; a missing maintenance schedule is an acceptance blocker for bounded retention.
+After an approved fast-forward of `main`, wait for the Vercel Production
+deployment to become `READY`, then run bounded, non-destructive checks against
+`https://estate-sales-bakersfield.vercel.app`.
+
+Verify:
+
+- `/api/health` returns HTTP 200;
+- the beta remains `noindex` and sensitive routes remain
+  `noindex,nofollow`;
+- authentication, organizer, private-media, approval, Stripe test Checkout,
+  webhook publication, and jobs use existing Production-beta resources;
+- the existing webhook delivers to the stable Production endpoint;
+- public routes, mobile layouts, keyboard focus, safe areas, and logs are
+  healthy; and
+- unavailable credentials or providers are `BLOCKED`, never silently passed.
+
+Confirm variables and resource scopes without printing values. Do not rotate
+credentials, create uncontrolled provider fixtures, or use Preview resources
+as a fallback.
+
+## Provider-specific boundaries
+
+- **Neon:** inspect migration status and PostGIS without broad cleanup. Apply
+  only approved checked-in migrations; stop on drift.
+- **Authentication email:** use a controlled recipient. Retain
+  enumeration-resistant responses and never log an address or token.
+- **Private Blob:** use controlled objects and verify access remains private.
+  Do not enumerate or delete unrelated objects.
+- **Stripe:** use the existing test/sandbox Product, Price, key, and stable
+  endpoint webhook. The browser redirect is not publication authority.
+- **Jobs and limits:** invoke only the authenticated Production job endpoint
+  according to its existing schedule and retain sanitized aggregate counts.
+- **Location:** Mapbox server geocoding remains current. Google Maps is
+  conditional and must not be tested as live before its legal, schema,
+  credential, CSP, privacy, and cost gates pass.
 
 ## Result semantics
 
-Exit 0 means all configured live checks passed. Exit 1 means a check failed. Exit 2 means one or more required credentials/resources were unavailable and were explicitly reported as `BLOCKED`; it is not a passing result and does not alter a successful `pnpm verify` result.
-
-When the workspace contains local dotenv files, Vercel CLI preserves already-defined selector values instead of replacing them with downloaded Preview values. Preflight the effective child environment and explicitly set only the public `APP_ENV=preview` and `VERCEL_BENCHMARK_URL` selectors when necessary. Sensitive Preview values are intentionally unavailable to a clean `vercel env run`; provide the matching isolated non-production credentials through the operator's untracked local environment or a protected CI environment.
+Record each hosted check as `PASS`, `FAIL`, or `BLOCKED`, with sanitized
+evidence and the deployed commit/deployment ID. Any required `FAIL` or
+`BLOCKED` result stops acceptance. It does not pass because a local fake
+adapter test succeeded.
