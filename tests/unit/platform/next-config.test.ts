@@ -19,7 +19,7 @@ describe("sensitive page headers", () => {
     expect(tracingIncludes?.[routePattern]).not.toContain("./**/*");
   });
 
-  it("permits only the required Blob and Sentry connection origins", async () => {
+  it("permits only required provider connections and MapLibre workers", async () => {
     const headers = await nextConfig.headers?.();
     const securityHeaders = headers?.find((entry) => entry.source === "/(.*)");
     const csp = securityHeaders?.headers.find(
@@ -35,10 +35,19 @@ describe("sensitive page headers", () => {
       "'self'",
       "https://vercel.com",
       "https://*.ingest.sentry.io",
+      "https://tiles.openfreemap.org",
     ]);
     expect(sources).not.toContain("*");
     expect(sources).not.toContain("https:");
     expect(sources).not.toContain("https://attacker.example");
+
+    expect(csp).toContain(
+      "img-src 'self' blob: data: https://tiles.openfreemap.org",
+    );
+    expect(csp).toContain("worker-src 'self' blob:");
+    expect(csp).not.toContain("api.geoapify.com");
+    expect(csp).not.toContain("api.mapbox.com");
+    expect(csp).not.toContain("maps.googleapis.com");
   });
 
   it("keeps the remaining browser security headers intact", async () => {

@@ -4,6 +4,7 @@ import { parsePublicationSnapshot, projectionAt } from "@/modules/payments";
 
 import type {
   PublicListingCardProjection,
+  PublicMapMarkerProjection,
   PublicSearchCriteria,
   PublicSearchPage,
 } from "../domain/types";
@@ -17,6 +18,13 @@ import { resolvePublicDateInterval } from "./date-range";
 const PUBLIC_ID = /^[0-9a-f]{12}$/;
 const DEFAULT_LIMIT = 12;
 const MAXIMUM_LIMIT = 24;
+const PUBLIC_ZONE_CENTROIDS = {
+  bakersfield: {
+    longitude: -119.018_712,
+    latitude: 35.373_292,
+    label: "Bakersfield area",
+  },
+} as const;
 
 export class PublicSearchCursorError extends Error {
   constructor() {
@@ -33,6 +41,7 @@ function criteriaFingerprint(criteria: PublicSearchCriteria): string {
     to: criteria.to,
     location: criteria.location,
     sort: criteria.sort,
+    bounds: criteria.bounds,
   });
 }
 
@@ -116,13 +125,57 @@ function cardProjection(
   };
 }
 
+function markerProjection(
+  source: PublicSearchSourceRecord,
+  now: Date,
+): PublicMapMarkerProjection | null {
+  const snapshot = parsePublicationSnapshot(source.snapshot);
+  const projection = projectionAt(snapshot, now);
+  const protectedLocation = projection.address.kind !== "EXACT";
+  const zone =
+    PUBLIC_ZONE_CENTROIDS[
+      source.location.publicZone as keyof typeof PUBLIC_ZONE_CENTROIDS
+    ];
+  const coordinates =
+    protectedLocation && zone
+      ? ([zone.longitude, zone.latitude] as const)
+      : source.location.confirmationStatus === "CONFIRMED" &&
+          source.location.latitude !== null &&
+          source.location.longitude !== null
+        ? ([source.location.longitude, source.location.latitude] as const)
+        : null;
+  if (!coordinates) return null;
+  return {
+    id: source.publicId,
+    href: source.canonicalPath,
+    saleType: projection.eventType === "ESTATE_SALE" ? "estate" : "yard",
+    title: projection.title,
+    startsAt: projection.startsAt,
+    endsAt: projection.endsAt,
+    localStartsAt: projection.localStartsAt,
+    localEndsAt: projection.localEndsAt,
+    timezone: projection.timezone,
+    locationLabel: protectedLocation
+      ? (zone?.label ?? "Bakersfield area")
+      : `${projection.address.city}, ${projection.address.region}`,
+    coverPhotoUrl: projection.coverPhotoUrl,
+    geometry: { type: "Point", coordinates },
+    markerKind:
+      projection.address.kind === "EXACT"
+        ? "exact"
+        : projection.address.kind === "HIDDEN"
+          ? "hidden"
+          : "approximate",
+  };
+}
+
 export class PublicSearchService {
   constructor(private readonly repository: PublicSearchRepository) {}
 
   async search(
     criteria: PublicSearchCriteria,
     now = new Date(),
-    requestedLimit = DEFAULT_LIMIT,
+    requestedLimit = criteria.view === "map" ? 20 : DEFAULT_LIMIT,
   ): Promise<PublicSearchPage> {
     const limit = Math.min(Math.max(requestedLimit, 1), MAXIMUM_LIMIT);
     const fingerprint = criteriaFingerprint(criteria);
@@ -138,13 +191,24 @@ export class PublicSearchService {
       range: resolvePublicDateInterval(criteria, now),
       cursor: decodeCursor(criteria.cursor, fingerprint),
       limit: limit + 1,
+      bounds: criteria.view === "map" ? (criteria.bounds ?? null) : null,
     });
     const visible = rows.slice(0, limit);
     const last = visible.at(-1);
+    const items = visible.map((row) => cardProjection(row, now));
+    const markers =
+      criteria.view === "map"
+        ? visible
+            .map((row) => markerProjection(row, now))
+            .filter(
+              (marker): marker is PublicMapMarkerProjection => marker !== null,
+            )
+        : undefined;
     return {
       schema: "public-search-v1",
       criteria,
-      items: visible.map((row) => cardProjection(row, now)),
+      items,
+      ...(markers ? { markers } : {}),
       pageInfo: {
         hasNext: rows.length > limit,
         nextCursor:

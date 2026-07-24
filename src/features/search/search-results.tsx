@@ -8,6 +8,7 @@ import {
 } from "@/modules/public-search";
 
 import { ListingCard } from "./listing-card";
+import { ExploreResults } from "./explore-results";
 
 export function SearchResults({
   result,
@@ -59,43 +60,24 @@ export function SearchResults({
         <p>Soonest first</p>
       </div>
 
-      {result.criteria.view === "map" ? (
-        <section className="search-map-unavailable" aria-labelledby="map-title">
-          <span className="search-map-unavailable__icon" aria-hidden="true">
-            <Icon name="map" size={28} />
-          </span>
-          <div>
-            <p className="eyebrow">Map view</p>
-            <h2 id="map-title">The interactive map is not available yet</h2>
-            <p>
-              We&apos;re preparing a privacy-safe map. For now, continue in list
-              view; your current sale type and date filters will stay applied.
-            </p>
-            <Link
-              className="ui-button ui-button--secondary"
-              href={buildSearchHref(result.criteria, { view: "list" })}
-            >
-              Continue in list view
-            </Link>
-          </div>
-        </section>
-      ) : null}
-
       {count > 0 ? (
-        <div
-          className={`market-listing-grid ${
-            result.criteria.view === "map" ? "market-listing-grid--compact" : ""
-          }`}
-        >
-          {result.items.map((listing, index) => (
-            <ListingCard
-              key={listing.id}
-              listing={listing}
-              variant={result.criteria.view === "map" ? "compact" : "grid"}
-              priority={index === 0}
-            />
-          ))}
-        </div>
+        result.criteria.view === "map" ? (
+          <ExploreResults
+            listings={result.items}
+            markers={result.markers ?? []}
+          />
+        ) : (
+          <div className="market-listing-grid">
+            {result.items.map((listing, index) => (
+              <ListingCard
+                key={listing.id}
+                listing={listing}
+                variant="grid"
+                priority={index === 0}
+              />
+            ))}
+          </div>
+        )
       ) : (
         <section className="search-state search-state--empty">
           <span aria-hidden="true">

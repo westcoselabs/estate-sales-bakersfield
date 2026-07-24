@@ -11,6 +11,10 @@ interface PublicSearchRow {
   readonly eventType: string;
   readonly startsAt: Date;
   readonly endsAt: Date;
+  readonly latitude: number | string | null;
+  readonly longitude: number | string | null;
+  readonly confirmationStatus: "UNCONFIRMED" | "CONFIRMED";
+  readonly publicZone: string;
 }
 
 export class PrismaPublicSearchRepository implements PublicSearchRepository {
@@ -24,6 +28,17 @@ export class PrismaPublicSearchRepository implements PublicSearchRepository {
     const endsAt = Prisma.sql`(${projection} ->> 'endsAt')::timestamptz`;
     const eventType = Prisma.sql`${projection} ->> 'eventType'`;
     const address = Prisma.sql`${projection} -> 'address'`;
+    const privacyMode = Prisma.sql`publication."snapshot" ->> 'privacyMode'`;
+    const publicLongitude = Prisma.sql`
+      CASE
+        WHEN ${privacyMode} = 'EXACT_ADDRESS' THEN location."longitude"
+        ELSE -119.018712
+      END`;
+    const publicLatitude = Prisma.sql`
+      CASE
+        WHEN ${privacyMode} = 'EXACT_ADDRESS' THEN location."latitude"
+        ELSE 35.373292
+      END`;
     const limit = Math.min(Math.max(input.limit, 1), 25);
 
     const rows = await this.prisma.$queryRaw<PublicSearchRow[]>(Prisma.sql`
@@ -34,14 +49,26 @@ export class PrismaPublicSearchRepository implements PublicSearchRepository {
         ${eventType} AS "eventType",
         ${startsAt} AS "startsAt",
         ${endsAt} AS "endsAt"
+        , location."latitude" AS "latitude"
+        , location."longitude" AS "longitude"
+        , location."confirmation_status" AS "confirmationStatus"
+        , location."public_zone" AS "publicZone"
       FROM "event_publications" AS publication
       INNER JOIN "events" AS source_event ON source_event."id" = publication."event_id"
+      INNER JOIN "event_locations" AS location ON location."event_id" = source_event."id"
       WHERE source_event."canceled_at" IS NULL
         AND source_event."removed_at" IS NULL
         AND ${endsAt} > ${input.activeAfter}
         AND (${input.eventType}::text IS NULL OR ${eventType} = ${input.eventType}::text)
         AND ${address} ->> 'city' = ${input.location.city}
         AND ${address} ->> 'region' = ${input.location.region}
+        AND (
+          ${input.bounds?.west ?? null}::numeric IS NULL
+          OR (
+            ${publicLongitude} BETWEEN ${input.bounds?.west ?? null} AND ${input.bounds?.east ?? null}
+            AND ${publicLatitude} BETWEEN ${input.bounds?.south ?? null} AND ${input.bounds?.north ?? null}
+          )
+        )
         AND (
           ${input.range?.endsAt ?? null}::timestamptz IS NULL
           OR (
@@ -65,8 +92,18 @@ export class PrismaPublicSearchRepository implements PublicSearchRepository {
         throw new Error("The publication contains an unsupported sale type");
       }
       return {
-        ...row,
+        publicId: row.publicId,
+        canonicalPath: row.canonicalPath,
+        snapshot: row.snapshot,
+        startsAt: row.startsAt,
+        endsAt: row.endsAt,
         eventType: row.eventType,
+        location: {
+          latitude: row.latitude === null ? null : Number(row.latitude),
+          longitude: row.longitude === null ? null : Number(row.longitude),
+          confirmationStatus: row.confirmationStatus,
+          publicZone: row.publicZone,
+        },
       };
     });
   }

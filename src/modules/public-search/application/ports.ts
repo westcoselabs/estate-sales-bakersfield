@@ -10,6 +10,12 @@ export interface PublicSearchSourceRecord {
   readonly startsAt: Date;
   readonly endsAt: Date;
   readonly snapshot: unknown;
+  readonly location: {
+    readonly latitude: number | null;
+    readonly longitude: number | null;
+    readonly confirmationStatus: "UNCONFIRMED" | "CONFIRMED";
+    readonly publicZone: string;
+  };
 }
 
 export interface PublicSearchRepository {
@@ -26,5 +32,7 @@ export interface PublicSearchRepository {
     } | null;
     readonly cursor: PublicSearchCursor | null;
     readonly limit: number;
+    readonly bounds: PublicMapBounds | null;
   }): Promise<readonly PublicSearchSourceRecord[]>;
 }
+import type { PublicMapBounds } from "../domain/types";

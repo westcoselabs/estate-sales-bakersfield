@@ -85,10 +85,8 @@ test("keeps category hubs and map navigation in one shared search", async ({
 
   await page.goto("/search?view=map");
   await expect(
-    page.getByRole("heading", {
-      name: "The interactive map is not available yet",
-    }),
-  ).toBeVisible();
+    page.getByText("The interactive map is not available yet"),
+  ).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Map" })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -115,7 +113,7 @@ test("renders public discovery content without client JavaScript", async ({
   await context.close();
 });
 
-test("normalizes filter URLs, restores browser history, and loads no Mapbox resources in list view", async ({
+test("normalizes filter URLs, restores browser history, and loads no map provider resources in list view", async ({
   page,
 }) => {
   await page.goto("/search");
@@ -144,7 +142,7 @@ test("normalizes filter URLs, restores browser history, and loads no Mapbox reso
   );
   expect(
     resourceUrls.some((url) =>
-      /mapbox|api\.mapbox\.com|tiles\.mapbox/.test(url),
+      /mapbox|api\.mapbox\.com|tiles\.mapbox|openfreemap|map-style/.test(url),
     ),
   ).toBe(false);
 });
@@ -212,9 +210,7 @@ test("keeps the professional service path separate and explicit", async ({
   await expect(serviceLink).toHaveAttribute("rel", /noreferrer/);
 });
 
-test("serves the shared list contract and fails the map projection closed", async ({
-  request,
-}) => {
+test("serves narrow shared list and map projections", async ({ request }) => {
   const listResponse = await request.get(
     "/api/search?sale=estate&date=next-7-days",
   );
@@ -236,11 +232,13 @@ test("serves the shared list contract and fails the map projection closed", asyn
   });
 
   const response = await request.get("/api/search?projection=map");
-  expect(response.status()).toBe(503);
+  expect(response.status()).toBe(200);
   expect(response.headers()["cache-control"]).toContain("no-store");
   await expect(response.json()).resolves.toMatchObject({
     schema: "public-search-v1",
-    error: { code: "MAP_PROJECTION_UNAVAILABLE" },
+    criteria: { view: "map" },
+    items: expect.any(Array),
+    markers: expect.any(Array),
   });
 });
 
@@ -270,10 +268,14 @@ for (const width of [360, 390, 430, 768, 1280, 1440]) {
         ).toHaveCount(0);
       } else {
         await expect(
-          page.getByRole("heading", {
-            name: "The interactive map is not available yet",
-          }),
-        ).toBeVisible();
+          page.getByText("Loading the next available sale results."),
+        ).toHaveCount(0, { timeout: 15_000 });
+        const searchArea = page.getByRole("button", {
+          name: "Search this area",
+        });
+        if ((await searchArea.count()) > 0) {
+          await expect(searchArea).toBeEnabled();
+        }
       }
       await expectNoHorizontalOverflow(page);
       await expect(page.getByRole("main")).toBeVisible();

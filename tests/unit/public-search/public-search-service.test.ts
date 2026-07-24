@@ -32,6 +32,8 @@ function source(input: {
   eventType?: "ESTATE_SALE" | "YARD_SALE";
   privacyMode?: "EXACT_ADDRESS" | "APPROXIMATE_LOCATION" | "HIDDEN_UNTIL_START";
   addressKind?: "EXACT" | "APPROXIMATE";
+  latitude?: number | null;
+  longitude?: number | null;
 }): PublicSearchSourceRecord {
   const eventType = input.eventType ?? "ESTATE_SALE";
   const segment = eventType === "ESTATE_SALE" ? "estate-sales" : "yard-sales";
@@ -63,6 +65,12 @@ function source(input: {
     eventType,
     startsAt,
     endsAt,
+    location: {
+      latitude: input.latitude ?? 35.373292,
+      longitude: input.longitude ?? -119.018712,
+      confirmationStatus: "CONFIRMED",
+      publicZone: "bakersfield",
+    },
     snapshot: {
       schema: "estate-sales-publication-v1",
       privacyMode: input.privacyMode ?? "EXACT_ADDRESS",
@@ -205,6 +213,7 @@ describe("PublicSearchService", () => {
         endsAt: new Date("2026-08-04T07:00:00.000Z"),
       },
       cursor: null,
+      bounds: null,
       limit: 25,
     });
   });
@@ -296,6 +305,66 @@ describe("PublicSearchService", () => {
       city: "Bakersfield",
       region: "CA",
     });
+  });
+
+  it("returns marker IDs matching the loaded cards and protects non-exact geometry", async () => {
+    const repository = new InMemoryPublicSearchRepository([
+      source({
+        publicId: "111111111111",
+        startsAt: "2026-08-01T16:00:00.000Z",
+        latitude: 35.22,
+        longitude: -118.82,
+      }),
+      source({
+        publicId: "222222222222",
+        startsAt: "2026-08-01T17:00:00.000Z",
+        privacyMode: "APPROXIMATE_LOCATION",
+        addressKind: "APPROXIMATE",
+        latitude: 35.21,
+        longitude: -118.66666,
+      }),
+      source({
+        publicId: "333333333333",
+        startsAt: "2026-08-01T18:00:00.000Z",
+        privacyMode: "HIDDEN_UNTIL_START",
+        latitude: 35.2,
+        longitude: -118.77777,
+      }),
+    ]);
+
+    const mapPage = await new PublicSearchService(repository).search(
+      criteria({ view: "map" }),
+      now,
+    );
+    expect(mapPage.items.map(({ id }) => id)).toEqual(
+      mapPage.markers?.map(({ id }) => id),
+    );
+    expect(mapPage.markers?.[0]).toMatchObject({
+      id: "111111111111",
+      markerKind: "exact",
+      geometry: { coordinates: [-118.82, 35.22] },
+    });
+    expect(mapPage.markers?.[1]).toMatchObject({
+      id: "222222222222",
+      markerKind: "approximate",
+      locationLabel: "Bakersfield area",
+      geometry: { coordinates: [-119.018712, 35.373292] },
+    });
+    expect(mapPage.markers?.[2]).toMatchObject({
+      id: "333333333333",
+      markerKind: "hidden",
+      locationLabel: "Bakersfield area",
+      geometry: { coordinates: [-119.018712, 35.373292] },
+    });
+    const serialized = JSON.stringify(mapPage);
+    expect(serialized).not.toContain("-118.66666");
+    expect(serialized).not.toContain("-118.77777");
+
+    const listPage = await new PublicSearchService(repository).search(
+      criteria(),
+      now,
+    );
+    expect(listPage).not.toHaveProperty("markers");
   });
 
   it("rejects a snapshot whose path or type disagrees with publication authority", async () => {

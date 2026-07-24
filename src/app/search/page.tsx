@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 
 import { PublicShell } from "@/components/shells/shells";
 import { SearchControls } from "@/features/search/search-controls";
 import { SearchResults } from "@/features/search/search-results";
 import {
   createConfiguredPublicSearchService,
+  enforcePublicSearchRateLimit,
   normalizeSearchQuery,
   type PublicSearchRawQuery,
   type PublicSearchPage,
@@ -50,6 +52,10 @@ export default async function SearchPage({
   let result: PublicSearchPage | null = null;
   if (!normalized.issue) {
     try {
+      await enforcePublicSearchRateLimit(
+        await headers(),
+        normalized.criteria.view,
+      );
       result = await createConfiguredPublicSearchService().search(
         normalized.criteria,
       );

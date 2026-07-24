@@ -19,18 +19,16 @@ const defaults: PublicSearchCriteria = {
   sort: "soonest",
   view: "list",
   cursor: null,
+  bounds: null,
 };
 
 describe("public search query criteria", () => {
-  it("normalizes only supported public filters and fixed search behavior", () => {
+  it("normalizes supported public filters and rejects unsupported keys", () => {
     expect(
       normalizeSearchQuery({
         sale: "estate",
         date: "weekend",
         view: "map",
-        location: "fresno-ca",
-        sort: "price",
-        category: "antiques",
       }),
     ).toEqual({
       criteria: {
@@ -41,9 +39,26 @@ describe("public search query criteria", () => {
       },
       issue: null,
     });
+
+    expect(
+      normalizeSearchQuery({
+        sale: "estate",
+        date: "weekend",
+        view: "map",
+        location: "fresno-ca",
+        sort: "price",
+        category: "antiques",
+      }),
+    ).toEqual({
+      criteria: defaults,
+      issue: {
+        code: "INVALID_PARAMETERS",
+        message: "The search contains unsupported or repeated parameters.",
+      },
+    });
   });
 
-  it("uses the first value and falls back safely for unsupported input", () => {
+  it("rejects repeated and malformed input deterministically", () => {
     expect(
       normalizeSearchQuery({
         sale: ["yard", "estate"],
@@ -52,8 +67,11 @@ describe("public search query criteria", () => {
         cursor: "not valid!",
       }),
     ).toEqual({
-      criteria: { ...defaults, sale: "yard" },
-      issue: null,
+      criteria: defaults,
+      issue: {
+        code: "INVALID_PARAMETERS",
+        message: "The search contains unsupported or repeated parameters.",
+      },
     });
   });
 
@@ -105,6 +123,38 @@ describe("public search query criteria", () => {
       message:
         "Choose a valid start and end date. The end date cannot be before the start date.",
     });
+  });
+
+  it("accepts only useful map bounds inside the Bakersfield service area", () => {
+    expect(
+      normalizeSearchQuery({
+        view: "map",
+        bounds: "-119.20,35.20,-118.90,35.50",
+      }),
+    ).toEqual({
+      criteria: {
+        ...defaults,
+        view: "map",
+        bounds: {
+          west: -119.2,
+          south: 35.2,
+          east: -118.9,
+          north: 35.5,
+        },
+      },
+      issue: null,
+    });
+    for (const bounds of [
+      "-120,35.20,-118.90,35.50",
+      "-119.20,35.20,-118.90,36",
+      "-119.20,35.20,-119.18,35.50",
+      "-119.20,35.20,-118.90,35.21",
+      "not,bounds",
+    ]) {
+      expect(normalizeSearchQuery({ view: "map", bounds }).issue?.code).toBe(
+        "INVALID_MAP_BOUNDS",
+      );
+    }
   });
 
   it("creates canonical, shareable hrefs and resets pagination after a filter change", () => {

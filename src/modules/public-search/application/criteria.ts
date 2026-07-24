@@ -18,6 +18,21 @@ export interface NormalizedPublicSearch {
 
 const CALENDAR_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const CURSOR = /^[A-Za-z0-9_-]{8,500}$/;
+const ALLOWED_KEYS = new Set([
+  "sale",
+  "date",
+  "from",
+  "to",
+  "view",
+  "cursor",
+  "bounds",
+]);
+const SERVICE_BOUNDS = {
+  west: -119.45,
+  south: 35.05,
+  east: -118.65,
+  north: 35.75,
+} as const;
 
 function first(value: string | readonly string[] | undefined): string {
   if (typeof value === "string") return value;
@@ -62,10 +77,38 @@ function normalizedDate(value: string): PublicDateFilter {
 export function normalizeSearchQuery(
   parameters: PublicSearchQueryParameters,
 ): NormalizedPublicSearch {
+  const duplicateUrlParameter =
+    parameters instanceof URLSearchParams &&
+    [...new Set(parameters.keys())].some(
+      (key) => parameters.getAll(key).length !== 1,
+    );
   const raw =
     parameters instanceof URLSearchParams
       ? publicSearchRawQueryFromUrlSearchParams(parameters)
       : parameters;
+  const invalidKey = Object.keys(raw).some((key) => !ALLOWED_KEYS.has(key));
+  const duplicateValue = Object.values(raw).some((value) =>
+    Array.isArray(value) ? value.length !== 1 : false,
+  );
+  if (invalidKey || duplicateValue || duplicateUrlParameter) {
+    return {
+      criteria: {
+        sale: "all",
+        date: "all",
+        from: null,
+        to: null,
+        location: "bakersfield-ca",
+        sort: "soonest",
+        view: "list",
+        cursor: null,
+        bounds: null,
+      },
+      issue: {
+        code: "INVALID_PARAMETERS",
+        message: "The search contains unsupported or repeated parameters.",
+      },
+    };
+  }
   const saleValue = first(raw.sale);
   const date = normalizedDate(first(raw.date));
   const fromValue = first(raw.from);
@@ -74,6 +117,7 @@ export function normalizeSearchQuery(
   const to = isCalendarDate(toValue) ? toValue : null;
   const customRangeValid =
     date !== "custom" || Boolean(from && to && from <= to);
+  const bounds = parseMapBounds(first(raw.bounds));
 
   return {
     criteria: {
@@ -85,15 +129,41 @@ export function normalizeSearchQuery(
       sort: "soonest",
       view: first(raw.view) === "map" ? "map" : "list",
       cursor: CURSOR.test(first(raw.cursor)) ? first(raw.cursor) : null,
+      bounds: first(raw.bounds) ? bounds : null,
     },
-    issue: customRangeValid
-      ? null
-      : {
+    issue: !customRangeValid
+      ? {
           code: "INVALID_CUSTOM_RANGE",
           message:
             "Choose a valid start and end date. The end date cannot be before the start date.",
-        },
+        }
+      : first(raw.bounds) && !bounds
+        ? {
+            code: "INVALID_MAP_BOUNDS",
+            message: "Choose a larger map area within the Bakersfield region.",
+          }
+        : null,
   };
+}
+
+function parseMapBounds(value: string) {
+  if (!value) return null;
+  const values = value.split(",").map(Number);
+  if (values.length !== 4 || values.some((item) => !Number.isFinite(item))) {
+    return null;
+  }
+  const [west, south, east, north] = values as [number, number, number, number];
+  if (
+    west < SERVICE_BOUNDS.west ||
+    east > SERVICE_BOUNDS.east ||
+    south < SERVICE_BOUNDS.south ||
+    north > SERVICE_BOUNDS.north ||
+    east - west < 0.05 ||
+    north - south < 0.05
+  ) {
+    return null;
+  }
+  return { west, south, east, north };
 }
 
 export function buildSearchHref(
@@ -118,6 +188,17 @@ export function buildSearchHref(
   }
   if (merged.view === "map") parameters.set("view", "map");
   if (merged.cursor) parameters.set("cursor", merged.cursor);
+  if (merged.view === "map" && merged.bounds) {
+    parameters.set(
+      "bounds",
+      [
+        merged.bounds.west,
+        merged.bounds.south,
+        merged.bounds.east,
+        merged.bounds.north,
+      ].join(","),
+    );
+  }
   const query = parameters.toString();
   return query ? `/search?${query}` : "/search";
 }

@@ -16,6 +16,10 @@ export {
 } from "./application/public-search-service";
 export { createConfiguredPublicSearchService } from "./infrastructure/configured-public-search";
 export { PrismaPublicSearchRepository } from "./infrastructure/prisma-public-search-repository";
+export {
+  enforcePublicSearchRateLimit,
+  PublicSearchRateLimitError,
+} from "./infrastructure/public-search-rate-limit";
 export type {
   NormalizedPublicSearch,
   PublicSearchQueryParameters,
@@ -29,6 +33,7 @@ export type {
 export type {
   PublicDateFilter,
   PublicListingCardProjection,
+  PublicMapMarkerProjection,
   PublicSaleFilter,
   PublicSearchCriteria,
   PublicSearchIssue,
