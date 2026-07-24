@@ -8,7 +8,9 @@
 
 **Primary viewport:** 360-430px, progressively enhanced for tablet and desktop
 
-**Production posture:** Production is out of scope and must not be changed
+**Production posture:** This document does not authorize a Production change.
+The approved hosted review path is the existing, stable Production beta only,
+and it remains `noindex` until the public-launch gate is approved.
 
 ## Plan contract
 
@@ -48,12 +50,24 @@ documents are authoritative for the Phase 3 and Phase 4 workflows.
   cancellation, removal, schedule, and privacy rules may appear publicly.
 - List and map use one normalized filter, sort, cursor, listing, and marker
   contract.
-- The initial list response is server rendered where practical. Mapbox and
-  other heavy client code are loaded only when needed.
+- The initial list response is server rendered where practical. The conditional
+  Google Maps browser runtime and other heavy client code are loaded only when
+  needed.
 - Existing authentication, organizer, event, photo, approval, payment,
   privacy, and publication rules remain authoritative.
 - Production beta stays `noindex` until the SEO, content, inventory, privacy,
   and launch gate is explicitly approved.
+- Google Maps Platform is the intended Mapbox replacement, but implementation
+  is blocked until written Google Maps Platform or qualified legal
+  confirmation covers this estate-sale directory use case, the intended
+  provider-data lifecycle, and public display.
+- The conditionally approved launch APIs are Maps JavaScript API, Places API
+  (New), and the Maps JavaScript Geocoding Service for controlled
+  administrator fallback. Address Validation and all other Google Maps
+  Platform APIs remain deferred.
+- Mapbox remains the current server-side location provider until the legal,
+  storage, credential, privacy, and migration gates in Section 23 are
+  satisfied.
 
 ### Non-goals
 
@@ -91,18 +105,18 @@ garage-sale type, or organizer upgrades.
 
 ### Surface audit
 
-| Surface                           | Current state                                                                      | Primary UX issue                                                                                | Overhaul response                                                                          |
-| --------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `/`                               | Minimal seller-first account prompt                                                | No shopper path, search, trust content, shared navigation, or local marketplace story           | Build a mobile-first discovery homepage with search, Explore, Map, seller, and trust paths |
-| `/estate-sales` and `/yard-sales` | Placeholder hubs                                                                   | No useful editorial content or upcoming inventory                                               | Convert to category landing pages that link into filtered `/search`                        |
-| Public detail                     | Functional snapshot-based page                                                     | Weak hierarchy, raw images, generic gallery alt text, no shared shell or expired treatment      | Redesign presentation without changing snapshot authority                                  |
-| Authentication                    | Complete workflows in a large shared client file                                   | Dense generic cards, inconsistent recovery hierarchy, limited mobile state design               | Split presentation components and use one calm auth shell                                  |
-| `/dashboard`                      | Verification, onboarding, drafts, payment states, sessions, and logout on one page | Competing priorities and excessive cognitive load                                               | Separate overview, listings, profile, and account/security                                 |
-| Event builder                     | One 1,542-line client component                                                    | Five full step buttons collapse into a long mobile list; dense upload/form states               | Split by step and add compact progress, sticky actions, and recovery states                |
-| Payment                           | Correct authority and polling                                                      | Operational states are visually flat and raw                                                    | Map only real display states to consistent status panels and next actions                  |
-| Navigation                        | No shared public or application shell                                              | Users lack orientation and predictable destinations                                             | Add public, auth, dashboard, and focused-builder shells                                    |
-| CSS                               | One 562-line global stylesheet with broad element selectors                        | Brittle page composition, hard-coded values, one desktop-first breakpoint                       | Implement approved semantic tokens and component-scoped styles                             |
-| Testing                           | Strong unit/integration/provider contracts and broad desktop E2E                   | No mobile projects, visual baselines, automated accessibility, SEO crawl, or performance budget | Add deterministic viewport, visual, semantic, SEO, and performance checks                  |
+| Surface                           | Current state                                                                       | Primary UX issue                                                                                    | Overhaul response                                                                     |
+| --------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `/`                               | In-progress marketplace homepage exists in the preserved working tree               | Requires content, shared-search, mobile, accessibility, and acceptance review before promotion      | Finish one mobile-first discovery homepage without introducing a second search system |
+| `/estate-sales` and `/yard-sales` | In-progress editorial category pages link to the shared filtered search             | Require inventory/content, canonical, internal-link, and no-thin-page acceptance                    | Keep them as content landings; filters/results remain owned by `/search`              |
+| Public detail                     | Functional snapshot-based page in the shared public shell                           | Still needs photo hierarchy, authored-alt prerequisite, and an approved expired projection          | Redesign presentation without changing snapshot authority                             |
+| Authentication                    | Branded responsive auth shell preserves the complete workflows                      | The shared client form remains large and needs continued state-regression discipline                | Preserve backend behavior; extract presentation only when a focused change needs it   |
+| `/dashboard`                      | Workflow-led overview plus listings, profile, and settings routes are implemented   | Summary-query efficiency and all real recovery states still need phase acceptance                   | Preserve the shared dashboard system; add no invented analytics                       |
+| Event builder                     | Premium five-step UI exists in one large client component                           | Presentation and domain orchestration remain tightly coupled; Google location is not implemented    | Extract incrementally and gate all location-contract changes                          |
+| Payment                           | Correct authority/polling with branded workflow states                              | Must retain every delayed, failed, stale-revision, and webhook-authority recovery path              | Reuse real statuses and keep server/webhook authority                                 |
+| Navigation                        | Public, auth, dashboard, and focused-builder shells are implemented                 | In-progress public marketing changes still require responsive and semantic regression review        | Preserve the shared shells and extend them without parallel navigation systems        |
+| CSS                               | Global, foundation, and in-progress marketplace layers use approved semantic tokens | The large style layers require ownership discipline, bundle review, and incremental consolidation   | Keep tokenized layers; avoid route-specific duplication and a broad rewrite           |
+| Testing                           | Strong unit/integration/provider contracts plus responsive E2E assertions           | No complete visual baseline matrix, automated accessibility suite, SEO crawl, or performance budget | Add deterministic visual, semantic, SEO, privacy, and performance evidence            |
 
 ### Current workflow truths to preserve
 
@@ -144,11 +158,23 @@ garage-sale type, or organizer upgrades.
   do not contain dimensions. Reserve aspect ratios immediately; any snapshot or
   schema expansion for intrinsic dimensions or authored alt text is a separate
   approval.
-- There is no public collection repository, `/search` contract, browser map,
-  client Mapbox token, `robots.ts`, or `sitemap.ts`.
-- Root metadata is indexable by default. The Production beta flag currently
-  constrains Stripe configuration, but application code does not apply a
-  global beta `noindex`. Correcting this is the first indexing-safety task.
+- The current working implementation has a server-rendered `/search` list,
+  shared `public-search-v1` list contract, and an API that deliberately returns
+  `503 MAP_PROJECTION_UNAVAILABLE` for map projection. It has no browser map
+  SDK, public marker DTO, coordinate-expiry model, or public-search rate
+  limiter.
+- Current location resolution is server-only Mapbox forward geocoding.
+  `EventLocation` stores provider address fields and exact coordinates in
+  scalar and PostGIS forms without a provider-data expiry lifecycle.
+- Checked-in environment validation recognizes the existing Mapbox server
+  variables but not `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` or
+  `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`. The asserted hosted Google configuration
+  must be verified without printing values before implementation; this
+  planning document does not add or change credentials.
+- Root metadata already applies the fail-closed `prelaunchRobots` policy, and
+  sensitive routes apply `noindex,nofollow`. Preserve that behavior throughout
+  the overhaul; removing `noindex` remains a separate public-launch decision
+  and must never be inferred from `PRODUCTION_BETA_MODE` or Stripe mode.
 
 ## 2. Mockup translation matrix
 
@@ -287,14 +313,15 @@ Goal: finish and publish a valid listing with minimal uncertainty.
 
 - Existing auth, account, organizer, event, photo, approval, payment, webhook,
   job, health, and media routes retain their contracts.
-- Phase 3 creates the first bounded list slice of one application-owned public
-  search contract and a functional default `/search` destination. Phase 4
-  extends that exact contract with dates, location, cursors, and markers.
+- The current working Phase 3 implementation provides the first bounded list
+  slice of one application-owned public-search contract and a functional
+  default `/search` destination. Phase 4 extends that exact contract with
+  dates, location, cursors, and markers.
 - `GET /api/search` is the single read-only client transport for pagination and
   lazy map data. Server components call the same application service directly;
   the route handler is an adapter, never a second query path.
 - `src/app/robots.ts` and `src/app/sitemap.ts` are planned in Phase 8, with an
-  early beta/preview noindex guard in Phase 1.
+  early fail-closed Production-beta noindex guard in Phase 1.
 - No public API may return a raw publication snapshot or private event location.
 
 ## 5. Mobile and desktop navigation architecture
@@ -590,9 +617,10 @@ variants and doorway pages.
 
 ### Application-owned contract
 
-Create one `public-search` application boundary. Phase 3 implements its
-published-only sale-type/default-list slice; Phase 4 extends, rather than
-replaces, it with:
+Retain the existing `public-search` application boundary and
+`public-search-v1` list slice. When the map gates pass, Phase 4 evolves the
+transport once to `public-search-v2` while preserving the existing list fields
+and semantics. It adds:
 
 - `normalizeSearchQuery(raw, now, timezone)`
 - `searchPublishedListings(criteria, now)`
@@ -601,10 +629,16 @@ replaces, it with:
 - `PublicSearchPage` containing normalized criteria, list items, page
   information, and optional map-page data
 
-The repository selects immutable `EventPublication` rows, joined only to
-authoritative event/location fields needed for structured filters,
-cancellation/removal, schedule, and approved marker derivation. It must never
-select draft/workflow/payment state as a substitute for publication.
+The current API intentionally returns `503 MAP_PROJECTION_UNAVAILABLE` for a
+map request. Preserve that fail-closed behavior until the marker contract,
+public-zone source, provider-eligibility gate, and Google browser integration
+are all approved and implemented.
+
+The repository continues to select immutable, paid `EventPublication` rows,
+joined only to authoritative event/location fields needed for structured
+filters, cancellation/removal, schedule, and approved marker derivation. It
+must never select draft/workflow/payment state as a substitute for
+publication.
 
 The card/detail source is the publication snapshot after runtime
 `projectionAt(now)`. Raw snapshot JSON and private location records never enter
@@ -620,16 +654,28 @@ raw organizer contact data, even when the detail projection is exact.
 
 - `GET /api/search` accepts the same normalized public URL parameters plus an
   internal `projection=list|map` selector.
-- The response has `schema: "public-search-v1"`, normalized criteria, at most
-  24 list items, opaque page information, and optional `mapPage`.
+- Until the map implementation is approved, the response remains
+  `schema: "public-search-v1"`. The approved map release uses
+  `schema: "public-search-v2"` with normalized criteria, at most 24 list items,
+  opaque page information, and optional `mapPage`; it does not silently add
+  geometry to v1.
 - `projection=list` never returns marker geometry.
-- `projection=map` returns the same current cursor page plus one privacy-safe
-  marker for each item. The initial release therefore caps markers at 24,
-  cluster counts describe only that page, and `pageInfo.hasNext` communicates
-  additional matching pages.
+- After the map gate is cleared, `projection=map` returns the same current
+  cursor page and ordered list item IDs plus a separate privacy-safe marker
+  collection. A marker may exist only for an item on that page. It may be
+  omitted when no authorized public geometry is available, including stale
+  exact evidence without an approved public-zone fallback. The initial release
+  caps the list at 24, clusters describe only markers on that loaded page, and
+  `pageInfo.hasNext` communicates additional matching pages.
+- `PublicMapMarkerProjection` contains only public listing ID, canonical route,
+  sale type, title, schedule, privacy-safe public label, authorized cover URL,
+  approved public geometry, and marker kind. It never contains private address
+  fields, postal code, provider response objects, Place ID, raw publication
+  snapshots, payment state, or account data.
 - "Search this area" adds approved bounds, resets the cursor, and returns a new
-  page whose item IDs and marker IDs match. A future all-viewport aggregation
-  is a versioned contract extension, not a parallel implementation.
+  page with the same ordered list projection plus every marker that has
+  authorized public geometry. A future all-viewport aggregation is a versioned
+  contract extension, not a parallel implementation.
 - The map island requests `projection=map` only after its lazy client code
   loads. Geometry is not embedded in list-only server HTML.
 - Initial responses use `Cache-Control: no-store` so a cached payload cannot
@@ -649,17 +695,19 @@ raw organizer contact data, even when the detail projection is exact.
 | `sort`       | `soonest`                                          | `soonest`                | Other sorts require data/privacy approval                     |
 | `view`       | `list`, `map`                                      | `list`                   | Explore omits the default; Map uses `view=map`                |
 | `cursor`     | Opaque server value                                | Omitted                  | Never parsed or constructed by the client                     |
-| `bounds`     | Approved encoded bounds                            | Omitted                  | Gated with map-query privacy controls                         |
-| `radius`     | Approved bounded miles                             | Omitted                  | Gated; never imply current support                            |
+| `bounds`     | Approved encoded bounds                            | Omitted                  | Must satisfy service-envelope and minimum-zone-size rules     |
 
 Defaults are omitted from generated links. Applying filters or a view change
 pushes meaningful history. Opening/closing a sheet does not. Map panning is
 ephemeral until the user selects "Search this area"; only that action may update
 approved bounds state.
 
-Malformed public URLs normalize to safe defaults where unambiguous. Invalid
-custom dates produce an accessible inline error and do not issue a misleading
-query.
+Reject duplicate, unknown, malformed, and over-length public parameters before
+database work. Normalize only unambiguous omissions to documented defaults.
+Invalid custom dates produce an accessible inline error and do not issue a
+misleading query. Opaque cursors are bound to normalized criteria and capped
+at 500 characters. Public radius and distance filters are not part of the
+launch contract.
 
 ### Rendering and client boundaries
 
@@ -669,7 +717,12 @@ query.
   updates, and focus management.
 - `SearchMap` is dynamically imported only when map view is requested or a
   desktop split view explicitly needs it.
-- List view must not download Mapbox JS/CSS or request tiles.
+- List view must not download Google Maps JavaScript, request Google tiles, or
+  serialize marker geometry.
+- The map island loads Maps JavaScript API and `AdvancedMarkerElement` only
+  after the legal/provider and configuration gates are cleared. Google SDK
+  types stay inside browser adapters and never become public application
+  contracts.
 - A map refresh and cursor request use the same normalization and service as
   the initial server render.
 - Use an opaque deterministic cursor ordered by `(startsAt, publicId)` for
@@ -687,6 +740,9 @@ query.
 - Closing the preview returns focus to the selected marker.
 - List selection and marker selection share the same public ID; no duplicate
   listing model is allowed.
+- A card without authorized marker geometry remains a usable listing result. It
+  does not pan the map and exposes a concise accessible "Map location
+  unavailable" status rather than fabricating a point.
 
 ### Desktop interaction
 
@@ -701,29 +757,53 @@ query.
 - No results preserve and summarize the active criteria and offer Clear
   filters or a broader approved location/date.
 - Loading over 300ms uses geometry-matched card or map skeletons.
-- Failed map loading leaves the server-rendered list usable.
+- Missing/invalid key, unauthorized referrer, invalid Map ID, quota, billing,
+  Content Security Policy, script, or provider failure leaves the
+  server-rendered list usable and offers a direct switch back to list view.
 - Failed pagination leaves existing results in place and provides Retry.
 - Do not replace a public error with fabricated inventory.
+
+### Public-search abuse controls
+
+- Apply one normalized validation and abuse policy to server-rendered and API
+  requests.
+- Keep the maximum page size at 24 and custom date ranges at no more than 31
+  local calendar days.
+- Accept only approved sale type, date, locality, sort, view, cursor, and
+  bounds keys. Do not accept radius, distance, arbitrary neighborhood, or
+  free-text location at launch.
+- Bounds must remain inside the approved Bakersfield service envelope and may
+  not be narrower than the smallest approved public zone.
+- Start with 60 list requests and 20 map requests per hashed client per 60
+  seconds. Return `429` with `Retry-After`; fail closed with `503` if the
+  durable limiter is unavailable.
+- Extract the existing HMAC client-fingerprint and rate-limit infrastructure
+  into a provider-neutral platform boundary rather than importing
+  authentication internals into public search.
+- Record request category and outcome only. Never log addresses, postal codes,
+  Place IDs, coordinates, bounds precise enough to reveal a residence, or API
+  keys.
 
 ## 11. Supported filters and date behavior
 
 ### Capability matrix
 
-| Capability                 | Data exists                         | Public contract exists now | Phase 4 disposition                                        |
-| -------------------------- | ----------------------------------- | -------------------------- | ---------------------------------------------------------- |
-| Estate/yard sale type      | Yes                                 | No                         | Implement in the new shared contract                       |
-| Today/custom date overlap  | Yes                                 | No                         | Implement                                                  |
-| Weekend/next-seven presets | Derivable                           | No                         | Implement in one LA-time normalizer                        |
-| Soonest sort               | Yes                                 | No                         | Implement deterministic cursor order                       |
-| City/region                | Yes                                 | No                         | Implement initially through approved normalized localities |
-| Postal code                | Stored privately                    | No                         | Gate on privacy and product approval                       |
-| Radius/bounds              | Coordinates/PostGIS exist privately | No                         | Gate on privacy, abuse, query-plan, and marker approval    |
-| Distance sort/display      | Derivable from private data         | No                         | Defer until safe projection is approved                    |
-| Title/description keyword  | Text exists                         | No FTS contract/index      | Future prerequisite; do not ship a misleading input        |
-| Neighborhood               | No normalized field                 | No                         | Unsupported                                                |
-| Item categories/tags       | No                                  | No                         | Unsupported                                                |
-| Item price                 | No                                  | No                         | Unsupported                                                |
-| Featured                   | No                                  | No                         | Unsupported                                                |
+| Capability                 | Data exists                       | Public contract exists now | Phase 4 disposition                                        |
+| -------------------------- | --------------------------------- | -------------------------- | ---------------------------------------------------------- |
+| Estate/yard sale type      | Yes                               | Yes, `public-search-v1`    | Preserve and harden through the shared v2 transport        |
+| Today/custom date overlap  | Yes                               | Yes, `public-search-v1`    | Preserve; enforce the approved 31-day custom cap           |
+| Weekend/next-seven presets | Derivable                         | Yes, `public-search-v1`    | Preserve the Los Angeles-time normalizer and DST tests     |
+| Soonest sort               | Yes                               | Yes, `public-search-v1`    | Preserve deterministic criteria-bound cursor order         |
+| City/region                | Yes                               | Yes, one approved locality | Preserve the bounded Bakersfield locality contract         |
+| Postal code                | Stored privately                  | No                         | Defer; never expose it as a public filter                  |
+| Approved map bounds        | Future public-zone geometry       | No                         | Gate on privacy, abuse, zone, query-plan, and map approval |
+| Radius/distance            | Exact coordinates exist privately | No                         | Defer; excluded from the launch contract                   |
+| Distance sort/display      | Derivable from private data       | No                         | Defer; do not expose                                       |
+| Title/description keyword  | Text exists                       | No FTS contract/index      | Future prerequisite; do not ship a misleading input        |
+| Neighborhood               | No normalized field               | No                         | Unsupported                                                |
+| Item categories/tags       | No                                | No                         | Unsupported                                                |
+| Item price                 | No                                | No                         | Unsupported                                                |
+| Featured                   | No                                | No                         | Unsupported                                                |
 
 ### Date semantics
 
@@ -775,40 +855,173 @@ projection. Never serialize:
 - Normalized address, provider place ID/name, precision, confidence, private
   postal code, contact email/phone, payment data, or approval digest.
 
+### Conditional Google Places and pin-confirmation workflow
+
+After the provider gates are cleared, the Address and Privacy builder step
+uses this exact sequence:
+
+1. Load the Maps JavaScript Places library only on that step.
+2. Use `PlaceAutocompleteElement` with United States restriction and an
+   approved Bakersfield-area bias.
+3. Fetch only `id`, `formattedAddress`, `addressComponents`, and `location`.
+4. Display provider content transiently with required Google attribution.
+5. Show the selected point on a Google map with a non-draggable pin.
+6. Require the organizer to confirm the pin or return to address search.
+7. Save through a server-authorized application transition; never describe
+   browser input as "Google verified."
+8. Require a new selection and confirmation after any address change.
+
+The organizer enters or edits the durable structured address in
+application-owned fields before selection. Persist only those submitted values,
+using application-defined syntactic normalization such as trimming and
+country/region casing. Google `formattedAddress` and `addressComponents` may be
+shown transiently for comparison but must not silently populate or overwrite
+durable address fields. If the two representations do not describe the same
+location to the organizer, return to the application-owned fields and require a
+new selection. Organizer confirmation does not change the licensing status of
+Google content.
+
+The widget-managed autocomplete session lifecycle is preferred. A custom
+data-API dropdown is allowed only if it preserves a unique session token,
+keyboard accessibility, attribution, stale-request cancellation, and the same
+narrow field mask.
+
+If Google is unavailable, save organizer-entered address data only as an
+unconfirmed draft, allow unrelated editing, and block approval, payment, and
+publication. Never fabricate a Place ID, coordinate, or confirmation. Preserve
+an existing confirmed location during a temporary failure only until its
+permitted coordinate cache expires.
+
+### Controlled Geocoding fallback
+
+- Geocoding is only for authenticated administrators resolving imported,
+  legacy, or otherwise unresolved records. It is not an organizer or public
+  Explore fallback.
+- With the approved single browser key, call the Maps JavaScript Geocoding
+  Service interactively. Do not send the public browser key to a server REST
+  endpoint.
+- Record the resolution source, administrator, application confirmation time,
+  provider retrieval time, and expiry.
+- Do not support unattended batch geocoding or server refresh without a
+  separately approved secure server identity.
+- Arbitrary typed organizer input can never transition directly to
+  publication-ready.
+
+### Application-owned location state
+
+Separate durable first-party state from expiring provider evidence:
+
+- `EventLocation` retains only the organizer-entered application fields,
+  timezone, privacy choice, public zone, and application confirmation. Existing
+  Mapbox-normalized rows are legacy provider-derived data, not presumed
+  first-party input; require re-entry and confirmation before a future
+  publication-ready transition.
+- Confirmation states are `UNCONFIRMED`, `CONFIRMED`, and `STALE`.
+- Provider-evidence resolution sources are `ORGANIZER_PLACE_SELECTION`,
+  `ADMIN_GEOCODING`, and `LEGACY_PROVIDER`.
+- Confirmation actor/time and `publicZoneId` are application-owned.
+- A one-to-one provider-evidence record contains provider/version, Place ID,
+  resolution source, exact coordinate/PostGIS cache, retrieval time, expiry,
+  Place-ID refresh time, and resolving administrator where applicable.
+- Provider evidence and exact coordinates are nullable so a provider outage
+  can still produce a valid unconfirmed draft.
+- `PublicLocationZone` is application-owned data with stable slug, public
+  label, licensed source/version, and coarse centroid geometry.
+- Organizers using approximate or hidden privacy choose an approved public
+  zone. Never derive it by rounding, jittering, offsetting, or spatially
+  analyzing a Google coordinate.
+
+Unless written provider/legal approval grants broader rights:
+
+- Place IDs may be stored and IDs older than 12 months must be refreshed.
+- Places-derived coordinates and their PostGIS point expire and are deleted no
+  later than 30 days after retrieval.
+- Google formatted addresses and address components are transient provider
+  content, not durable application data.
+- Pin confirmation does not convert Google content into unrestricted
+  application-owned data.
+- Stale coordinate geometry is removed from spatial queries.
+- Existing Mapbox evidence is marked legacy/stale during a future migration;
+  migration never invents a Google Place ID.
+- Address, Place ID, privacy mode, or public-zone changes are material and
+  invalidate approval.
+- Refreshing evidence for the same Place ID is non-material; retrieval
+  timestamps and expiring coordinates do not enter the approval digest.
+
+The final schema and migration remain blocked until written clearance defines
+which selected Place fields may be retained and reused publicly.
+
 ### Marker rules
 
-| Runtime location state | Public text                                         | Marker behavior                                                                         |
-| ---------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Exact                  | Current allowed address projection                  | Exact point may be used only after marker-contract/privacy approval                     |
-| Approximate            | City, region, country, and approved "Near..." label | Use an approved locality/coarse point not derived by lightly rounding the private point |
-| Hidden before start    | City/region and release explanation                 | Use the same approved locality/coarse approach or an intentional regional cluster       |
-| Hidden after start     | Runtime exact projection                            | Exact point may release only from authoritative server time and approved cache behavior |
-| Expired/archive        | City/region only                                    | Never retain a residential exact marker                                                 |
+| Runtime location state | Public text                                         | Marker behavior                                                                            |
+| ---------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Exact                  | Current allowed address projection                  | Fresh exact evidence only when publication rules permit release                            |
+| Approximate            | City, region, country, and approved zone label      | Application-owned public-zone centroid for the full listing lifetime                       |
+| Hidden before start    | City/region, zone, and release explanation          | Application-owned public-zone centroid until authoritative server time permits release     |
+| Hidden after start     | Runtime exact projection                            | Fresh exact evidence only after authoritative server time permits release                  |
+| Stale exact evidence   | Keep privacy-safe list text                         | Omit exact marker and directions link; never fall back to a privately derived coarse point |
+| Ended/canceled/removed | City/region only where the public projection allows | Remove exact public geometry immediately; never retain an archived residential marker      |
 
-The coarse-marker algorithm must be documented and security reviewed. If no
-safe coarse source is approved, omit precise marker geometry and show a
-regional aggregate rather than leak location.
+Protected listings are queried and included using only their public-zone
+geometry. Result inclusion, clusters, pagination, cache keys, and counts must
+not depend on their private exact coordinate.
+
+### Public-text leak safeguard
+
+- For `APPROXIMATE_LOCATION` and pre-release `HIDDEN_UNTIL_START`, reject a
+  title or description containing the private house-number/street combination.
+- Normalize common street suffixes and unit punctuation for comparison while
+  protecting against false positives.
+- Do not echo the private address in validation messages, analytics, logs,
+  error reporting, screenshots, or test snapshots.
 
 ### Anti-triangulation requirements
 
-- Repeated bounds/radius queries can reveal a private point through result
-  inclusion changes even when coordinates are absent.
-- Security approval must cover minimum radius/bounds, coordinate coarsening,
-  inclusion behavior, rate limits, log redaction, caching, and abuse
-  monitoring.
-- Distance labels for approximate/hidden listings are absent unless computed
-  from an approved coarse point and explicitly understood as approximate.
-- Browser geolocation is opt-in, purpose-limited, and not persisted or logged
-  as a raw coordinate by default.
+- Reject map bounds narrower than the smallest approved public zone and bounds
+  outside the service envelope.
+- Do not offer radius search, distance labels, or distance sort at launch.
+- Repeated bounds, pagination, cluster counts, and result counts must remain
+  stable with respect to protected exact coordinates.
+- Browser geolocation remains deferred and is never persisted or logged by
+  default.
 
-### Mapbox boundary
+### Google eligibility, credentials, CSP, attribution, and cost
 
-- Current Mapbox integration is server-only forward geocoding. Never expose the
-  existing server token to the browser.
-- A client renderer/package, public restricted token, allowed origins,
-  environment validation, CSP changes, quotas/billing limits, and Preview
-  configuration require separate approval.
-- Map failure must not block the list or detail route.
+- Google Maps Platform implementation is a hard gate. Obtain written Google
+  Maps Platform or qualified legal confirmation covering directory use,
+  Places/Geocoding storage, public reuse, exact-marker display, PostGIS
+  caching, and the planned 30-day coordinate lifecycle.
+- Treat the non-EEA Google terms as applicable. If approval is denied or
+  materially narrower, stop and reopen provider selection.
+- Continue with only `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` and
+  `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`; this plan does not create or rotate a
+  credential. Verify presence and restrictions without printing values.
+- Restrict the browser key to approved localhost origins, the stable
+  Production-beta origin, and the future approved custom domain. Restrict
+  enabled APIs to Maps JavaScript API, Places API (New), and the Cloud Console
+  `Geocoding API` required by the Maps JavaScript Geocoding Service.
+- Do not use the public browser key for server REST calls. Verify that the Map
+  ID is a JavaScript Map ID with Advanced Markers enabled.
+- Add a route-scoped nonce Content Security Policy through Next.js `proxy.ts`
+  for `/search` and builder location routes, using only Google-documented
+  script, connect, image, style, font, frame, and worker sources. Preserve
+  static rendering for unrelated marketing pages.
+- Preserve required Google attribution and add public Terms and Privacy links.
+- Redact addresses, postal codes, coordinates, Place IDs, and API keys from
+  telemetry and error reporting.
+- Configure API quota caps and endpoint alerts plus billing alerts at 50%, 80%,
+  90%, and 100%. Document that budget alerts do not cap spending.
+
+Provider/legal review must use current primary sources, including the
+[Google Maps Platform Terms](https://cloud.google.com/maps-platform/terms),
+[Service Specific Terms](https://cloud.google.com/maps-platform/terms/maps-service-terms),
+[API key security guidance](https://developers.google.com/maps/api-security-best-practices),
+[Places Autocomplete widget guidance](https://developers.google.com/maps/documentation/javascript/place-autocomplete-new),
+[Advanced Markers guidance](https://developers.google.com/maps/documentation/javascript/advanced-markers/start),
+and
+[Google Content Security Policy guidance](https://developers.google.com/maps/documentation/javascript/content-security-policy).
+Documentation links do not substitute for the required written eligibility
+decision.
 
 ## 13. Public listing-detail plan
 
@@ -982,8 +1195,17 @@ before adding one.
 - Separate private address entry from the public privacy choice.
 - Explain Exact, Approximate, and Hidden until start in plain language before
   selection.
-- Preserve server Mapbox validation, confidence/error handling, and
+- Until the conditional Google migration is approved and implemented, preserve
+  the current server Mapbox validation, confidence/error handling, and
   schedule/location timezone agreement.
+- After the Google gates clear, use Places Autocomplete selection followed by
+  the non-draggable pin-confirmation sequence in Section 12. A typed address is
+  an unconfirmed draft, not verified provider evidence.
+- Approximate and hidden modes require an approved application-owned public
+  zone. Exact coordinates must never be used to derive that zone.
+- Show `UNCONFIRMED`, `CONFIRMED`, or `STALE` status and a direct recovery
+  action. Unconfirmed or stale locations block approval, payment, and
+  publication without blocking unrelated draft edits.
 - Show the same privacy projection that review/publication will use.
 
 ### Step 4: Photos
@@ -1060,8 +1282,10 @@ The acceptance target is WCAG 2.2 AA where applicable.
 
 - Keep public and marketing content server rendered.
 - Keep `/search` list HTML useful before hydration.
-- Dynamically import Mapbox only for map view; list view must make no Mapbox
-  script, stylesheet, token, or tile request.
+- Dynamically import Google Maps JavaScript only for map view; list view must
+  make no Google script, tile, Place, Geocoding, or marker request.
+- Load Places only on the Address and Privacy builder step. Provider failure
+  must not hydrate unrelated builder steps or public routes.
 - Split the monolithic builder/auth client components so each route hydrates
   only the interaction it needs.
 - Batch dashboard summary/status retrieval.
@@ -1091,10 +1315,11 @@ The acceptance target is WCAG 2.2 AA where applicable.
 
 ## 18. SEO metadata, canonical, sitemap, robots, structured-data, and expired-page rules
 
-### Beta and preview indexing safety
+### Production-beta indexing safety
 
-- Phase 1 must add a testable application-level robots policy for all Preview
-  deployments and the Production beta.
+- Phase 1 established a testable application-level robots policy for the stable
+  Production beta. Preserve its fail-closed handling for every deployed
+  environment path.
 - The policy is fail-closed for every deployed environment by default. Merely
   removing `PRODUCTION_BETA_MODE` or changing Stripe mode must never enable
   indexing.
@@ -1216,9 +1441,10 @@ serialization.
 - Use deterministic Test-Neon fixtures and captured email/media/fake Checkout.
 - Freeze or mask timestamps, random IDs, processing animation, and other
   nondeterministic values.
-- Do not compare live Mapbox tiles pixel-for-pixel. Use a deterministic map
-  adapter/surface for component screenshots and test live map controls and
-  markers semantically in Preview.
+- Do not compare live Google tiles pixel-for-pixel. Normal unit, integration,
+  contract, E2E, and visual tests use fake Google adapters and make no live
+  Google calls. Test live map controls and markers semantically only during an
+  explicitly approved Production-beta smoke.
 - Review intentional baseline changes with the relevant phase; never bulk
   accept unrelated differences.
 
@@ -1231,53 +1457,98 @@ serialization.
 - Cursor order is stable and duplicates/gaps are absent.
 - Approximate and hidden listings never serialize street, raw coordinate,
   provider data, or exact-distance leakage.
-- List view does not load Mapbox resources.
+- List view does not load Google scripts, tiles, Places, Geocoding, or marker
+  geometry.
+- Duplicate, unknown, malformed, over-length, out-of-envelope, and
+  too-narrow-bounds requests are rejected before database work.
+- List and map limits, cursor binding, 31-day custom-date cap, `429`
+  `Retry-After`, and fail-closed limiter behavior are deterministic.
+- Repeated bounds, cursor, pagination, and cluster queries cannot distinguish a
+  protected listing's exact point.
+- Approximate and hidden listings use only their selected application-owned
+  zone for inclusion, marker geometry, counts, clusters, and cache keys.
 
-## 20. Preview deployment and review workflow
+### Conditional Google location assertions
 
-This is a future review workflow, not authorization to deploy this planning
-branch.
+- Autocomplete requests use the minimum field set and a valid widget/session
+  lifecycle; stale selections cannot win a race.
+- Selecting a Place does not confirm a location until the organizer accepts
+  the non-draggable pin and the server authorizes the transition.
+- Address changes invalidate confirmation and require reselection.
+- A Google failure produces an unconfirmed draft and blocks approval, payment,
+  and publication without blocking unrelated draft edits.
+- Only an authenticated administrator can use interactive Geocoding fallback,
+  and its provenance is recorded.
+- Coordinate evidence expires, is purged from scalar and PostGIS forms, and is
+  never silently queried after expiry.
+- Same-Place-ID evidence refresh does not invalidate approval; a changed Place
+  ID, address, privacy mode, or public zone does.
+- Exact, approximate, hidden-before-start, hidden-after-start, stale,
+  canceled, removed, ended, and expired projections have explicit coverage.
+- Protected titles/descriptions containing the private house-number/street
+  combination are rejected without echoing the address.
+- Missing/invalid key, unauthorized referrer, invalid Map ID, quota, billing,
+  CSP, Places, Geocoding, and script-load failures all preserve the usable
+  server-rendered list.
+- HTML, RSC payloads, API responses, metadata, JSON-LD, logs, error reporting,
+  screenshots, and snapshots never leak a credential, private address, postal
+  code, Place ID, or unauthorized coordinate.
+
+## 20. Production-beta review workflow
+
+This describes the approved future hosted-review path; this planning document
+does not authorize a merge or deployment. Vercel Preview deployments,
+Preview-specific provider resources, and additional phase branches are not
+part of the workflow.
 
 1. Complete local and CI gates for the current implementation phase.
-2. Confirm the branch is not the Vercel Production branch.
-3. Create only a non-Production Preview after owner approval.
-4. Confirm `APP_ENV=preview` and isolated Preview Neon, Blob, Resend, Mapbox,
-   and Stripe test resources with matching resource markers without printing
-   secrets.
-5. Apply only checked-in migrations to Preview Neon when a separately approved
-   phase contains one. Never use `db push`.
-6. Verify Preview and beta robots/noindex behavior before visual review.
+2. Commit the phase on `feature/ui-ux-overhaul`; do not create another phase
+   branch.
+3. Stop for owner review. After explicit approval, verify that `main` can be
+   fast-forwarded to the approved commit without a merge commit or force push.
+4. Fast-forward and push `main`; allow Vercel to deploy the existing stable
+   Production-beta URL using its existing Production environment variables and
+   provider resources. Do not create or rotate provider credentials.
+5. Confirm the deployed commit and deployment are `READY`, then verify
+   `/api/health` returns HTTP 200.
+6. Verify Production-beta `noindex` and sensitive-route
+   `noindex,nofollow` behavior before visual review. Do not advertise a public
+   sitemap.
 7. Review at 360, 390, 430, 768, 1280, and 1440 where relevant.
 8. Review touch, keyboard, NVDA sample, 200% text zoom, mobile landscape,
    reduced motion/transparency, slow network, empty/error/conflict states, and
    safe-area spacing.
-9. Run the real Preview workflow appropriate to the phase with controlled
-   accounts and provider-safe data.
-10. Record sanitized screenshots, test results, unresolved issues, and the
-    owner decision.
+9. Run the phase's provider-safe smoke with controlled test data, inspect
+   Production error logs, and avoid any real payment or publication side
+   effect not explicitly approved.
+10. Record the deployed commit, deployment ID, sanitized screenshots, test
+    results, unresolved issues, and owner decision.
 
-Unavailable Preview providers are `BLOCKED`, not passing. Never use
-`--prod`, assign the public domain, promote a deployment, or configure
-Production as part of a phase review.
+An unavailable required provider or failed safety gate is `BLOCKED`, not
+passing. Production beta remains `noindex`; public indexing, a custom-domain
+launch, and live-provider changes require separate approval.
 
 ## 21. Phased implementation roadmap
 
-| Phase                                                    | Outcome                                                                                | Principal dependency                                              |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| 1. Design foundation and application shells              | Tokens, base primitives, indexing safety, and public/auth/dashboard/builder shells     | Approved DESIGN and no new UI dependency                          |
-| 2. Authentication                                        | Cohesive mobile-first auth/recovery/session presentation                               | Existing auth contracts remain unchanged                          |
-| 3. Homepage and marketing pages                          | Public story, category/marketing content, and a functional default/sale `/search` list | Approved copy/legal/service content and G3 list slice             |
-| 4. Shared search and map                                 | Extend the same list contract with dates, location, cursors, and a lazy map            | Remaining G3, privacy markers, Mapbox browser/config, query plans |
-| 5. Public listing details                                | Photo-forward, privacy-safe, canonical active/expired detail                           | Existing snapshot plus approved expired projection                |
-| 6. Organizer dashboard                                   | Workflow-led overview/listings/profile/account                                         | Batch summary DTO; no analytics                                   |
-| 7. Listing builder                                       | Five focused, recoverable mobile steps                                                 | Existing event/photo/payment contracts                            |
-| 8. SEO, accessibility, performance, and final regression | Launch-ready verification while retaining beta noindex until approval                  | Content/inventory/SEO launch gate                                 |
+| Phase                                                    | Outcome                                                                                | Principal dependency                                                          |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| 1. Design foundation and application shells              | Tokens, base primitives, indexing safety, and public/auth/dashboard/builder shells     | Approved DESIGN and no new UI dependency                                      |
+| 2. Authentication                                        | Cohesive mobile-first auth/recovery/session presentation                               | Existing auth contracts remain unchanged                                      |
+| 3. Homepage and marketing pages                          | Public story, category/marketing content, and a functional default/sale `/search` list | Approved copy/legal/service content and G3 list slice                         |
+| 4. Shared search and map                                 | Extend the list contract; add a lazy Google map only after every hard gate clears      | G3-G6, G12-G14, public zones, expiring evidence, CSP, and query plans         |
+| 5. Public listing details                                | Photo-forward, privacy-safe, canonical active/expired detail                           | Existing snapshot plus approved expired projection                            |
+| 6. Organizer dashboard                                   | Workflow-led overview/listings/profile/account                                         | Batch summary DTO; no analytics                                               |
+| 7. Listing builder                                       | Five focused steps; add Places and pin confirmation only after every hard gate clears  | Existing event/photo/payment contracts plus G12-G14 for the location workflow |
+| 8. SEO, accessibility, performance, and final regression | Launch-ready verification while retaining beta noindex until approval                  | Content/inventory/SEO launch gate                                             |
 
-No phase begins automatically. Each stops for evidence and approval.
+Phases 1 and 2 are implemented in the audited baseline; their criteria below
+remain regression requirements. Public marketing and search work present in
+the working tree is not treated as accepted merely because it exists. No
+remaining phase begins automatically, and each stops for evidence and approval.
 
 ## 22. Acceptance criteria for every phase
 
-### Phase 1: Design foundation and application shells
+### Phase 1: Design foundation and application shells (completed; regression gate)
 
 **Routes and files affected**
 
@@ -1285,7 +1556,8 @@ No phase begins automatically. Each stops for evidence and approval.
   surfaces as approved.
 - New shared primitives and shell files under `src/components/`.
 - `src/app/dashboard/layout.tsx` and focused shell boundaries as needed.
-- Robots-policy helper/tests to keep Preview and Production beta noindex.
+- Robots-policy helper/tests to keep Production beta and any legacy deployed
+  environment fail-closed `noindex`.
 
 **Components**
 
@@ -1322,16 +1594,16 @@ No phase begins automatically. Each stops for evidence and approval.
 - Keyboard reaches all shell navigation in logical order; focus is always
   visible; current page is announced.
 
-**Preview review**
+**Production-beta review**
 
-- Optional only after local/CI pass and explicit approval; verify noindex
-  before reviewing.
+- Optional only after local/CI pass and explicit approval; follow Section 20
+  and verify noindex before reviewing.
 
 **Stop condition**
 
 - Stop after token/shell/noindex evidence and owner approval. Do not start auth.
 
-### Phase 2: Authentication
+### Phase 2: Authentication (completed; regression gate)
 
 **Routes and files affected**
 
@@ -1370,10 +1642,11 @@ No phase begins automatically. Each stops for evidence and approval.
 - Labels, descriptions, errors, live regions, password control, and focus
   transitions pass manual keyboard/NVDA sampling.
 
-**Preview review**
+**Production-beta review**
 
-- Controlled recipient only; repeat registration, verification, reset, prior
-  session revocation, and safe failures.
+- After the Section 20 approval and deployment gates, use a controlled test
+  recipient to repeat registration, verification, reset, prior-session
+  revocation, and safe failures.
 
 **Stop condition**
 
@@ -1431,10 +1704,10 @@ No phase begins automatically. Each stops for evidence and approval.
 - Logical headings/landmarks, descriptive links, external destination clarity,
   keyboard order, and contrast pass.
 
-**Preview review**
+**Production-beta review**
 
-- Review every claim, legal page, empty inventory state, and service CTA with
-  the owner.
+- After the Section 20 approval and deployment gates, review every claim, legal
+  page, empty inventory state, and service CTA with the owner.
 
 **Stop condition**
 
@@ -1449,10 +1722,12 @@ No phase begins automatically. Each stops for evidence and approval.
 
 - Extend the Phase 3 `/search` page/loading/error surfaces.
 - Extend the Phase 3 public-search application/repository boundary.
-- Add the exact `GET /api/search` adapter described in Section 10.
+- Extend the existing `GET /api/search` adapter with the gated map projection
+  described in Section 10.
 - Search/list/filter/date/map components.
-- `next.config.ts` and environment parsing only if separately approved for the
-  browser map.
+- Provider-neutral location contracts, future forward-only migration,
+  public-zone seed source, expiring-evidence cleanup, route-scoped CSP, and
+  environment parsing only after separate approval.
 
 **Components**
 
@@ -1463,17 +1738,22 @@ No phase begins automatically. Each stops for evidence and approval.
 
 - Approved normalized query/response/cursor contract.
 - Published-only repository query and representative query plans.
-- Privacy-approved exact/coarse marker algorithm and anti-triangulation rules.
-- Approved browser map library, restricted token, origins, CSP, quotas, and
-  Preview configuration.
-- Any schema/index change is a separate prerequisite, not implicit.
+- Approved application-owned public zones, marker privacy, exact release,
+  evidence expiry, anti-triangulation, and public-text leak rules.
+- Written Google/provider eligibility; approved Maps JavaScript/Places terms;
+  restricted browser key and Map ID; allowed origins; route-scoped CSP;
+  attribution; quotas, billing alerts, and Production-beta configuration.
+- Approved forward-only schema migration separating first-party location state
+  from expiring provider evidence. No schema/index change is implicit.
 
 **Tests required**
 
 - URL/date/cursor unit tests; published-only integration tests; shared
   list/marker contract; privacy non-leakage; list/map/back/filter E2E; SSR HTML;
-  map failure; no-results; response-schema/version and page-cap tests; proof
-  list responses contain no geometry and list view loads no Mapbox.
+  map/provider/CSP/quota failure; no-results; response-schema/version, abuse,
+  bounds, cursor, and page-cap tests; coordinate-expiry and public-zone tests;
+  proof list responses contain no geometry and list view loads no Google
+  resources. Use fake adapters for automated tests.
 
 **Mobile acceptance**
 
@@ -1490,16 +1770,20 @@ No phase begins automatically. Each stops for evidence and approval.
 - Results summary/live changes are controlled; map has a list alternative;
   keyboard can select controls/markers and escape previews; focus returns.
 
-**Preview review**
+**Production-beta review**
 
-- Use isolated Preview Mapbox and deterministic fixtures; inspect token/network
-  exposure, safe markers, bounds behavior, query timing, and screenshots.
+- Only after every hard gate and the Section 20 deployment approval, use
+  controlled provider-safe fixtures; inspect key restrictions without printing
+  values, network exposure, attribution, safe markers, bounds behavior, query
+  timing, Google failure fallback, error logs, and screenshots.
 
 **Stop condition**
 
-- If any search-contract, privacy, dependency, provider, CSP, or query-plan gate
-  is unapproved, stop before map implementation. Otherwise stop after the
-  shared search review; do not begin detail redesign.
+- The date/list/cursor extension may be reviewed independently. If any
+  provider-eligibility, storage, credential, migration, public-zone, privacy,
+  dependency, CSP, abuse, cost, or query-plan gate is unapproved, retain
+  `MAP_PROJECTION_UNAVAILABLE` and stop before map implementation. Otherwise
+  stop after the shared search review; do not begin detail redesign.
 
 ### Phase 5: Public listing details
 
@@ -1542,10 +1826,11 @@ No phase begins automatically. Each stops for evidence and approval.
 - Privacy state is textual, images have accurate available alternatives,
   breadcrumbs/heading order pass, and gallery is keyboard usable.
 
-**Preview review**
+**Production-beta review**
 
-- Review controlled listings in every privacy state and a simulated expired
-  state without exposing private addresses.
+- After the Section 20 approval and deployment gates, review controlled
+  listings in every privacy state and a simulated expired state without
+  exposing private addresses.
 
 **Stop condition**
 
@@ -1594,10 +1879,11 @@ No phase begins automatically. Each stops for evidence and approval.
 - Current navigation, status, action priority, table/card semantics, and
   keyboard order pass.
 
-**Preview review**
+**Production-beta review**
 
-- Review controlled accounts across restricted, unverified, incomplete,
-  draft, payment, blocked, and published states.
+- After the Section 20 approval and deployment gates, review controlled
+  accounts across restricted, unverified, incomplete, draft, payment, blocked,
+  and published states.
 
 **Stop condition**
 
@@ -1621,8 +1907,10 @@ No phase begins automatically. Each stops for evidence and approval.
 **Backend/data dependencies**
 
 - Existing event/photo/location/approval/payment APIs and `expectedVersion`.
-- No autosave, provider, schema, payment, or publication rule change is
-  assumed.
+- No autosave, payment, or publication rule change is assumed.
+- Places selection, pin confirmation, unconfirmed/stale states, provider
+  evidence, and public zones are a separately gated location-domain migration;
+  retain current Mapbox behavior until G12-G14 are all satisfied.
 
 **Tests required**
 
@@ -1630,6 +1918,10 @@ No phase begins automatically. Each stops for evidence and approval.
 - Mobile step layouts, sticky clearance, conflict/error focus, upload
   retry/processing, keyboard ordering, cover gating, approved-edit
   invalidation, offline/timeout recovery, and all payment states.
+- When the location migration is approved: autocomplete/session/field-mask
+  behavior, pin confirmation, reselection, provider failure, unconfirmed/stale
+  blocking, controlled admin Geocoding, evidence expiry, and address-leak
+  safeguards.
 
 **Mobile acceptance**
 
@@ -1647,9 +1939,10 @@ No phase begins automatically. Each stops for evidence and approval.
 - Field errors, progress, upload updates, photo ordering, dialogs, sticky
   actions, and payment polling announcements pass keyboard/NVDA sampling.
 
-**Preview review**
+**Production-beta review**
 
-- Repeat the complete current Preview workflow with controlled Mapbox, Blob,
+- After the Section 20 approval and deployment gates, repeat the complete
+  builder workflow with controlled provider-safe location data, existing Blob,
   Stripe test, and publication states.
 
 **Stop condition**
@@ -1680,7 +1973,7 @@ No phase begins automatically. Each stops for evidence and approval.
 
 - Full repository verification; metadata/robots/sitemap/structured-data;
   visual suite; broken-link crawl; keyboard/NVDA/zoom/landscape/reduced settings;
-  performance budgets; provider-safe Preview regression.
+  performance budgets; provider-safe Production-beta regression.
 
 **Mobile acceptance**
 
@@ -1697,10 +1990,11 @@ No phase begins automatically. Each stops for evidence and approval.
 - WCAG 2.2 AA checklist is complete with documented manual evidence and no
   unresolved critical/serious issue.
 
-**Preview review**
+**Production-beta review**
 
-- Run the complete non-Production workflow and retain sanitized evidence.
-- Confirm beta/Preview noindex before and after all tests.
+- After the Section 20 approval and deployment gates, run the complete stable
+  Production-beta workflow and retain sanitized evidence.
+- Confirm Production-beta noindex before and after all tests.
 
 **Stop condition**
 
@@ -1711,19 +2005,22 @@ No phase begins automatically. Each stops for evidence and approval.
 
 ### Approval gates
 
-| Gate                        | Required decision                                                                                                           | Blocks                                            |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| G1: Indexing safety         | Approve server-side beta/Preview robots policy and tests                                                                    | Any public visual rollout                         |
-| G2: Content/legal           | Approve marketing claims, legal pages, FAQ, contact details, and service CTA                                                | Phase 3 acceptance                                |
-| G3: Public search contract  | Approve the Phase 3 published-list/card slice, then query, transport, DTOs, cursor, filters, abuse boundary, and versioning | Phase 3 inventory/search links and Phase 4        |
-| G4: Marker privacy/security | Approve coarse-point method, exact release, anti-triangulation, distance, geolocation, caching, logging, and rate limits    | Map and spatial filters                           |
-| G5: Map dependency/provider | Approve browser renderer/package, restricted token, origins, CSP, quota/billing, and Preview config                         | Interactive map                                   |
-| G6: Database/query plan     | Approve representative query plans and any schema/index migration                                                           | Search launch if current indexes are insufficient |
-| G7: Dashboard summary       | Approve the batch organizer-listing/payment summary DTO and bounded repository strategy                                     | Phase 6                                           |
-| G8: Expired projection      | Approve archive fields, address removal, media placeholder/retention, cache behavior, and EventCompleted metadata           | Phase 5/8                                         |
-| G9: Optional tooling        | Approve axe, Lighthouse CI, bundle analyzer, RUM, or other new dependency/provider                                          | Only the related automated check                  |
-| G10: Preview                | Approve non-Production deployment and isolated resources                                                                    | Hosted phase review                               |
-| G11: Public launch/indexing | Approve inventory, content, privacy, SEO, accessibility, performance, robots, sitemap, and live-mode posture                | Removing noindex, merge/promotion/deploy          |
+| Gate                                 | Required decision                                                                                                                 | Blocks                                               |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| G1: Indexing safety                  | Approve fail-closed Production-beta robots policy and tests                                                                       | Any public visual rollout                            |
+| G2: Content/legal                    | Approve marketing claims, legal pages, FAQ, contact details, service CTA, and Google-required public terms/privacy links          | Phase 3 acceptance and Google surfaces               |
+| G3: Public search contract           | Approve list/map transport, DTOs, cursor, filters, validation, abuse boundary, and versioning                                     | Phase 4                                              |
+| G4: Marker privacy/security          | Approve public zones, exact release, evidence expiry, anti-triangulation, text-leak protection, logging, caching, and rate limits | Map and spatial filters                              |
+| G5: Google browser configuration     | Approve Maps JavaScript/Places integration, key/Map ID restrictions, origins, CSP, attribution, quota caps, and billing alerts    | Any Google browser request                           |
+| G6: Database/query plan              | Approve representative query plans and every schema/index migration                                                               | Search/map launch if current storage is insufficient |
+| G7: Dashboard summary                | Approve the batch organizer-listing/payment summary DTO and bounded repository strategy                                           | Phase 6                                              |
+| G8: Expired projection               | Approve archive fields, address removal, media retention, cache behavior, and EventCompleted metadata                             | Phase 5/8                                            |
+| G9: Optional tooling                 | Approve axe, Lighthouse CI, bundle analyzer, RUM, or another dependency/provider                                                  | Only the related automated check                     |
+| G10: Production-beta hosted review   | Approve fast-forwarding `main` and using the stable Production-beta deployment for a controlled hosted smoke                      | Hosted phase review                                  |
+| G11: Public launch/indexing          | Approve inventory, content, privacy, SEO, accessibility, performance, robots, sitemap, and live-mode posture                      | Removing noindex and public launch                   |
+| G12: Google provider eligibility     | Obtain written Google Maps Platform or qualified legal confirmation for directory use, storage, reuse, exact display, and caching | All Google implementation                            |
+| G13: Provider-data lifecycle         | Approve durable first-party fields, transient Google fields, 30-day coordinate purge, Place-ID refresh, and legacy handling       | Location schema, organizer Places, and map           |
+| G14: Location migration and rollback | Approve forward-only schema/data migration, application-owned zone source, cleanup job, legacy Mapbox treatment, and rollback     | Replacing current Mapbox runtime                     |
 
 ### Primary risks and mitigations
 
@@ -1733,7 +2030,10 @@ No phase begins automatically. Each stops for evidence and approval.
 | Separate list/map logic drifts                                     | Conflicting inventory and filters   | One normalizer, service, cursor, projection, and contract                                         |
 | Raw publication snapshot is serialized                             | Hidden exact address exposure       | Parse and project server-side; contract tests reject private keys                                 |
 | Production beta is indexed early                                   | Thin/incomplete pages enter search  | Implement G1 first; launch change remains separate                                                |
-| Map bundle harms mobile list performance                           | Poor 90% mobile experience          | Lazy import; assert no Mapbox network in list view                                                |
+| Google directory use is not contractually eligible                 | Suspension, billing, or legal risk  | G12 written confirmation is a hard stop; reopen provider selection if denied                      |
+| Google provider data is retained beyond approved terms             | Compliance and privacy exposure     | Separate expiring evidence, purge coordinates/PostGIS by 30 days, and test stale removal          |
+| One public browser key is used from a server                       | Unrestrictable credential exposure  | Keep it website-restricted; use JavaScript services only; require separate approval for server ID |
+| Map bundle harms mobile list performance                           | Poor 90% mobile experience          | Lazy import; assert no Google network or geometry in list view                                    |
 | Dashboard redesign invents product data                            | Misleading organizer experience     | Real next-action/status DTOs only                                                                 |
 | Monolithic refactor changes business behavior                      | Auth/payment/publication regression | Incremental presentation extraction and existing integration/E2E suites                           |
 | Expired page retains street address                                | Long-lived residential disclosure   | City/region archive projection and exact-marker removal                                           |
@@ -1742,20 +2042,21 @@ No phase begins automatically. Each stops for evidence and approval.
 | New dependency expands security/maintenance surface                | Unreviewed risk                     | Dependency approval and no-library default                                                        |
 | Thin location pages become doorway pages                           | SEO quality penalty and poor trust  | Inventory/content threshold and owner review                                                      |
 
-### Recommended first implementation task
+### Recommended next implementation prerequisite
 
-Begin with a narrowly scoped Phase 1 safety/foundation slice:
+Do not begin Google implementation. First:
 
-1. Add an application-level, server-only Preview and Production-beta noindex
-   policy with focused tests. Keep it fail-closed even if the beta flag is
-   absent.
-2. Implement the approved root color, typography, spacing, focus, motion, and
-   safe-area tokens without changing route behavior.
-3. Add the skip-link and minimal shell landmarks.
-4. Run existing verification and capture 360/390/430/768/1280 baseline
-   screenshots.
-5. Stop for review before redesigning authentication or any product page.
+1. Obtain and archive the G12 written provider-eligibility decision.
+2. Approve G13's exact field-retention, 30-day coordinate/PostGIS purge, and
+   Place-ID refresh rules.
+3. Approve the licensed Bakersfield `PublicLocationZone` source and G14
+   forward-only migration/rollback posture.
+4. Verify the asserted browser key and Map ID restrictions without printing
+   values; approve the route-scoped CSP, attribution, quotas, and billing
+   alerts.
+5. Only then plan the smallest implementation commit: provider-neutral
+   location-domain contracts, fake adapters, migration, and expiry tests.
 
-This sequence removes the immediate indexing risk and establishes the smallest
-shared foundation for every later phase while leaving all backend workflows
-untouched.
+If any provider gate is denied or materially narrower than this plan, keep the
+current Mapbox runtime and `MAP_PROJECTION_UNAVAILABLE`, stop, and reopen
+provider selection.
