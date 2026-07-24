@@ -67,9 +67,10 @@ as a fallback.
   endpoint webhook. The browser redirect is not publication authority.
 - **Jobs and limits:** invoke only the authenticated Production job endpoint
   according to its existing schedule and retain sanitized aggregate counts.
-- **Location:** Mapbox server geocoding remains current. Google Maps is
-  conditional and must not be tested as live before its legal, schema,
-  credential, CSP, privacy, and cost gates pass.
+- **Location:** verify server-mediated Geoapify autocomplete, controlled admin
+  resolution, MapLibre/OpenFreeMap maps, PostGIS persistence, visible
+  attribution, and privacy-safe public zones. Never print queries, addresses,
+  coordinates, identifiers, or keys.
 
 ## Result semantics
 

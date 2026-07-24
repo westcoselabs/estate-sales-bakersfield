@@ -32,4 +32,10 @@ Then run `pnpm db:test:reset`. The command re-runs every guard, refuses every no
 
 ## Provider confinement
 
-Automated commands strip real Blob, Resend, Mapbox, Sentry, all public build variables, all inherited Preview/Production-prefixed values, and all Vercel-scoped values. Playwright rebuilds the production application under that isolated Test environment, refuses to reuse an existing server, and uses Test Neon for real atomic rate limits, capture email, deterministic geocoding, and signed filesystem media inside `.tmp`. No real email or provider object is created.
+Automated commands strip real Blob, Resend, Geoapify, Sentry, inherited
+Preview/Production-prefixed values, and Vercel-scoped values.
+Playwright rebuilds the production application under that isolated Test
+environment, refuses to reuse an existing server, and uses Test Neon for real
+atomic rate limits, capture email, deterministic location suggestions, an
+inline source-free map style, and signed filesystem media inside `.tmp`. No
+real email, location, map, or payment-provider request is made.

@@ -1,6 +1,6 @@
 # Google Maps Location and Explore Handoff
 
-**Status:** Planning only; Google implementation is blocked
+**Status:** Historical; superseded on 2026-07-24
 
 **Branch:** `feature/ui-ux-overhaul`
 
@@ -8,13 +8,16 @@
 plus the preserved uncommitted public marketplace/search work audited on
 2026-07-23
 
-**Superseding decision:** [ADR 012](../adr/012-google-maps-places-and-explore-location.md)
+**Historical decision:** [ADR 012](../adr/012-google-maps-places-and-explore-location.md)
+
+**Current authority:** [ADR 013](../adr/013-maplibre-openfreemap-geoapify-location.md)
+and the [active location/Explore handoff](./location-explore-handoff.md)
 
 **Still-live decision:** [ADR 008](../adr/008-private-location-time-and-projections.md)
 
 ## 1. Purpose and authority
 
-This handoff defines the conditional migration from the current Mapbox
+This preserved historical handoff defined the conditional migration from the then-current Mapbox
 location resolver to Google Maps Platform and the privacy-safe completion of
 the shared `/search` map. It is not permission to implement, migrate data,
 change provider resources, edit environment values, deploy, or enable

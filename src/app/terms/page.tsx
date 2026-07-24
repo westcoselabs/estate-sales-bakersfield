@@ -109,6 +109,12 @@ export default function TermsPage() {
               projection and must not substitute private draft, account,
               payment, or exact-coordinate data.
             </p>
+            <p>
+              Address selection uses server-mediated Geoapify results. Confirmed
+              structured addresses and coordinates may be stored permanently in
+              Neon/PostGIS. Interactive maps use MapLibre GL JS, OpenFreeMap,
+              and OpenStreetMap-derived map data with visible attribution.
+            </p>
           </section>
 
           <section aria-labelledby="terms-status-title">

@@ -88,6 +88,12 @@ export default function PrivacyPage() {
               postal code, or exact-coordinate data. A hidden-until-start
               location remains hidden until the authoritative sale start time.
             </p>
+            <p>
+              Address suggestions are requested from Geoapify through the Estate
+              Sales Bakersfield server. Confirmed structured addresses and
+              coordinates are stored in Neon/PostGIS for the listing.
+              Unconfirmed draft text does not receive fabricated coordinates.
+            </p>
           </section>
 
           <section aria-labelledby="privacy-provider-title">
@@ -98,6 +104,12 @@ export default function PrivacyPage() {
               mapping, hosting, and data persistence. This summary does not
               expand those provider contracts or authorize new uses of personal
               information.
+            </p>
+            <p>
+              Interactive maps use MapLibre GL JS and an OpenFreeMap style. Map
+              data includes OpenStreetMap contributors. Address autocomplete and
+              controlled geocoding use Geoapify; the browser does not receive
+              the private Geoapify credential.
             </p>
           </section>
 

@@ -4,24 +4,22 @@ The source accepts exactly four `APP_ENV` values: `local`, `test`, `preview`,
 and `production`. That compatibility model is broader than the approved
 operating topology.
 
-| Environment | Current approved use                 | Database and provider posture                                                                                               |
-| ----------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| Local       | Unhosted manual development          | Non-Production data; capture or fake providers by default; never inherit Production credentials                             |
-| Test        | Automated integration and Playwright | Persistent isolated Test Neon, scoped PostgreSQL limits, capture email, fixture media/location, deterministic Stripe        |
-| Preview     | Legacy compatibility only            | Do not deploy, provision Preview-specific providers, or create Preview webhooks                                             |
-| Production  | The only hosted beta                 | Production-scoped Neon, Blob, email, current Mapbox location provider, and the existing Stripe test-mode beta configuration |
+| Environment | Current approved use                 | Database and provider posture                                                                                            |
+| ----------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Local       | Unhosted manual development          | Non-Production data; capture or fake providers by default; never inherit Production credentials                          |
+| Test        | Automated integration and Playwright | Persistent isolated Test Neon, scoped PostgreSQL limits, capture email, fixture media/location, deterministic Stripe     |
+| Preview     | Legacy compatibility only            | Do not deploy, provision Preview-specific providers, or create Preview webhooks                                          |
+| Production  | The only hosted beta                 | Production-scoped Neon/PostGIS, Blob, email, Geoapify, OpenFreeMap, and the existing Stripe test-mode beta configuration |
 
-Only `main` deploys automatically to Vercel Production. Work on
-`feature/ui-ux-overhaul` remains local until it passes the complete local
-verification suite and is explicitly approved for a fast-forward promotion.
-Do not force-push, create a merge commit, or use a Vercel Preview as an
-intermediate review environment.
+Only `main` deploys automatically to Vercel Production. Work locally on
+`main`, run the complete verification suite, and push without force. Do not
+use a Vercel Preview as an intermediate review environment.
 
 ## Current environment validation
 
-The checked-in validator still recognizes `DATABASE_RESOURCE_ENV`,
-`BLOB_RESOURCE_ENV`, `RESEND_RESOURCE_ENV`, `MAPBOX_RESOURCE_ENV`, and
-`STRIPE_RESOURCE_ENV`. A marker must match the application environment
+The checked-in validator recognizes `DATABASE_RESOURCE_ENV`,
+`BLOB_RESOURCE_ENV`, `RESEND_RESOURCE_ENV`, and `STRIPE_RESOURCE_ENV`. A
+marker must match the application environment
 consuming the credential. The marker is a guard against accidental scope
 mixing, not cryptographic proof of the vendor resource; operators must still
 verify resource identity without printing values.
@@ -58,22 +56,17 @@ The Production beta remains `noindex`. Removing the beta flag, enabling live
 Stripe, advertising a sitemap, or enabling public indexing requires a
 separate reviewed launch.
 
-## Conditional Google Maps transition
+## Location and map configuration
 
-Mapbox server-side forward geocoding remains current runtime behavior. Google
-Maps Platform is not live and its asserted public variables are not yet part
-of the checked-in environment schema. Do not add Google credentials, print
-values, remove Mapbox variables, or change provider resources until:
+Production requires:
 
-1. Written Google Maps Platform or qualified legal confirmation covers the
-   estate-sale directory use case, selected Place data, coordinate caching,
-   PostGIS use, public markers, and attribution.
-2. The approved schema and migration define first-party address data,
-   expiring provider evidence, and application-owned public zones.
-3. The single browser key can be restricted to approved localhost and
-   Production origins and only the approved APIs.
-4. The Maps JavaScript Map ID supports Advanced Markers.
-5. CSP, redaction, quotas, billing alerts, and failure behavior pass review.
+```text
+GEOAPIFY_API_KEY=<private server-only value>
+NEXT_PUBLIC_MAP_STYLE_URL=https://tiles.openfreemap.org/styles/liberty
+```
 
-Until then, do not treat `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` or
-`NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` as evidence that Google Maps is enabled.
+The Geoapify key must never appear in HTML, RSC data, browser bundles, logs,
+errors, screenshots, or snapshots. The map-style URL is deliberately public.
+Do not add Google variables. Deterministic Test configuration omits Geoapify
+and uses `https://map-style.test.invalid/fixture`, which performs no map
+provider request.

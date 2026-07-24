@@ -12,8 +12,7 @@ the project's only hosted review environment.
 
 ## Active branch and environment workflow
 
-- `feature/ui-ux-overhaul` is the ongoing local integration branch. It does not
-  deploy automatically.
+- Local implementation work is performed on `main`.
 - `main` is the only branch allowed to deploy automatically to the stable
   Vercel Production beta.
 - Local development and automated tests must use local or isolated Test
@@ -56,17 +55,18 @@ as passing. The repository's older Preview-only live-provider command is not
 the active hosted workflow; its retained behavior is documented in
 [Live-provider verification](./docs/operations/live-verification.md).
 
-## Location provider transition
+## Location and Explore providers
 
-Mapbox server-side forward geocoding remains the current runtime. Google Maps
-Platform is only a conditionally accepted replacement and is not live. No
-Google migration, new credential, schema change, or browser map may begin until
-written Google Maps Platform or qualified legal confirmation covers this
-directory use case and the proposed storage and public-display behavior.
+MapLibre GL JS renders organizer confirmation and public Explore maps.
+OpenFreeMap supplies the launch map style and tiles. Geoapify supplies
+server-mediated address autocomplete and controlled administrator geocoding.
+Confirmed structured addresses and coordinates are stored permanently in
+Neon/PostGIS.
 
-The conditional architecture and approval gates are documented in
-[ADR 012](./docs/adr/012-google-maps-places-and-explore-location.md) and the
-[Google Maps location handoff](./docs/ui-ux/google-maps-location-explore-handoff.md).
+The active architecture is documented in
+[ADR 013](./docs/adr/013-maplibre-openfreemap-geoapify-location.md) and the
+[location/Explore handoff](./docs/ui-ux/location-explore-handoff.md). The
+earlier Mapbox and conditional Google decisions remain as historical ADRs.
 
 ## Architecture
 

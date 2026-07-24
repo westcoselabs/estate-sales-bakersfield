@@ -1,15 +1,12 @@
 # Production-Beta Verification
 
-Use this checklist only after the complete local suite passes and an approved
-commit is fast-forwarded to `main`. The stable Vercel Production deployment is
-the project's only hosted beta.
+Use this checklist only after the complete local suite passes on `main`. The
+stable Vercel Production deployment is the project's only hosted beta.
 
 ## Safety gate
 
-1. Confirm the intended commit passed `pnpm verify` on
-   `feature/ui-ux-overhaul`.
-2. Confirm promotion to `main` is a fast-forward requiring neither a force
-   push nor a merge commit.
+1. Confirm the intended `main` commit passed `pnpm verify`.
+2. Require an ordinary push without force.
 3. Confirm `vercel.json` permits automatic Git deployment only for `main`.
 4. Confirm the target is exactly
    `https://estate-sales-bakersfield.vercel.app` and no Vercel Preview or
@@ -63,8 +60,9 @@ schedule and retain only sanitized aggregate evidence.
 Use only controlled beta data:
 
 1. Create and resume a draft; save details and schedule.
-2. Validate a Bakersfield address through the deployed location provider and
-   verify exact, approximate, and hidden privacy behavior.
+2. Select a structured Bakersfield address through the deployed application
+   autocomplete endpoint, confirm the non-draggable MapLibre pin, and verify
+   permanent PostGIS coordinates plus exact, approximate, and hidden privacy.
 3. Upload and sanitize controlled photos; select, reorder, and remove them;
    select a ready cover.
 4. Compare preview and publication, accept terms, approve, edit material
@@ -100,19 +98,22 @@ Capture deterministic screenshots without private or credential-bearing data.
 
 ## Location and map expectation
 
-Test the deployed commit's actual behavior. Mapbox server-side forward
-geocoding remains current until the separately approved Google migration.
-
-Google Maps is not live merely because external variables may exist. Before
-the transition, do not expect Google scripts, Places Autocomplete, Advanced
-Markers, or tiles. Preserve intentional `MAP_PROJECTION_UNAVAILABLE` behavior
-and ensure list results remain usable.
-
-After the legal, storage, schema, credential, CSP, privacy, and cost gates pass
-and a later implementation is approved, extend this checklist with Places
-selection and pin confirmation, public-zone markers, expiring coordinates,
-list-view network isolation, provider failures, attribution, redaction,
-anti-triangulation, and rate-limit checks.
+- Confirm the browser calls `/api/locations/autocomplete` and never
+  `api.geoapify.com`.
+- Confirm the private Geoapify key does not appear in HTML, RSC payloads,
+  scripts, logs, errors, or screenshots.
+- Confirm selecting a suggestion shows structured review, a MapLibre pin, and
+  visible attribution.
+- Confirm changing the address clears confirmation.
+- Confirm provider failure saves an unconfirmed draft, preserves unrelated
+  builder work, and blocks approval/payment/publication.
+- Confirm list view requests no OpenFreeMap style/tile and receives no marker
+  geometry.
+- Confirm map view has the same loaded listing IDs, loaded-page clusters,
+  selected state, a usable preview, and explicit bounded **Search this area**.
+- Confirm exact, approximate, and hidden marker transitions. Repeated bounds
+  must not reveal or depend on protected private coordinates.
+- Confirm map failure leaves server-rendered results usable.
 
 ## Result and stop condition
 
@@ -121,5 +122,5 @@ evidence. `PASS` requires hosted behavior; `BLOCKED` is not a pass.
 
 Stop after reporting the deployed commit, deployment ID, health result,
 hosted checks, screenshots, logs reviewed, and accessibility findings. Do not
-begin another milestone, enable indexing, switch to live Stripe, or begin the
-Google Maps implementation.
+begin another milestone, enable indexing, switch to live Stripe, or begin
+public launch work.
