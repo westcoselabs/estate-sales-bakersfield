@@ -24,8 +24,8 @@ importers:
         specifier: 7.8.0
         version: 7.8.0
       '@prisma/client':
-        specifier: 7.8.0
-        version: 7.8.0(prisma@7.8.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(magicast@0.5.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(typescript@5.9.3)
+        specifier: 7.9.0
+        version: 7.9.0(prisma@7.8.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(magicast@0.5.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(typescript@5.9.3)
       '@sentry/nextjs':
         specifier: 10.66.0
         version: 10.66.0(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(next@16.2.11(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(@types/node@24.13.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)(webpack@5.108.4(esbuild@0.28.1))
@@ -873,11 +873,11 @@ packages:
   '@prisma/adapter-neon@7.8.0':
     resolution: {integrity: sha512-9MoOjRuY53sQNyji87u1NivsK0tIacoUE3PqTxdG95b7ORn1pzwribH2z83j4Vh3eb9nQ/UC+MTfVW7jCFnXlA==}
 
-  '@prisma/client-runtime-utils@7.8.0':
-    resolution: {integrity: sha512-5NQZztQ0oY/ADFkmd9gPuweH5A1/CCY8YQPorLLO0Mu6a87mY5gsnDkzmFmIHs9NFaLnZojzgddFVN4RpKYrdw==}
+  '@prisma/client-runtime-utils@7.9.0':
+    resolution: {integrity: sha512-kMVmS4ZEy3xlkca+TfxOEm/ToVVlOS2x1Tc6/wIRf/HfczBqENtSPcKszy4ZpFNzjJ8SRKvlU5V0rrpoFw2KOg==}
 
-  '@prisma/client@7.8.0':
-    resolution: {integrity: sha512-HFp3Dawv/3sU3JtlPha90IB+48lS7zHiH4LKZPjmcE8YH5P9DOXGPvo8dqOtO7MqLDd1p2hOWMcFlRT1DMblHw==}
+  '@prisma/client@7.9.0':
+    resolution: {integrity: sha512-BTG/mB+WL/1sD2gWwdNc2uuVJjNNBgCDlPFdjco6jJArgbg4IAChtzVeW4debFa/NKBbsGedCjET316sjllWTQ==}
     engines: {node: ^20.19 || ^22.12 || >=24.0}
     peerDependencies:
       prisma: '*'
@@ -4504,11 +4504,11 @@ snapshots:
       '@prisma/driver-adapter-utils': 7.8.0
       postgres-array: 3.0.4
 
-  '@prisma/client-runtime-utils@7.8.0': {}
+  '@prisma/client-runtime-utils@7.9.0': {}
 
-  '@prisma/client@7.8.0(prisma@7.8.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(magicast@0.5.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(typescript@5.9.3)':
+  '@prisma/client@7.9.0(prisma@7.8.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(magicast@0.5.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(typescript@5.9.3)':
     dependencies:
-      '@prisma/client-runtime-utils': 7.8.0
+      '@prisma/client-runtime-utils': 7.9.0
     optionalDependencies:
       prisma: 7.8.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(magicast@0.5.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3)
       typescript: 5.9.3
