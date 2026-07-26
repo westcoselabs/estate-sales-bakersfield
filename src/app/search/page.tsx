@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 
 import { PublicShell } from "@/components/shells/shells";
-import { SearchControls } from "@/features/search/search-controls";
-import { SearchResults } from "@/features/search/search-results";
+import { ExploreResultsShell } from "@/features/search/explore-results";
 import {
   createConfiguredPublicSearchService,
   enforcePublicSearchRateLimit,
@@ -66,30 +65,11 @@ export default async function SearchPage({
 
   return (
     <PublicShell>
-      <div className="search-page">
-        <header className="search-page__heading">
-          <div>
-            <p className="eyebrow">Bakersfield sale directory</p>
-            <h1>Find estate sales and yard sales near you</h1>
-            <p>
-              Browse published listings by sale type and date. List and map
-              share this same search state.
-            </p>
-          </div>
-          <div className="search-location-chip">
-            <span>Bakersfield, CA</span>
-            <small>Current search area</small>
-          </div>
-        </header>
-        <SearchControls criteria={normalized.criteria} />
-        <div
-          className={`search-page__results search-page__results--${normalized.criteria.view}`}
-          aria-live="polite"
-          aria-busy="false"
-        >
-          <SearchResults result={result} issue={normalized.issue} />
-        </div>
-      </div>
+      <ExploreResultsShell
+        criteria={normalized.criteria}
+        result={result}
+        issue={normalized.issue}
+      />
     </PublicShell>
   );
 }

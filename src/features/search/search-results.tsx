@@ -1,30 +1,121 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 
 import { Icon } from "@/components/ui/icons";
 import {
   buildSearchHref,
+  type PublicSearchCriteria,
   type PublicSearchIssue,
   type PublicSearchPage,
-} from "@/modules/public-search";
+} from "@/modules/public-search/client";
 
+import { ExploreMapLoader } from "./explore-map-loader";
 import { ListingCard } from "./listing-card";
-import { ExploreResults } from "./explore-results";
+
+function MapResults({
+  result,
+  active,
+}: {
+  readonly result: PublicSearchPage;
+  readonly active: boolean;
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedMarker =
+    result.markers?.find((marker) => marker.id === selectedId) ?? null;
+  const selectedListing =
+    result.items.find((listing) => listing.id === selectedId) ?? null;
+  const effectiveSelectedId = selectedMarker ? selectedId : null;
+
+  return (
+    <div className="explore-map-stage">
+      <ExploreMapLoader
+        markers={result.markers ?? []}
+        selectedId={effectiveSelectedId}
+        active={active}
+        onSelect={setSelectedId}
+      />
+      {result.items.length === 0 ? <ExploreEmptyState compact /> : null}
+      {selectedListing && selectedMarker ? (
+        <div className="explore-map-preview">
+          <ListingCard
+            listing={selectedListing}
+            marker={selectedMarker}
+            variant="preview"
+            priority
+            onDismiss={() => setSelectedId(null)}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ExploreEmptyState({
+  onClear,
+  compact = false,
+}: {
+  readonly onClear?: () => void;
+  readonly compact?: boolean;
+}) {
+  return (
+    <section
+      className={`search-state search-state--empty${compact ? " search-state--map" : ""}`}
+    >
+      <span aria-hidden="true">
+        <Icon name="search" size={28} />
+      </span>
+      <div>
+        <h2>No sales found for this search yet.</h2>
+        <p>Clear the current filters to see all upcoming Bakersfield sales.</p>
+        {onClear ? (
+          <button
+            className="ui-button ui-button--primary"
+            type="button"
+            onClick={onClear}
+          >
+            Clear filters
+          </button>
+        ) : (
+          <Link className="ui-button ui-button--primary" href="/search">
+            Clear filters
+          </Link>
+        )}
+      </div>
+    </section>
+  );
+}
 
 export function SearchResults({
   result,
   issue,
+  criteria,
+  view,
+  mapVisited,
+  onClear,
 }: {
   readonly result: PublicSearchPage | null;
-  readonly issue?: PublicSearchIssue | null;
+  readonly issue?: PublicSearchIssue | null | undefined;
+  readonly criteria: PublicSearchCriteria;
+  readonly view: "map" | "list";
+  readonly mapVisited: boolean;
+  readonly onClear: () => void;
 }) {
   if (issue) {
     return (
       <section className="search-state search-state--error" role="alert">
         <Icon name="warning" size={26} />
         <div>
-          <h2>Check your date range</h2>
+          <h2>Check your search filters</h2>
           <p>{issue.message}</p>
-          <Link href="/search">Show all upcoming sales</Link>
+          <button
+            className="ui-button ui-button--secondary"
+            type="button"
+            onClick={onClear}
+          >
+            Clear filters
+          </button>
         </div>
       </section>
     );
@@ -35,80 +126,64 @@ export function SearchResults({
         <Icon name="warning" size={26} />
         <div>
           <h2>We could not load sale results</h2>
-          <p>
-            Your search is still safe. Try again without changing the current
-            filters.
-          </p>
-          <Link href="/search">Try again</Link>
+          <p>Try again. Your current search filters are still in the URL.</p>
+          <button
+            className="ui-button ui-button--secondary"
+            type="button"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </button>
         </div>
       </section>
     );
   }
 
-  const count = result.items.length;
   return (
-    <>
-      <div className="search-results-heading">
-        <div>
-          <p className="eyebrow">Bakersfield, California</p>
-          <h2>
-            {count === 0
-              ? "No matching sales yet"
-              : `${String(count)} ${count === 1 ? "sale" : "sales"} shown`}
-          </h2>
-        </div>
-        <p>Soonest first</p>
+    <div className="explore-results-views">
+      <div
+        className="explore-results-view explore-results-view--map"
+        hidden={view !== "map"}
+      >
+        {mapVisited ? (
+          <MapResults result={result} active={view === "map"} />
+        ) : null}
       </div>
-
-      {count > 0 ? (
-        result.criteria.view === "map" ? (
-          <ExploreResults
-            listings={result.items}
-            markers={result.markers ?? []}
-          />
-        ) : (
-          <div className="market-listing-grid">
+      <div
+        className="explore-results-view explore-results-view--list"
+        hidden={view !== "list"}
+      >
+        {result.items.length > 0 ? (
+          <div className="explore-list" aria-label="Sale results">
             {result.items.map((listing, index) => (
               <ListingCard
                 key={listing.id}
                 listing={listing}
-                variant="grid"
+                marker={result.markers?.find(
+                  (marker) => marker.id === listing.id,
+                )}
                 priority={index === 0}
               />
             ))}
           </div>
-        )
-      ) : (
-        <section className="search-state search-state--empty">
-          <span aria-hidden="true">
-            <Icon name="search" size={28} />
-          </span>
-          <div>
-            <h2>No sales match these filters yet</h2>
-            <p>
-              Try all upcoming dates or switch sale type. New listings will
-              appear here when they are published.
-            </p>
-            <Link className="ui-button ui-button--primary" href="/search">
-              Clear filters
+        ) : (
+          <ExploreEmptyState onClear={onClear} />
+        )}
+        {result.pageInfo.hasNext && result.pageInfo.nextCursor ? (
+          <nav className="search-pagination" aria-label="Result pages">
+            <Link
+              className="ui-button ui-button--secondary"
+              href={buildSearchHref(
+                { ...criteria, view },
+                { cursor: result.pageInfo.nextCursor },
+              )}
+            >
+              Next results
+              <Icon name="arrow" size={18} />
             </Link>
-          </div>
-        </section>
-      )}
-
-      {result.pageInfo.hasNext && result.pageInfo.nextCursor ? (
-        <nav className="search-pagination" aria-label="Result pages">
-          <Link
-            className="ui-button ui-button--secondary"
-            href={buildSearchHref(result.criteria, {
-              cursor: result.pageInfo.nextCursor,
-            })}
-          >
-            Next results
-            <Icon name="arrow" size={18} />
-          </Link>
-        </nav>
-      ) : null}
-    </>
+          </nav>
+        ) : null}
+      </div>
+    </div>
   );
 }

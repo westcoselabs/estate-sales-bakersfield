@@ -1,24 +1,19 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-  type FormEvent,
-} from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Icon } from "@/components/ui/icons";
-import { Button, IconButton } from "@/components/ui/primitives";
+import type {
+  PublicDateFilter,
+  PublicSaleFilter,
+  PublicSearchCriteria,
+} from "@/modules/public-search/client";
 import {
   activeFilterCount,
-  buildSearchHref,
   dateFilterLabel,
-  type PublicDateFilter,
-  type PublicSaleFilter,
-  type PublicSearchCriteria,
 } from "@/modules/public-search/client";
+
+type NavigateSearch = (changes: Partial<PublicSearchCriteria>) => void;
 
 const saleOptions: ReadonlyArray<{
   readonly value: PublicSaleFilter;
@@ -30,97 +25,218 @@ const saleOptions: ReadonlyArray<{
 ];
 
 const dateOptions: ReadonlyArray<{
-  readonly value: Exclude<PublicDateFilter, "all" | "custom">;
+  readonly value: Exclude<PublicDateFilter, "custom">;
   readonly label: string;
 }> = [
+  { value: "all", label: "All upcoming" },
   { value: "today", label: "Today" },
   { value: "weekend", label: "This weekend" },
   { value: "next-7-days", label: "Next 7 days" },
 ];
 
-export function SearchControls({
+function FilterOptionGroups({
+  sale,
+  date,
+  onSale,
+  onDate,
+}: {
+  readonly sale: PublicSaleFilter;
+  readonly date: PublicDateFilter;
+  readonly onSale: (value: PublicSaleFilter) => void;
+  readonly onDate: (value: PublicDateFilter) => void;
+}) {
+  return (
+    <>
+      <fieldset className="explore-filter-group">
+        <legend>Sale type</legend>
+        <div className="explore-filter-options">
+          {saleOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={sale === option.value}
+              onClick={() => onSale(option.value)}
+            >
+              <span aria-hidden="true" />
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset className="explore-filter-group">
+        <legend>Date</legend>
+        <div className="explore-date-options">
+          {dateOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={date === option.value}
+              onClick={() => onDate(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+    </>
+  );
+}
+
+export function ExploreFilterSidebar({
   criteria,
+  pending,
+  onNavigate,
 }: {
   readonly criteria: PublicSearchCriteria;
+  readonly pending: boolean;
+  readonly onNavigate: NavigateSearch;
 }) {
-  const router = useRouter();
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const filterTriggerRef = useRef<HTMLButtonElement>(null);
-  const [pending, startTransition] = useTransition();
-  const [customFrom, setCustomFrom] = useState(criteria.from ?? "");
-  const [customTo, setCustomTo] = useState(criteria.to ?? "");
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [from, setFrom] = useState(criteria.from ?? "");
+  const [to, setTo] = useState(criteria.to ?? "");
 
   useEffect(() => {
-    // The date inputs retain local edits while the sheet is open, but must
-    // immediately reflect URL criteria after Back/Forward navigation.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCustomFrom(criteria.from ?? "");
-    setCustomTo(criteria.to ?? "");
+    setFrom(criteria.from ?? "");
+    setTo(criteria.to ?? "");
   }, [criteria.from, criteria.to]);
 
-  function navigate(changes: Partial<PublicSearchCriteria>) {
-    startTransition(() => {
-      router.push(buildSearchHref(criteria, changes), { scroll: false });
-    });
+  function applyDates(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!from || !to || from > to) return;
+    onNavigate({ date: "custom", from, to });
   }
 
+  return (
+    <aside className="explore-filter-sidebar" aria-label="Search filters">
+      <div className="explore-filter-sidebar__heading">
+        <div>
+          <span>Filters</span>
+          <small>Bakersfield sales</small>
+        </div>
+        <button
+          type="button"
+          disabled={activeFilterCount(criteria) === 0 || pending}
+          onClick={() =>
+            onNavigate({ sale: "all", date: "all", from: null, to: null })
+          }
+        >
+          Clear all
+        </button>
+      </div>
+      <div className="explore-location-summary">
+        <Icon name="pin" size={19} />
+        <span>
+          <small>Search area</small>
+          <strong>Bakersfield, CA</strong>
+        </span>
+      </div>
+      <FilterOptionGroups
+        sale={criteria.sale}
+        date={criteria.date}
+        onSale={(sale) => onNavigate({ sale })}
+        onDate={(date) => onNavigate({ date, from: null, to: null })}
+      />
+      <form className="explore-custom-dates" onSubmit={applyDates}>
+        <fieldset>
+          <legend>Custom dates</legend>
+          <div>
+            <label htmlFor="desktop-search-from">
+              Start date
+              <input
+                id="desktop-search-from"
+                type="date"
+                value={from}
+                onChange={(event) => setFrom(event.target.value)}
+              />
+            </label>
+            <label htmlFor="desktop-search-to">
+              End date
+              <input
+                id="desktop-search-to"
+                type="date"
+                min={from || undefined}
+                value={to}
+                onChange={(event) => setTo(event.target.value)}
+              />
+            </label>
+          </div>
+          {from && to && from > to ? (
+            <p className="ui-field-error" role="alert">
+              End date must be on or after the start date.
+            </p>
+          ) : null}
+          <button
+            className="ui-button ui-button--secondary"
+            type="submit"
+            disabled={!from || !to || from > to || pending}
+          >
+            Apply dates
+          </button>
+        </fieldset>
+      </form>
+      <p className="explore-filter-note">
+        Only published estate sales and yard sales are shown.
+      </p>
+    </aside>
+  );
+}
+
+export function MobileFilterControls({
+  criteria,
+  view,
+  pending,
+  onNavigate,
+}: {
+  readonly criteria: PublicSearchCriteria;
+  readonly view: "map" | "list";
+  readonly pending: boolean;
+  readonly onNavigate: NavigateSearch;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [draftSale, setDraftSale] = useState(criteria.sale);
+  const [draftDate, setDraftDate] = useState(criteria.date);
+  const [from, setFrom] = useState(criteria.from ?? "");
+  const [to, setTo] = useState(criteria.to ?? "");
+  const count = activeFilterCount(criteria);
+
   function openFilters() {
-    setSheetOpen(true);
+    setDraftSale(criteria.sale);
+    setDraftDate(criteria.date);
+    setFrom(criteria.from ?? "");
+    setTo(criteria.to ?? "");
+    setOpen(true);
     dialogRef.current?.showModal();
   }
 
   function closeFilters() {
     dialogRef.current?.close();
-    setSheetOpen(false);
-    requestAnimationFrame(() => filterTriggerRef.current?.focus());
+    setOpen(false);
+    requestAnimationFrame(() => triggerRef.current?.focus());
   }
 
-  function applyCustomDates(event: FormEvent<HTMLFormElement>) {
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!customFrom || !customTo || customFrom > customTo) return;
+    if (draftDate === "custom" && (!from || !to || from > to)) return;
     closeFilters();
-    navigate({
-      date: "custom",
-      from: customFrom,
-      to: customTo,
+    onNavigate({
+      sale: draftSale,
+      date: draftDate,
+      from: draftDate === "custom" ? from : null,
+      to: draftDate === "custom" ? to : null,
     });
   }
 
-  const activeDate = dateFilterLabel(criteria);
-  const count = activeFilterCount(criteria);
-
   return (
-    <section className="search-controls" aria-label="Search controls">
-      <div className="search-controls__topline">
-        <div
-          className="search-view-toggle"
-          aria-label="Results view"
-          role="group"
-        >
-          <button
-            type="button"
-            aria-pressed={criteria.view === "list"}
-            onClick={() => navigate({ view: "list" })}
-          >
-            <Icon name="list" size={19} />
-            List
-          </button>
-          <button
-            type="button"
-            aria-pressed={criteria.view === "map"}
-            onClick={() => navigate({ view: "map" })}
-          >
-            <Icon name="map" size={19} />
-            Map
-          </button>
-        </div>
+    <>
+      <div className="explore-mobile-toolbar">
         <button
           className="search-filter-trigger"
           type="button"
-          ref={filterTriggerRef}
+          ref={triggerRef}
           aria-haspopup="dialog"
-          aria-expanded={sheetOpen}
+          aria-expanded={open}
           onClick={openFilters}
         >
           <Icon name="settings" size={19} />
@@ -129,215 +245,139 @@ export function SearchControls({
             <span aria-label={`${String(count)} active filters`}>{count}</span>
           ) : null}
         </button>
+        {view === "list" ? (
+          <label className="explore-sort-control">
+            <span className="sr-only">Sort results</span>
+            <select
+              aria-label="Sort results"
+              value="soonest"
+              onChange={() => {}}
+            >
+              <option value="soonest">Sort: Soonest</option>
+            </select>
+            <Icon name="chevron" size={18} />
+          </label>
+        ) : null}
       </div>
-
-      <div className="search-controls__desktop" aria-label="Quick filters">
-        <div className="search-segmented" role="group" aria-label="Sale type">
-          {saleOptions.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={criteria.sale === option.value}
-              onClick={() => navigate({ sale: option.value })}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-        <div
-          className="search-date-presets"
-          role="group"
-          aria-label="Sale date"
-        >
-          {dateOptions.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={criteria.date === option.value}
-              onClick={() =>
-                navigate({ date: option.value, from: null, to: null })
-              }
-            >
-              {option.label}
-            </button>
-          ))}
-          <button
-            type="button"
-            aria-pressed={criteria.date === "custom"}
-            onClick={openFilters}
-          >
-            <Icon name="calendar" size={18} />
-            {criteria.date === "custom" && activeDate
-              ? activeDate
-              : "Choose dates"}
-          </button>
-        </div>
-      </div>
-
-      {count > 0 ? (
-        <div className="search-active-filters" aria-label="Active filters">
-          {criteria.sale !== "all" ? (
-            <button type="button" onClick={() => navigate({ sale: "all" })}>
-              {criteria.sale === "estate" ? "Estate sales" : "Yard sales"}
-              <Icon name="close" size={15} />
-              <span className="sr-only">Remove sale type filter</span>
-            </button>
-          ) : null}
-          {activeDate ? (
-            <button
-              type="button"
-              onClick={() => navigate({ date: "all", from: null, to: null })}
-            >
-              {activeDate}
-              <Icon name="close" size={15} />
-              <span className="sr-only">Remove date filter</span>
-            </button>
-          ) : null}
-          {count > 1 ? (
-            <button
-              className="search-clear-filters"
-              type="button"
-              onClick={() =>
-                navigate({
-                  sale: "all",
-                  date: "all",
-                  from: null,
-                  to: null,
-                })
-              }
-            >
-              Clear all
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-
-      <p
-        className="search-updating"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {pending ? "Updating results..." : ""}
-      </p>
-
       <dialog
         className="search-filter-sheet"
         ref={dialogRef}
         aria-labelledby="search-filter-title"
-        onCancel={() => setSheetOpen(false)}
-        onClose={() => setSheetOpen(false)}
+        onCancel={(event) => {
+          event.preventDefault();
+          closeFilters();
+        }}
+        onClose={() => setOpen(false)}
       >
-        <div className="search-filter-sheet__header">
-          <div>
-            <p className="eyebrow">Bakersfield search</p>
-            <h2 id="search-filter-title">Filter sales</h2>
-          </div>
-          <IconButton label="Close filters" onClick={closeFilters}>
-            <Icon name="close" />
-          </IconButton>
-        </div>
-        <div className="search-filter-sheet__body">
-          <fieldset>
-            <legend>Sale type</legend>
-            <div className="search-filter-options">
-              {saleOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={criteria.sale === option.value}
-                  onClick={() => {
-                    closeFilters();
-                    navigate({ sale: option.value });
-                  }}
-                >
-                  {option.label}
-                </button>
-              ))}
+        <form onSubmit={applyFilters}>
+          <div className="search-filter-sheet__header">
+            <div>
+              <small>Bakersfield search</small>
+              <h2 id="search-filter-title">Filter sales</h2>
             </div>
-          </fieldset>
-          <fieldset>
-            <legend>When</legend>
-            <div className="search-filter-options">
+            <button
+              type="button"
+              aria-label="Close filters"
+              onClick={closeFilters}
+            >
+              <Icon name="close" />
+            </button>
+          </div>
+          <div className="search-filter-sheet__body">
+            <div className="explore-location-summary">
+              <Icon name="pin" size={19} />
+              <span>
+                <small>Search area</small>
+                <strong>Bakersfield, CA</strong>
+              </span>
+            </div>
+            <FilterOptionGroups
+              sale={draftSale}
+              date={draftDate}
+              onSale={setDraftSale}
+              onDate={(date) => {
+                setDraftDate(date);
+                if (date !== "custom") {
+                  setFrom("");
+                  setTo("");
+                }
+              }}
+            />
+            <fieldset className="explore-filter-group explore-filter-group--custom">
+              <legend>Custom dates</legend>
               <button
                 type="button"
-                aria-pressed={criteria.date === "all"}
-                onClick={() => {
-                  closeFilters();
-                  navigate({ date: "all", from: null, to: null });
-                }}
+                aria-pressed={draftDate === "custom"}
+                onClick={() => setDraftDate("custom")}
               >
-                All upcoming
+                <Icon name="calendar" size={18} />
+                {draftDate === "custom"
+                  ? (dateFilterLabel({
+                      ...criteria,
+                      date: draftDate,
+                      from,
+                      to,
+                    }) ?? "Choose dates")
+                  : "Choose dates"}
               </button>
-              {dateOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={criteria.date === option.value}
-                  onClick={() => {
-                    closeFilters();
-                    navigate({
-                      date: option.value,
-                      from: null,
-                      to: null,
-                    });
-                  }}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-          <form className="search-custom-dates" onSubmit={applyCustomDates}>
-            <fieldset>
-              <legend>Custom date range</legend>
-              <p>
-                Choose an inclusive range using Bakersfield local calendar
-                dates.
-              </p>
-              <div>
-                <label htmlFor="search-from">
-                  Start date
-                  <input
-                    id="search-from"
-                    type="date"
-                    value={customFrom}
-                    onChange={(event) => setCustomFrom(event.target.value)}
-                  />
-                </label>
-                <label htmlFor="search-to">
-                  End date
-                  <input
-                    id="search-to"
-                    type="date"
-                    min={customFrom || undefined}
-                    value={customTo}
-                    onChange={(event) => setCustomTo(event.target.value)}
-                  />
-                </label>
-              </div>
-              {customFrom && customTo && customFrom > customTo ? (
-                <p className="ui-field-error" role="alert">
-                  End date must be on or after the start date.
-                </p>
+              {draftDate === "custom" ? (
+                <div className="search-custom-dates">
+                  <label htmlFor="search-from">
+                    Start date
+                    <input
+                      id="search-from"
+                      type="date"
+                      value={from}
+                      onChange={(event) => setFrom(event.target.value)}
+                    />
+                  </label>
+                  <label htmlFor="search-to">
+                    End date
+                    <input
+                      id="search-to"
+                      type="date"
+                      min={from || undefined}
+                      value={to}
+                      onChange={(event) => setTo(event.target.value)}
+                    />
+                  </label>
+                  {from && to && from > to ? (
+                    <p className="ui-field-error" role="alert">
+                      End date must be on or after the start date.
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
             </fieldset>
-            <div className="search-filter-sheet__actions">
-              <Button type="button" variant="secondary" onClick={closeFilters}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={
-                  !customFrom || !customTo || customFrom > customTo || pending
-                }
-              >
-                Apply dates
-              </Button>
-            </div>
-          </form>
-        </div>
+          </div>
+          <div className="search-filter-sheet__actions">
+            <button
+              type="button"
+              disabled={
+                draftSale === "all" && draftDate === "all" && !from && !to
+              }
+              onClick={() => {
+                setDraftSale("all");
+                setDraftDate("all");
+                setFrom("");
+                setTo("");
+              }}
+            >
+              Clear all
+            </button>
+            <button
+              className="ui-button ui-button--primary"
+              type="submit"
+              disabled={
+                pending ||
+                (draftDate === "custom" && (!from || !to || from > to))
+              }
+            >
+              Apply filters
+            </button>
+          </div>
+        </form>
       </dialog>
-    </section>
+    </>
   );
 }

@@ -99,7 +99,7 @@ export function normalizeSearchQuery(
         to: null,
         location: "bakersfield-ca",
         sort: "soonest",
-        view: "list",
+        view: "map",
         cursor: null,
         bounds: null,
       },
@@ -127,7 +127,7 @@ export function normalizeSearchQuery(
       to,
       location: "bakersfield-ca",
       sort: "soonest",
-      view: first(raw.view) === "map" ? "map" : "list",
+      view: first(raw.view) === "list" ? "list" : "map",
       cursor: CURSOR.test(first(raw.cursor)) ? first(raw.cursor) : null,
       bounds: first(raw.bounds) ? bounds : null,
     },
@@ -186,9 +186,9 @@ export function buildSearchHref(
     parameters.set("from", merged.from);
     parameters.set("to", merged.to);
   }
-  if (merged.view === "map") parameters.set("view", "map");
+  if (merged.view === "list") parameters.set("view", "list");
   if (merged.cursor) parameters.set("cursor", merged.cursor);
-  if (merged.view === "map" && merged.bounds) {
+  if (merged.bounds) {
     parameters.set(
       "bounds",
       [

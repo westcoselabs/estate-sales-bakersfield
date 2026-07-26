@@ -16,7 +16,7 @@ import type {
 import { resolvePublicDateInterval } from "./date-range";
 
 const PUBLIC_ID = /^[0-9a-f]{12}$/;
-const DEFAULT_LIMIT = 12;
+const DEFAULT_LIMIT = 20;
 const MAXIMUM_LIMIT = 24;
 const PUBLIC_ZONE_CENTROIDS = {
   bakersfield: {
@@ -175,7 +175,7 @@ export class PublicSearchService {
   async search(
     criteria: PublicSearchCriteria,
     now = new Date(),
-    requestedLimit = criteria.view === "map" ? 20 : DEFAULT_LIMIT,
+    requestedLimit = DEFAULT_LIMIT,
   ): Promise<PublicSearchPage> {
     const limit = Math.min(Math.max(requestedLimit, 1), MAXIMUM_LIMIT);
     const fingerprint = criteriaFingerprint(criteria);
@@ -191,24 +191,19 @@ export class PublicSearchService {
       range: resolvePublicDateInterval(criteria, now),
       cursor: decodeCursor(criteria.cursor, fingerprint),
       limit: limit + 1,
-      bounds: criteria.view === "map" ? (criteria.bounds ?? null) : null,
+      bounds: criteria.bounds ?? null,
     });
     const visible = rows.slice(0, limit);
     const last = visible.at(-1);
     const items = visible.map((row) => cardProjection(row, now));
-    const markers =
-      criteria.view === "map"
-        ? visible
-            .map((row) => markerProjection(row, now))
-            .filter(
-              (marker): marker is PublicMapMarkerProjection => marker !== null,
-            )
-        : undefined;
+    const markers = visible
+      .map((row) => markerProjection(row, now))
+      .filter((marker): marker is PublicMapMarkerProjection => marker !== null);
     return {
       schema: "public-search-v1",
       criteria,
       items,
-      ...(markers ? { markers } : {}),
+      markers,
       pageInfo: {
         hasNext: rows.length > limit,
         nextCursor:

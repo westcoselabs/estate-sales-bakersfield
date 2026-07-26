@@ -17,7 +17,7 @@ const defaults: PublicSearchCriteria = {
   to: null,
   location: "bakersfield-ca",
   sort: "soonest",
-  view: "list",
+  view: "map",
   cursor: null,
   bounds: null,
 };
@@ -170,13 +170,16 @@ describe("public search query criteria", () => {
 
     expect(buildSearchHref(defaults)).toBe("/search");
     expect(buildSearchHref(current)).toBe(
-      "/search?sale=estate&date=custom&from=2026-08-01&to=2026-08-03&view=map",
+      "/search?sale=estate&date=custom&from=2026-08-01&to=2026-08-03",
     );
     expect(buildSearchHref(current, { sale: "yard" })).toBe(
-      "/search?sale=yard&date=custom&from=2026-08-01&to=2026-08-03&view=map",
+      "/search?sale=yard&date=custom&from=2026-08-01&to=2026-08-03",
     );
     expect(buildSearchHref(current, { cursor: "bmV4dC1wYWdl" })).toBe(
-      "/search?sale=estate&date=custom&from=2026-08-01&to=2026-08-03&view=map&cursor=bmV4dC1wYWdl",
+      "/search?sale=estate&date=custom&from=2026-08-01&to=2026-08-03&cursor=bmV4dC1wYWdl",
+    );
+    expect(buildSearchHref(current, { view: "list" })).toBe(
+      "/search?sale=estate&date=custom&from=2026-08-01&to=2026-08-03&view=list",
     );
   });
 
@@ -189,6 +192,22 @@ describe("public search query criteria", () => {
         to: "2026-08-03",
       }),
     ).toBe("/search?date=today");
+  });
+
+  it("preserves map bounds while switching between presentation modes", () => {
+    const criteria: PublicSearchCriteria = {
+      ...defaults,
+      bounds: { west: -119.2, south: 35.2, east: -118.9, north: 35.5 },
+    };
+    expect(buildSearchHref(criteria, { view: "list" })).toBe(
+      "/search?view=list&bounds=-119.2%2C35.2%2C-118.9%2C35.5",
+    );
+    expect(
+      normalizeSearchQuery({
+        view: "list",
+        bounds: "-119.2,35.2,-118.9,35.5",
+      }).criteria,
+    ).toMatchObject({ view: "list", bounds: criteria.bounds });
   });
 
   it("provides stable active-filter counts and human-readable labels", () => {

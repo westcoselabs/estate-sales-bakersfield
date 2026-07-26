@@ -37,7 +37,6 @@ export function PublicShell({ children }: { readonly children: ReactNode }) {
           <Brand />
           <nav className="public-nav public-nav--desktop" aria-label="Primary">
             <TextLink href="/search">Explore</TextLink>
-            <TextLink href="/search?view=map">Map preview</TextLink>
             <TextLink href="/how-it-works">How it works</TextLink>
             <TextLink href="/about">About</TextLink>
           </nav>
@@ -59,7 +58,6 @@ export function PublicShell({ children }: { readonly children: ReactNode }) {
             </summary>
             <nav aria-label="Mobile primary">
               <TextLink href="/search">Explore sales</TextLink>
-              <TextLink href="/search?view=map">Map preview</TextLink>
               <TextLink href="/estate-sales">Estate sales</TextLink>
               <TextLink href="/yard-sales">Yard sales</TextLink>
               <TextLink href="/how-it-works">How it works</TextLink>

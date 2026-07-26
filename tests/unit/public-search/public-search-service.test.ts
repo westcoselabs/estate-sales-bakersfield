@@ -364,7 +364,9 @@ describe("PublicSearchService", () => {
       criteria(),
       now,
     );
-    expect(listPage).not.toHaveProperty("markers");
+    expect(listPage.markers?.map(({ id }) => id)).toEqual(
+      listPage.items.map(({ id }) => id),
+    );
   });
 
   it("rejects a snapshot whose path or type disagrees with publication authority", async () => {
@@ -421,5 +423,18 @@ describe("PublicSearchService", () => {
         1,
       ),
     ).rejects.toThrow("The search cursor does not match the active criteria");
+  });
+
+  it("uses one repository query shape for map and list presentation modes", async () => {
+    const repository = new InMemoryPublicSearchRepository([]);
+    const service = new PublicSearchService(repository);
+
+    await service.search(criteria({ view: "map" }), now, 10);
+    await service.search(criteria({ view: "list" }), now, 10);
+
+    expect(repository.search).toHaveBeenCalledTimes(2);
+    expect(repository.search.mock.calls[0]?.[0]).toEqual(
+      repository.search.mock.calls[1]?.[0],
+    );
   });
 });
