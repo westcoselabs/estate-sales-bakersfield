@@ -3,19 +3,24 @@ import type { ReactNode } from "react";
 
 import { ExternalLink, TextLink } from "@/components/ui/primitives";
 import { Icon, type IconName } from "@/components/ui/icons";
+import { getCurrentUser } from "@/modules/auth";
 
 import { AccountMenu, type ShellAccount } from "./account-menu";
 
 export function Brand() {
   return (
     <Link className="brand" href="/" aria-label="Estate Sales Bakersfield home">
-      <span className="brand__mark" aria-hidden="true">
-        <span />
-      </span>
-      <span className="brand__type">
-        <strong>Estate Sales</strong>
-        <small>Bakersfield</small>
-      </span>
+      <picture className="brand__logo">
+        <source media="(max-width: 767px)" srcSet="/images/Logo.svg" />
+        <img
+          alt=""
+          aria-hidden="true"
+          className="brand__logo-image"
+          height={340}
+          src="/images/Logo-01.webp"
+          width={2000}
+        />
+      </picture>
     </Link>
   );
 }
@@ -28,45 +33,95 @@ export function SkipLink() {
   );
 }
 
-export function PublicShell({ children }: { readonly children: ReactNode }) {
+function PublicListingCta() {
   return (
-    <div className="public-shell">
+    <Link
+      className="ui-button ui-button--accent public-listing-cta"
+      href="/list-your-sale"
+    >
+      <span>List your sale</span>
+      <Icon name="plus" size={18} />
+    </Link>
+  );
+}
+
+function PublicMobileMenu({ home = false }: { readonly home?: boolean }) {
+  return (
+    <details className="public-menu">
+      <summary aria-label="Open navigation">
+        <Icon name="menu" size={22} />
+      </summary>
+      <nav aria-label="Mobile primary">
+        <TextLink href="/search">{home ? "Explore" : "Find sales"}</TextLink>
+        <TextLink href="/how-it-works">How it works</TextLink>
+        <TextLink href="/about">About</TextLink>
+        <TextLink href="/faq">FAQs</TextLink>
+        <TextLink href="/list-your-sale">List your sale</TextLink>
+      </nav>
+    </details>
+  );
+}
+
+export async function PublicShell({
+  children,
+  variant = "default",
+}: {
+  readonly children: ReactNode;
+  readonly variant?: "default" | "home";
+}) {
+  const home = variant === "home";
+  const currentUser = await getCurrentUser();
+  const account: ShellAccount | null = currentUser
+    ? { displayName: currentUser.displayName }
+    : null;
+
+  return (
+    <div className={`public-shell${home ? " public-shell--home" : ""}`}>
       <SkipLink />
       <header className="public-header">
         <div className="shell-container public-header__inner">
           <Brand />
           <nav className="public-nav public-nav--desktop" aria-label="Primary">
-            <TextLink href="/search">Explore</TextLink>
+            <TextLink href="/search">
+              {home ? "Explore" : "Find sales"}
+            </TextLink>
             <TextLink href="/how-it-works">How it works</TextLink>
             <TextLink href="/about">About</TextLink>
+            {!home ? <TextLink href="/faq">FAQs</TextLink> : null}
           </nav>
           <div className="public-header__actions">
-            <TextLink className="public-login" href="/login">
-              Log in
-            </TextLink>
-            <Link
-              className="ui-button ui-button--accent"
-              href="/list-your-sale"
-            >
-              List your sale
-            </Link>
+            {!home ? <PublicListingCta /> : null}
+            {!account ? (
+              <TextLink
+                className="public-login public-login--button"
+                href="/login"
+              >
+                Log in
+              </TextLink>
+            ) : null}
+            {account ? (
+              <AccountMenu account={account} variant="public" />
+            ) : null}
+            {home ? <PublicListingCta /> : null}
           </div>
-          <details className="public-menu">
-            <summary aria-label="Open navigation">
-              <Icon name="menu" size={22} />
-              <span>Menu</span>
-            </summary>
-            <nav aria-label="Mobile primary">
-              <TextLink href="/search">Explore sales</TextLink>
-              <TextLink href="/estate-sales">Estate sales</TextLink>
-              <TextLink href="/yard-sales">Yard sales</TextLink>
-              <TextLink href="/how-it-works">How it works</TextLink>
-              <TextLink href="/about">About</TextLink>
-              <TextLink href="/faq">FAQ</TextLink>
-              <TextLink href="/login">Log in</TextLink>
-              <TextLink href="/list-your-sale">List your sale</TextLink>
-            </nav>
-          </details>
+          <div className="public-header__mobile-actions">
+            {!account ? (
+              <>
+                <TextLink
+                  className="public-login public-login--button"
+                  href="/login"
+                >
+                  Log in
+                </TextLink>
+                <PublicMobileMenu home={home} />
+              </>
+            ) : (
+              <>
+                <AccountMenu account={account} variant="public" />
+                <PublicMobileMenu home={home} />
+              </>
+            )}
+          </div>
         </div>
       </header>
       <main id="main-content">{children}</main>
@@ -126,15 +181,17 @@ export function AuthShell({
   description,
   children,
   secondary,
+  className = "",
 }: {
   readonly eyebrow: string;
   readonly title: string;
   readonly description: string;
   readonly children: ReactNode;
   readonly secondary: ReactNode;
+  readonly className?: string;
 }) {
   return (
-    <div className="auth-shell">
+    <div className={`auth-shell ${className}`.trim()}>
       <SkipLink />
       <header className="auth-header shell-container">
         <Brand />
@@ -143,9 +200,9 @@ export function AuthShell({
       <main id="main-content" className="auth-main">
         <section className="auth-card" aria-labelledby="auth-title">
           <div className="auth-card__intro">
-            <p className="eyebrow">{eyebrow}</p>
+            {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
             <h1 id="auth-title">{title}</h1>
-            <p>{description}</p>
+            {description ? <p>{description}</p> : null}
           </div>
           {children}
           <div className="auth-card__secondary">{secondary}</div>
@@ -257,6 +314,7 @@ export function BuilderShell({
   progress,
   actions,
   account,
+  className = "",
 }: {
   readonly eyebrow: string;
   readonly title: string;
@@ -267,9 +325,10 @@ export function BuilderShell({
   readonly progress?: ReactNode;
   readonly actions?: ReactNode;
   readonly account?: ShellAccount;
+  readonly className?: string;
 }) {
   return (
-    <div className="builder-app">
+    <div className={`builder-app ${className}`.trim()}>
       <SkipLink />
       <header className="builder-app__header">
         <div className="shell-container builder-app__header-inner">

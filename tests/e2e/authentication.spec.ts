@@ -77,7 +77,7 @@ async function login(page: Page, email: string, password: string) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Log in" }).click();
+  await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 
@@ -175,7 +175,7 @@ test("completes the Phase 2 account, recovery, session, and organizer lifecycle"
 
   await page.getByLabel("Email").fill("unknown@example.test");
   await page.getByLabel("Password").fill("not-the-right-password");
-  await page.getByRole("button", { name: "Log in" }).click();
+  await page.getByRole("button", { name: "Sign in" }).click();
   await expect(
     page.getByText("The email or password was not accepted. Please try again."),
   ).toBeVisible();
@@ -235,7 +235,7 @@ test("supports unverified onboarding while preserving publishing verification ga
 
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Log in" }).click();
+  await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(
     page.getByRole("heading", { name: "Verify your email" }),

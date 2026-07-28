@@ -7,8 +7,11 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type CSSProperties,
+  type DragEvent,
   type FormEvent,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { Icon } from "@/components/ui/icons";
 import {
@@ -54,12 +57,171 @@ interface UploadItem {
   readonly id: string;
   readonly file?: File | undefined;
   readonly fileName: string;
+  readonly fileSize: number;
   readonly previewUrl: string;
   readonly previewIsLocal: boolean;
   readonly status: UploadStatus;
   readonly progress: number;
   readonly error?: string | undefined;
   readonly photoId?: string | undefined;
+}
+
+interface PhotoManagerRow {
+  readonly key: string;
+  readonly upload?: UploadItem | undefined;
+  readonly photo?: EventEditorDto["photos"][number] | undefined;
+  readonly photoIndex: number;
+}
+
+interface PhotoActionDropdownProps {
+  readonly photoId: string;
+  readonly label: string;
+  readonly canMoveEarlier: boolean;
+  readonly canMoveLater: boolean;
+  readonly canMakeCover: boolean;
+  readonly disabled: boolean;
+  readonly onMoveEarlier: () => void;
+  readonly onMoveLater: () => void;
+  readonly onMakeCover: () => void;
+  readonly onDelete: () => void;
+}
+
+function PhotoActionDropdown({
+  photoId,
+  label,
+  canMoveEarlier,
+  canMoveLater,
+  canMakeCover,
+  disabled,
+  onMoveEarlier,
+  onMoveLater,
+  onMakeCover,
+  onDelete,
+}: PhotoActionDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 8, left: 8 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = `photo-actions-${photoId}`;
+
+  const positionMenu = () => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const width = Math.min(192, window.innerWidth - 16);
+    const estimatedHeight = canMakeCover ? 210 : 164;
+    const openAbove =
+      window.innerHeight - rect.bottom < estimatedHeight && rect.top > estimatedHeight;
+
+    setPosition({
+      top: openAbove
+        ? Math.max(8, rect.top - estimatedHeight - 8)
+        : Math.min(window.innerHeight - estimatedHeight - 8, rect.bottom + 8),
+      left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
+    });
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const closeMenu = (event?: Event) => {
+      if (
+        event?.target instanceof Node &&
+        (menuRef.current?.contains(event.target) ||
+          triggerRef.current?.contains(event.target))
+      ) {
+        return;
+      }
+      setIsOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeMenu, true);
+    window.addEventListener("resize", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu, true);
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+    };
+  }, [isOpen]);
+
+  const runAction = (action: () => void) => {
+    setIsOpen(false);
+    action();
+  };
+
+  return (
+    <div className="photo-actions-dropdown-wrap">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="photo-actions-trigger"
+        aria-label={`Actions for ${label}`}
+        aria-controls={menuId}
+        aria-expanded={isOpen}
+        onClick={() => {
+          if (isOpen) {
+            setIsOpen(false);
+            return;
+          }
+          positionMenu();
+          setIsOpen(true);
+        }}
+      >
+        <span aria-hidden="true">•••</span>
+      </button>
+      {isOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={menuRef}
+              id={menuId}
+              className="photo-actions-dropdown"
+              role="menu"
+              aria-label={`Actions for ${label}`}
+              style={position}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!canMoveEarlier || disabled}
+                onClick={() => runAction(onMoveEarlier)}
+              >
+                Move earlier
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!canMoveLater || disabled}
+                onClick={() => runAction(onMoveLater)}
+              >
+                Move later
+              </button>
+              {canMakeCover ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={disabled}
+                  onClick={() => runAction(onMakeCover)}
+                >
+                  Make cover
+                </button>
+              ) : null}
+              <button
+                type="button"
+                role="menuitem"
+                className="photo-actions-dropdown__delete"
+                disabled={disabled}
+                onClick={() => runAction(onDelete)}
+              >
+                Delete
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
 }
 
 type UploadAttemptResult = "ready" | "failed" | "pending";
@@ -93,20 +255,74 @@ function formatListingDate(
   }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
+const SCHEDULE_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function localDateKey(value: string | null | undefined): string | null {
+  return value && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)
+    ? value.slice(0, 10)
+    : null;
+}
+
+function localTimeValue(
+  value: string | null | undefined,
+  fallback: string,
+): string {
+  return value && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)
+    ? value.slice(11)
+    : fallback;
+}
+
+function calendarDateFromKey(value: string | null | undefined): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function calendarDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${String(year)}-${month}-${day}`;
+}
+
+function formatScheduleDate(value: string | null | undefined): string {
+  const date = calendarDateFromKey(localDateKey(value));
+  return date
+    ? new Intl.DateTimeFormat("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }).format(date)
+    : "Select a date";
+}
+
+function formatScheduleTime(value: string): string {
+  const [hour, minute] = value.split(":").map(Number);
+  if (hour === undefined || minute === undefined) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(2000, 0, 1, hour, minute));
+}
+
+function addressSuggestionIsVerified(
+  suggestion: ClientAddressSuggestion,
+): boolean {
+  return (
+    (suggestion.confidence ?? 0) >= 0.9 &&
+    ["building", "full_match", "match_by_building"].includes(
+      suggestion.matchType ?? "",
+    )
+  );
+}
+
 const STEP_LABELS: Readonly<Record<EventWizardStep, string>> = {
   details: "Details",
   schedule: "Schedule",
   location: "Privacy",
   photos: "Photos",
   review: "Review",
-};
-
-const STEP_SUMMARIES: Readonly<Record<EventWizardStep, string>> = {
-  details: "Sale details",
-  schedule: "Dates and times",
-  location: "Address and privacy",
-  photos: "Photos and cover",
-  review: "Review and payment",
 };
 
 const ACCEPTED_PHOTO_TYPES = new Set([
@@ -117,6 +333,7 @@ const ACCEPTED_PHOTO_TYPES = new Set([
   "image/heif",
 ]);
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
+const MAX_EVENT_PHOTOS = 150;
 const LocationConfirmationMap = dynamic(
   () => import("@/features/location/location-confirmation-map"),
   {
@@ -130,13 +347,18 @@ const LocationConfirmationMap = dynamic(
 );
 
 const UPLOAD_STATUS_LABELS: Readonly<Record<UploadStatus, string>> = {
-  selected: "Selected",
-  reserving: "Requesting upload permission",
+  selected: "Queued",
+  reserving: "Preparing photo",
   uploading: "Uploading",
-  processing: "Processing",
+  processing: "Preparing photo",
   ready: "Ready",
   failed: "Failed",
 };
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 function UploadPreview({ item }: { readonly item: UploadItem }) {
   const [failedSource, setFailedSource] = useState("");
@@ -163,13 +385,25 @@ function requestError(
   },
   fallback: string,
 ): Error {
+  if (result.code === "STALE_VERSION") {
+    return new StaleVersionError(result.requestId);
+  }
   const message =
-    result.code === "STALE_VERSION"
-      ? "This draft changed in another tab. Reload the page, review the latest values, and try again."
-      : (result.error ?? fallback);
+    result.error ?? fallback;
   return new Error(
     result.requestId ? `${message} Request: ${result.requestId}.` : message,
   );
+}
+
+class StaleVersionError extends Error {
+  constructor(requestId?: string) {
+    super(
+      requestId
+        ? `This draft was updated while you were working. We refreshed it and can safely retry your change. Request: ${requestId}.`
+        : "This draft was updated while you were working. We refreshed it and can safely retry your change.",
+    );
+    this.name = "StaleVersionError";
+  }
 }
 
 async function jsonRequest<T>(
@@ -280,6 +514,22 @@ export function EventBuilder({
   const [timezone, setTimezone] = useState(
     initialEvent.timezone ?? "America/Los_Angeles",
   );
+  const [scheduleStartTime, setScheduleStartTime] = useState(() =>
+    localTimeValue(initialEvent.localStartsAt, "09:00"),
+  );
+  const [scheduleEndTime, setScheduleEndTime] = useState(() =>
+    localTimeValue(initialEvent.localEndsAt, "16:00"),
+  );
+  const [activeScheduleTimePicker, setActiveScheduleTimePicker] = useState<
+    "start" | "end" | null
+  >(null);
+  const [scheduleMonth, setScheduleMonth] = useState(() => {
+    const initialDate = calendarDateFromKey(
+      localDateKey(initialEvent.localStartsAt),
+    );
+    const month = initialDate ?? new Date();
+    return new Date(month.getFullYear(), month.getMonth(), 1);
+  });
   const [addressLine1, setAddressLine1] = useState(
     initialEvent.location?.addressLine1 ?? "",
   );
@@ -297,11 +547,6 @@ export function EventBuilder({
   );
   const [countryCode, setCountryCode] = useState(
     initialEvent.location?.countryCode ?? "US",
-  );
-  const [locationTimezone, setLocationTimezone] = useState(
-    initialEvent.location?.timezone ??
-      initialEvent.timezone ??
-      "America/Los_Angeles",
   );
   const [privacyMode, setPrivacyMode] = useState<AddressPrivacyMode>(
     initialEvent.privacyMode ?? "HIDDEN_UNTIL_START",
@@ -331,10 +576,15 @@ export function EventBuilder({
   const [locationConfirmed, setLocationConfirmed] = useState(
     initialEvent.location?.confirmationStatus === "CONFIRMED",
   );
+  const [locationAddressError, setLocationAddressError] = useState("");
   const [uploads, setUploads] = useState<readonly UploadItem[]>([]);
   const [uploadActive, setUploadActive] = useState(false);
+  const [photoDragState, setPhotoDragState] = useState<
+    "idle" | "valid" | "invalid"
+  >("idle");
   const uploadActiveRef = useRef(false);
   const operationActiveRef = useRef(false);
+  const photoDragDepth = useRef(0);
   const previewUrls = useRef(new Set<string>());
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const previousStepRef = useRef(step);
@@ -361,6 +611,8 @@ export function EventBuilder({
     setLocalStartsAt(event.localStartsAt ?? "");
     setLocalEndsAt(event.localEndsAt ?? "");
     setTimezone(event.timezone ?? "America/Los_Angeles");
+    setScheduleStartTime(localTimeValue(event.localStartsAt, "09:00"));
+    setScheduleEndTime(localTimeValue(event.localEndsAt, "16:00"));
     setAddressLine1(event.location?.addressLine1 ?? "");
     setAddressLine2(event.location?.addressLine2 ?? "");
     setCity(event.location?.city ?? "Bakersfield");
@@ -372,6 +624,7 @@ export function EventBuilder({
     );
     setSelectionToken(null);
     setSelectedAddress(null);
+    setLocationAddressError("");
     setSelectedCoordinates(
       event.location?.latitude !== null &&
         event.location?.latitude !== undefined &&
@@ -384,9 +637,6 @@ export function EventBuilder({
         : null,
     );
     setLocationConfirmed(event.location?.confirmationStatus === "CONFIRMED");
-    setLocationTimezone(
-      event.location?.timezone ?? event.timezone ?? "America/Los_Angeles",
-    );
     setPrivacyMode(event.privacyMode ?? "HIDDEN_UNTIL_START");
   }
 
@@ -449,7 +699,21 @@ export function EventBuilder({
     setConfirmation("");
     setStepFeedback(target, { kind: "success", text: "" });
     try {
-      const response = await request<EventResponse>(endpoint, method, body);
+      let response: EventResponse;
+      try {
+        response = await request<EventResponse>(endpoint, method, body);
+      } catch (error) {
+        if (!(error instanceof StaleVersionError)) throw error;
+        setStepFeedback(target, {
+          kind: "success",
+          text: "Your draft was updated in the background. Refreshing the latest version and saving your changes…",
+        });
+        const latest = await refreshEvent();
+        response = await request<EventResponse>(endpoint, method, {
+          ...body,
+          expectedVersion: latest.version,
+        });
+      }
       acceptEvent(response.event);
       if (!complete(response.event)) {
         setStepFeedback(target, {
@@ -458,7 +722,9 @@ export function EventBuilder({
             response.event.readiness.missing.find((message) =>
               target === "details"
                 ? message.includes("private street address")
-                : false,
+                : target === "location"
+                  ? /address|privacy/i.test(message)
+                  : false,
             ) ??
             (allowIncompleteAdvance
               ? "Draft saved. Confirm the address before approval or payment."
@@ -499,6 +765,13 @@ export function EventBuilder({
 
   function saveSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!localStartsAt || !localEndsAt) {
+      setStepFeedback("schedule", {
+        kind: "error",
+        text: "Choose both a start and end date before saving.",
+      });
+      return;
+    }
     void saveStep(
       "schedule",
       `/api/events/${draftRef.current.id}/schedule`,
@@ -514,6 +787,44 @@ export function EventBuilder({
     );
   }
 
+  function updateScheduleStartTime(value: string) {
+    setScheduleStartTime(value);
+    const date = localDateKey(localStartsAt);
+    if (date) setLocalStartsAt(`${date}T${value}`);
+  }
+
+  function updateScheduleEndTime(value: string) {
+    setScheduleEndTime(value);
+    const date = localDateKey(localEndsAt);
+    if (date) setLocalEndsAt(`${date}T${value}`);
+  }
+
+  function chooseScheduleDate(date: Date) {
+    const selectedDate = calendarDateKey(date);
+    const currentStart = localDateKey(localStartsAt);
+    const currentEnd = localDateKey(localEndsAt);
+
+    if (!currentStart || currentEnd) {
+      setLocalStartsAt(`${selectedDate}T${scheduleStartTime}`);
+      setLocalEndsAt("");
+      return;
+    }
+
+    if (selectedDate < currentStart) {
+      setLocalStartsAt(`${selectedDate}T${scheduleStartTime}`);
+      return;
+    }
+
+    setLocalEndsAt(`${selectedDate}T${scheduleEndTime}`);
+  }
+
+  function changeScheduleMonth(offset: number) {
+    setScheduleMonth(
+      (current) =>
+        new Date(current.getFullYear(), current.getMonth() + offset, 1),
+    );
+  }
+
   function changeAddressQuery(value: string) {
     setAddressQuery(value);
     setAddressLine1(value);
@@ -521,6 +832,7 @@ export function EventBuilder({
     setSelectedAddress(null);
     setSelectedCoordinates(null);
     setLocationConfirmed(false);
+    setLocationAddressError("");
   }
 
   function selectAddress(suggestion: ClientAddressSuggestion) {
@@ -537,10 +849,39 @@ export function EventBuilder({
       longitude: suggestion.longitude,
     });
     setLocationConfirmed(false);
+    setLocationAddressError("");
   }
 
   function saveLocation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const currentLocation = draftRef.current.location;
+    const hasSavedVerifiedAddress =
+      currentLocation?.validationStatus === "VERIFIED" &&
+      currentLocation.confirmationStatus === "CONFIRMED";
+
+    if (!selectedAddress && !hasSavedVerifiedAddress) {
+      const text =
+        "Choose the sale property from the address results. Typing an address alone cannot verify it.";
+      setLocationAddressError(text);
+      setStepFeedback("location", { kind: "error", text });
+      return;
+    }
+
+    if (selectedAddress && !addressSuggestionIsVerified(selectedAddress)) {
+      const text =
+        "Choose a more specific street-address result. This match cannot be verified for payment yet.";
+      setLocationAddressError(text);
+      setStepFeedback("location", { kind: "error", text });
+      return;
+    }
+
+    if (!locationConfirmed) {
+      const text = "Confirm that the map pin represents the sale property.";
+      setStepFeedback("location", { kind: "error", text });
+      return;
+    }
+
+    setLocationAddressError("");
     void saveStep(
       "location",
       `/api/events/${draftRef.current.id}/location`,
@@ -553,35 +894,48 @@ export function EventBuilder({
         region,
         postalCode,
         countryCode,
-        timezone: locationTimezone,
+        timezone,
         privacyMode,
         selectionToken,
         confirmed: locationConfirmed,
+        pinLatitude: selectedCoordinates?.latitude,
+        pinLongitude: selectedCoordinates?.longitude,
       },
       (saved) => saved.steps.locationComplete,
       "photos",
-      true,
     );
   }
 
-  function choosePhotos(event: ChangeEvent<HTMLInputElement>) {
-    if (operationActiveRef.current || uploadActiveRef.current) {
-      event.currentTarget.value = "";
+  function queuePhotos(selected: readonly File[]) {
+    if (
+      operationActiveRef.current ||
+      uploadActiveRef.current ||
+      selected.length === 0
+    ) {
       return;
     }
-    const selected = [...(event.currentTarget.files ?? [])];
+    const remainingCapacity = Math.max(
+      0,
+      MAX_EVENT_PHOTOS - draftRef.current.photos.length,
+    );
+    let acceptedForCapacity = 0;
     const items = selected.map<UploadItem>((file) => {
-      const error = !ACCEPTED_PHOTO_TYPES.has(file.type)
+      let error = !ACCEPTED_PHOTO_TYPES.has(file.type)
         ? "Unsupported format. Choose JPEG, PNG, WebP, HEIC, or HEIF."
         : file.size <= 0
           ? "This file is empty."
           : file.size > MAX_PHOTO_BYTES
             ? "This file exceeds the 15 MB limit."
             : undefined;
+      if (!error && acceptedForCapacity >= remainingCapacity) {
+        error = `This sale already has the maximum of ${String(MAX_EVENT_PHOTOS)} photos.`;
+      }
+      if (!error) acceptedForCapacity += 1;
       return {
         id: crypto.randomUUID(),
         file,
         fileName: file.name,
+        fileSize: file.size,
         previewUrl: URL.createObjectURL(file),
         previewIsLocal: true,
         status: error ? "failed" : "selected",
@@ -591,8 +945,47 @@ export function EventBuilder({
     });
     for (const item of items) previewUrls.current.add(item.previewUrl);
     setUploads((current) => [...current, ...items]);
-    event.currentTarget.value = "";
     void uploadSelected(items);
+  }
+
+  function choosePhotos(event: ChangeEvent<HTMLInputElement>) {
+    const selected = [...(event.currentTarget.files ?? [])];
+    event.currentTarget.value = "";
+    queuePhotos(selected);
+  }
+
+  function photoDragEnter(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    if (operationActiveRef.current || uploadActiveRef.current) return;
+    photoDragDepth.current += 1;
+    const files = [...event.dataTransfer.items].filter(
+      (item) => item.kind === "file",
+    );
+    setPhotoDragState(
+      files.length > 0 &&
+        files.every((item) => !item.type || ACCEPTED_PHOTO_TYPES.has(item.type))
+        ? "valid"
+        : "invalid",
+    );
+  }
+
+  function photoDragOver(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect =
+      photoDragState === "invalid" ? "none" : "copy";
+  }
+
+  function photoDragLeave(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    photoDragDepth.current = Math.max(0, photoDragDepth.current - 1);
+    if (photoDragDepth.current === 0) setPhotoDragState("idle");
+  }
+
+  function dropPhotos(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    photoDragDepth.current = 0;
+    setPhotoDragState("idle");
+    queuePhotos([...event.dataTransfer.files]);
   }
 
   function updateUpload(id: string, changes: Partial<UploadItem>) {
@@ -1124,6 +1517,16 @@ export function EventBuilder({
   const coverPhoto = draft.photos.find(
     (photo) => photo.status === "READY" && photo.isCover,
   );
+  const coverPhotoIndex = coverPhoto
+    ? draft.photos.findIndex((photo) => photo.id === coverPhoto.id)
+    : -1;
+  const additionalPhotos = draft.photos.filter((photo) => !photo.isCover);
+  const selectedAddressIsVerified = selectedAddress
+    ? addressSuggestionIsVerified(selectedAddress)
+    : false;
+  const savedAddressIsVerified =
+    draft.location?.validationStatus === "VERIFIED" &&
+    draft.location.confirmationStatus === "CONFIRMED";
   const completionItems = [
     { label: "Add sale details", complete: draft.steps.detailsComplete },
     { label: "Set the schedule", complete: draft.steps.scheduleComplete },
@@ -1168,7 +1571,57 @@ export function EventBuilder({
     );
   }
 
-  const currentStepNumber = EVENT_WIZARD_STEPS.indexOf(step) + 1;
+  const uploadReadyCount = uploads.filter(
+    (item) => item.status === "ready",
+  ).length;
+  const uploadFailedCount = uploads.filter(
+    (item) => item.status === "failed",
+  ).length;
+  const uploadInFlightCount = uploads.filter((item) =>
+    ["selected", "reserving", "uploading", "processing"].includes(item.status),
+  ).length;
+  const scheduleStartDate = calendarDateFromKey(localDateKey(localStartsAt));
+  const scheduleEndDate = calendarDateFromKey(localDateKey(localEndsAt));
+  const scheduleCalendarStart = new Date(
+    scheduleMonth.getFullYear(),
+    scheduleMonth.getMonth(),
+    1 - scheduleMonth.getDay(),
+  );
+  const scheduleDays = Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(scheduleCalendarStart);
+    day.setDate(scheduleCalendarStart.getDate() + index);
+    return day;
+  });
+  const scheduleTimeOptions = Array.from({ length: 48 }, (_, index) => {
+    const hour = String(Math.floor(index / 2)).padStart(2, "0");
+    const minute = index % 2 === 0 ? "00" : "30";
+    return `${hour}:${minute}`;
+  });
+  const uploadsByPhotoId = new Map(
+    uploads.flatMap((upload) =>
+      upload.photoId ? [[upload.photoId, upload] as const] : [],
+    ),
+  );
+  const photoManagerRows: readonly PhotoManagerRow[] = [
+    ...draft.photos.map((photo, photoIndex) => ({
+      key: photo.id,
+      upload: uploadsByPhotoId.get(photo.id),
+      photo,
+      photoIndex,
+    })),
+    ...uploads
+      .filter((upload) => !upload.photoId)
+      .map((upload) => ({
+        key: upload.id,
+        upload,
+        photo: undefined,
+        photoIndex: -1,
+      })),
+  ].sort(
+    (left, right) =>
+      Number(Boolean(right.photo?.isCover)) -
+      Number(Boolean(left.photo?.isCover)),
+  );
 
   return (
     <div className="builder-layout">
@@ -1184,6 +1637,7 @@ export function EventBuilder({
                 current ? "is-current" : completed[item] ? "is-complete" : ""
               }
               disabled={!available || Boolean(pending) || uploadActive}
+              aria-label={STEP_LABELS[item]}
               aria-current={current ? "step" : undefined}
               onClick={() => setStep(item)}
             >
@@ -1198,21 +1652,6 @@ export function EventBuilder({
         })}
       </nav>
 
-      <div className="wizard-progress-meta">
-        <p className="wizard-current-step">
-          <strong>
-            Step {currentStepNumber} of {EVENT_WIZARD_STEPS.length}
-          </strong>
-          <span>{STEP_SUMMARIES[step]}</span>
-        </p>
-        <p className="wizard-version">
-          <Icon name="check" size={16} />
-          <span>Draft v{draft.version}</span>
-          <span className="wizard-version__detail">
-            Changes are server confirmed
-          </span>
-        </p>
-      </div>
       {confirmation ? (
         <p className="success-box" role="status">
           {confirmation}
@@ -1269,42 +1708,230 @@ export function EventBuilder({
           ) : null}
 
           {step === "schedule" ? (
-            <section className="builder-card" aria-labelledby="schedule-title">
+            <section
+              className="builder-card schedule-card"
+              aria-labelledby="schedule-title"
+            >
               <p className="eyebrow">Step 2 of 5</p>
-              <h2 id="schedule-title" ref={stepHeadingRef} tabIndex={-1}>
-                Local schedule
-              </h2>
-              <p>
-                Times are validated on the server, including daylight-saving
-                gaps and overlaps.
-              </p>
+              <div className="schedule-card__heading">
+                <span
+                  className="schedule-card__heading-icon"
+                  aria-hidden="true"
+                >
+                  <Icon name="clock" size={24} />
+                </span>
+                <div>
+                  <h2 id="schedule-title" ref={stepHeadingRef} tabIndex={-1}>
+                    Schedule your sale
+                  </h2>
+                  <p>
+                    Choose the sale dates and local hours. We’ll validate the
+                    timezone and daylight-saving rules when you save.
+                  </p>
+                </div>
+              </div>
               <form onSubmit={saveSchedule}>
-                <label>
-                  Starts
-                  <input
-                    value={localStartsAt}
-                    onChange={(e) => setLocalStartsAt(e.target.value)}
-                    type="datetime-local"
-                    required
-                  />
-                </label>
-                <label>
-                  Ends
-                  <input
-                    value={localEndsAt}
-                    onChange={(e) => setLocalEndsAt(e.target.value)}
-                    type="datetime-local"
-                    required
-                  />
-                </label>
-                <label>
-                  IANA timezone
-                  <input
-                    value={timezone}
-                    onChange={(e) => setTimezone(e.target.value)}
-                    required
-                  />
-                </label>
+                <div className="schedule-picker">
+                  <section
+                    className="schedule-calendar"
+                    aria-label="Choose your sale dates"
+                  >
+                    <div className="schedule-calendar__header">
+                      <button
+                        type="button"
+                        className="schedule-calendar__nav schedule-calendar__nav--previous"
+                        aria-label="Previous month"
+                        onClick={() => changeScheduleMonth(-1)}
+                      >
+                        <Icon name="chevron" size={20} />
+                      </button>
+                      <h3>
+                        {new Intl.DateTimeFormat("en-US", {
+                          month: "long",
+                          year: "numeric",
+                        }).format(scheduleMonth)}
+                      </h3>
+                      <button
+                        type="button"
+                        className="schedule-calendar__nav schedule-calendar__nav--next"
+                        aria-label="Next month"
+                        onClick={() => changeScheduleMonth(1)}
+                      >
+                        <Icon name="chevron" size={20} />
+                      </button>
+                    </div>
+                    <div
+                      className="schedule-calendar__weekdays"
+                      aria-hidden="true"
+                    >
+                      {SCHEDULE_WEEKDAYS.map((weekday) => (
+                        <span key={weekday}>{weekday}</span>
+                      ))}
+                    </div>
+                    <div className="schedule-calendar__days">
+                      {scheduleDays.map((day) => {
+                        const dayKey = calendarDateKey(day);
+                        const startKey = localDateKey(localStartsAt);
+                        const endKey = localDateKey(localEndsAt);
+                        const isStart = dayKey === startKey;
+                        const isEnd = dayKey === endKey;
+                        const isInRange = Boolean(
+                          startKey &&
+                          endKey &&
+                          dayKey > startKey &&
+                          dayKey < endKey,
+                        );
+                        const isCurrentMonth =
+                          day.getMonth() === scheduleMonth.getMonth();
+                        const isToday = dayKey === calendarDateKey(new Date());
+
+                        return (
+                          <button
+                            key={dayKey}
+                            type="button"
+                            className={[
+                              "schedule-calendar__day",
+                              !isCurrentMonth ? "is-outside-month" : "",
+                              isToday ? "is-today" : "",
+                              isStart ? "is-range-start" : "",
+                              isEnd ? "is-range-end" : "",
+                              isInRange ? "is-in-range" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            aria-label={new Intl.DateTimeFormat("en-US", {
+                              weekday: "long",
+                              month: "long",
+                              day: "numeric",
+                              year: "numeric",
+                            }).format(day)}
+                            aria-pressed={isStart || isEnd}
+                            onClick={() => chooseScheduleDate(day)}
+                          >
+                            <span>{day.getDate()}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  <section
+                    className="schedule-details"
+                    aria-label="Sale schedule details"
+                  >
+                    <div className="schedule-date-field">
+                      <span>Start date*</span>
+                      <div>
+                        <strong>{formatScheduleDate(localStartsAt)}</strong>
+                        <button
+                          type="button"
+                          className="schedule-time-trigger"
+                          aria-expanded={activeScheduleTimePicker === "start"}
+                          aria-haspopup="dialog"
+                          aria-label={`Start time: ${formatScheduleTime(scheduleStartTime)}`}
+                          onClick={() =>
+                            setActiveScheduleTimePicker((current) =>
+                              current === "start" ? null : "start",
+                            )
+                          }
+                        >
+                          {formatScheduleTime(scheduleStartTime)}
+                          <Icon name="chevron" size={14} />
+                        </button>
+                        {activeScheduleTimePicker === "start" ? (
+                          <div
+                            className="schedule-time-popover"
+                            role="dialog"
+                            aria-label="Choose start time"
+                          >
+                            <div>
+                              {scheduleTimeOptions.map((time) => (
+                                <button
+                                  key={time}
+                                  type="button"
+                                  className={
+                                    time === scheduleStartTime
+                                      ? "is-selected"
+                                      : ""
+                                  }
+                                  onClick={() => {
+                                    updateScheduleStartTime(time);
+                                    setActiveScheduleTimePicker(null);
+                                  }}
+                                >
+                                  {formatScheduleTime(time)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="schedule-date-field">
+                      <span>End date*</span>
+                      <div>
+                        <strong>{formatScheduleDate(localEndsAt)}</strong>
+                        <button
+                          type="button"
+                          className="schedule-time-trigger"
+                          aria-expanded={activeScheduleTimePicker === "end"}
+                          aria-haspopup="dialog"
+                          aria-label={`End time: ${formatScheduleTime(scheduleEndTime)}`}
+                          onClick={() =>
+                            setActiveScheduleTimePicker((current) =>
+                              current === "end" ? null : "end",
+                            )
+                          }
+                        >
+                          {formatScheduleTime(scheduleEndTime)}
+                          <Icon name="chevron" size={14} />
+                        </button>
+                        {activeScheduleTimePicker === "end" ? (
+                          <div
+                            className="schedule-time-popover"
+                            role="dialog"
+                            aria-label="Choose end time"
+                          >
+                            <div>
+                              {scheduleTimeOptions.map((time) => (
+                                <button
+                                  key={time}
+                                  type="button"
+                                  className={
+                                    time === scheduleEndTime
+                                      ? "is-selected"
+                                      : ""
+                                  }
+                                  onClick={() => {
+                                    updateScheduleEndTime(time);
+                                    setActiveScheduleTimePicker(null);
+                                  }}
+                                >
+                                  {formatScheduleTime(time)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <label className="schedule-timezone-field">
+                      <span>IANA timezone</span>
+                      <input
+                        value={timezone}
+                        onChange={(event) => setTimezone(event.target.value)}
+                        required
+                      />
+                    </label>
+                    <div className="schedule-summary" role="status">
+                      {scheduleStartDate && scheduleEndDate
+                        ? `Sale: ${formatScheduleDate(localStartsAt)} – ${formatScheduleDate(localEndsAt)}, ${formatScheduleTime(scheduleStartTime)} – ${formatScheduleTime(scheduleEndTime)}`
+                        : scheduleStartDate
+                          ? "Choose an end date to finish your sale schedule."
+                          : "Select a start date to begin."}
+                    </div>
+                  </section>
+                </div>
                 <StepFeedback feedback={currentFeedback} />
                 <WizardActions
                   back={() => setStep("details")}
@@ -1325,10 +1952,30 @@ export function EventBuilder({
                   value={addressQuery}
                   onChange={changeAddressQuery}
                   onSelect={selectAddress}
+                  invalid={Boolean(locationAddressError)}
+                  validationMessage={locationAddressError}
                 />
+                {selectedAddress ? (
+                  <p
+                    className={`address-verification-status${selectedAddressIsVerified ? " is-verified" : " is-invalid"}`}
+                    role={selectedAddressIsVerified ? "status" : "alert"}
+                  >
+                    {selectedAddressIsVerified
+                      ? "Address match found. Confirm the map pin to finish this step."
+                      : "This result is not precise enough to verify. Choose a full street-address result from the list."}
+                  </p>
+                ) : savedAddressIsVerified ? (
+                  <p className="address-verification-status is-verified" role="status">
+                    Address verified. You can update the privacy setting and continue.
+                  </p>
+                ) : (
+                  <p className="address-verification-status">
+                    Step 1: choose the sale property from the address results. Step 2: confirm its map pin.
+                  </p>
+                )}
                 {selectedAddress || selectedCoordinates ? (
                   <section
-                    className="selected-address-review"
+                    className={`selected-address-review${selectedAddress && !selectedAddressIsVerified ? " selected-address-review--invalid" : ""}`}
                     aria-labelledby="selected-address-title"
                   >
                     <div>
@@ -1339,8 +1986,8 @@ export function EventBuilder({
                           addressQuery}
                       </h3>
                       <p>
-                        Review the structured address and non-draggable pin
-                        before confirming.
+                        Check the map pin, then drag it to the correct spot if
+                        the entrance or driveway is more accurate.
                       </p>
                     </div>
                     {selectedCoordinates ? (
@@ -1350,17 +1997,27 @@ export function EventBuilder({
                         label={
                           selectedAddress?.formattedAddress ?? addressQuery
                         }
+                        onPositionChange={(position) => {
+                          setSelectedCoordinates(position);
+                          setLocationConfirmed(false);
+                        }}
                       />
                     ) : null}
                     <label className="location-confirmation-check">
                       <input
                         type="checkbox"
                         checked={locationConfirmed}
-                        onChange={(event) =>
-                          setLocationConfirmed(event.target.checked)
-                        }
+                        onChange={(event) => {
+                          setLocationConfirmed(event.target.checked);
+                          if (event.target.checked) {
+                            setStepFeedback("location", {
+                              kind: "success",
+                              text: "Map pin confirmed. Save and continue to validate the address.",
+                            });
+                          }
+                        }}
                       />
-                      I confirm that this pin represents the sale property.
+                      I have checked this pin and it represents the sale property.
                     </label>
                     <p className="location-attribution">
                       {selectedAddress?.provider.attribution ??
@@ -1370,9 +2027,9 @@ export function EventBuilder({
                 ) : (
                   <section className="unconfirmed-address-draft">
                     <p>
-                      If address search is unavailable, save an unconfirmed
-                      draft. Approval, payment, and publication stay blocked
-                      until you select and confirm an address.
+                      Select an address result to continue. A typed address or
+                      these draft fields cannot be validated for approval or
+                      payment.
                     </p>
                     <div className="form-grid">
                       <label>
@@ -1423,16 +2080,8 @@ export function EventBuilder({
                     }}
                   />
                 </label>
-                <label>
-                  Address timezone
-                  <input
-                    value={locationTimezone}
-                    onChange={(e) => setLocationTimezone(e.target.value)}
-                    required
-                  />
-                </label>
                 <fieldset>
-                  <legend>Address privacy</legend>
+                  <legend>Privacy for this address</legend>
                   {(
                     [
                       ["EXACT_ADDRESS", "Show exact address"],
@@ -1469,164 +2118,447 @@ export function EventBuilder({
           ) : null}
 
           {step === "photos" ? (
-            <section className="builder-card" aria-labelledby="photos-title">
+            <section
+              className="builder-card builder-card--photos"
+              aria-labelledby="photos-title"
+            >
               <p className="eyebrow">Step 4 of 5</p>
               <h2 id="photos-title" ref={stepHeadingRef} tabIndex={-1}>
                 Photos
               </h2>
-              <p>
+              <p className="photo-step-intro">
                 Select several images at once. Every file is validated before
                 its private reservation, then sanitized and finalized
                 independently.
               </p>
-              <label>
-                Event photos (JPEG, PNG, WebP, HEIC, or HEIF; maximum 15 MB
-                each)
+              <label
+                className={`photo-dropzone photo-dropzone--${photoDragState}${draft.photos.length >= MAX_EVENT_PHOTOS ? " photo-dropzone--full" : ""}`}
+                aria-disabled={draft.photos.length >= MAX_EVENT_PHOTOS}
+                onDragEnter={photoDragEnter}
+                onDragOver={photoDragOver}
+                onDragLeave={photoDragLeave}
+                onDrop={dropPhotos}
+              >
                 <input
+                  className="photo-input"
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                   multiple
+                  aria-label="Event photos (JPEG, PNG, WebP, HEIC, or HEIF; maximum 15 MB each)"
                   onChange={choosePhotos}
-                  disabled={Boolean(pending) || uploadActive}
+                  disabled={
+                    Boolean(pending) ||
+                    uploadActive ||
+                    draft.photos.length >= MAX_EVENT_PHOTOS
+                  }
                 />
+                <span className="photo-dropzone__icon" aria-hidden="true">
+                  <Icon
+                    name={photoDragState === "invalid" ? "warning" : "photo"}
+                  />
+                </span>
+                <strong>
+                  {draft.photos.length >= MAX_EVENT_PHOTOS
+                    ? "Photo limit reached"
+                    : photoDragState === "valid"
+                      ? "Release to add photos"
+                      : photoDragState === "invalid"
+                        ? "Some files are not supported"
+                        : "Drag and drop photos here"}
+                </strong>
+                <span className="photo-dropzone__desktop-copy">
+                  or click to choose files
+                </span>
+                <span className="photo-dropzone__mobile-copy">
+                  Tap to choose photos
+                </span>
+                <small>JPEG, PNG, WebP, HEIC, or HEIF · Max 15 MB each</small>
+                <small>Up to {MAX_EVENT_PHOTOS} photos</small>
               </label>
               {uploads.length ? (
-                <ul
-                  className="upload-queue"
-                  aria-label="Selected photo uploads"
-                >
-                  {uploads.map((item) => (
-                    <li key={item.id}>
-                      <UploadPreview item={item} />
-                      <div className="upload-queue-details">
-                        <strong>{item.fileName}</strong>
-                        <span>
-                          {UPLOAD_STATUS_LABELS[item.status]} · {item.progress}%
+                <div className="upload-queue-region" hidden>
+                  <p className="upload-queue-summary" role="status">
+                    <Icon name="photo" size={18} />
+                    <strong>{uploads.length} selected</strong>
+                    {uploadReadyCount ? (
+                      <span className="is-ready">{uploadReadyCount} ready</span>
+                    ) : null}
+                    {uploadInFlightCount ? (
+                      <span className="is-uploading">
+                        {uploadInFlightCount} uploading
+                      </span>
+                    ) : null}
+                    {uploadFailedCount ? (
+                      <span className="is-failed">
+                        {uploadFailedCount} failed
+                      </span>
+                    ) : null}
+                  </p>
+                  <ul
+                    className="upload-queue"
+                    aria-label="Selected photo uploads"
+                  >
+                    {uploads.map((item) => (
+                      <li key={item.id} data-status={item.status}>
+                        <span
+                          className="upload-queue__state"
+                          aria-hidden="true"
+                        >
+                          {item.status === "ready" ? (
+                            <Icon name="check" size={15} />
+                          ) : item.status === "failed" ? (
+                            <Icon name="warning" size={15} />
+                          ) : (
+                            <span />
+                          )}
                         </span>
-                        {item.error ? <small>{item.error}</small> : null}
-                      </div>
-                      <progress
-                        aria-label={`Upload progress for ${item.fileName}`}
-                        max={100}
-                        value={item.progress}
-                      >
-                        {item.progress}%
-                      </progress>
-                      <div className="button-row">
-                        {uploadCanRetry(item) ? (
+                        <UploadPreview item={item} />
+                        <div className="upload-queue-details">
+                          <strong>{item.fileName}</strong>
+                          <small>{formatFileSize(item.fileSize)}</small>
+                        </div>
+                        <div className="upload-queue-progress">
+                          <span>
+                            <strong>{UPLOAD_STATUS_LABELS[item.status]}</strong>
+                            <small>{item.progress}%</small>
+                          </span>
+                          <progress
+                            aria-label={`Upload progress for ${item.fileName}`}
+                            max={100}
+                            value={item.progress}
+                          >
+                            {item.progress}%
+                          </progress>
+                          {item.error ? <small>{item.error}</small> : null}
+                        </div>
+                        <div className="button-row upload-queue-actions">
+                          {uploadCanRetry(item) ? (
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              disabled={Boolean(pending) || uploadActive}
+                              onClick={() => void uploadSelected([item])}
+                            >
+                              Retry
+                            </button>
+                          ) : null}
                           <button
                             type="button"
-                            className="secondary-button"
+                            className={
+                              uploadDismissesLocally(item)
+                                ? "secondary-button"
+                                : "danger-button"
+                            }
+                            aria-busy={pending === `remove-upload:${item.id}`}
                             disabled={Boolean(pending) || uploadActive}
-                            onClick={() => void uploadSelected([item])}
+                            onClick={() => void removeUpload(item)}
                           >
-                            Retry
+                            {pending === `remove-upload:${item.id}`
+                              ? "Removing…"
+                              : uploadDismissesLocally(item)
+                                ? "Dismiss"
+                                : "Remove"}
                           </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className={
-                            uploadDismissesLocally(item)
-                              ? "secondary-button"
-                              : "danger-button"
-                          }
-                          aria-busy={pending === `remove-upload:${item.id}`}
-                          disabled={Boolean(pending) || uploadActive}
-                          onClick={() => void removeUpload(item)}
-                        >
-                          {pending === `remove-upload:${item.id}`
-                            ? "Removing…"
-                            : uploadDismissesLocally(item)
-                              ? "Dismiss"
-                              : "Remove"}
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : null}
               {uploadActive ? (
                 <p role="status">Uploading and processing selected photos…</p>
               ) : null}
               {draft.photos.length ? (
-                <ol className="photo-list" aria-label="Event photo order">
-                  {draft.photos.map((photo, index) => (
-                    <li key={photo.id}>
-                      {photo.status === "READY" ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={photo.urls.thumbnail}
-                          alt={`Event photo ${index + 1}`}
-                        />
-                      ) : (
-                        <div className="photo-placeholder">{photo.status}</div>
-                      )}
-                      <div>
-                        <strong>
-                          Photo {index + 1} {photo.isCover ? "- Cover" : ""}
-                        </strong>
-                        <p>Status: {photo.status}</p>
-                        {photo.errorCode ? (
-                          <p>Safe error: {photo.errorCode}</p>
-                        ) : null}
-                        <div className="button-row">
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            aria-label={`Move photo ${index + 1} earlier`}
-                            disabled={
-                              index === 0 || Boolean(pending) || uploadActive
-                            }
-                            onClick={() => movePhoto(photo.id, -1)}
-                          >
-                            Move earlier
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            aria-label={`Move photo ${index + 1} later`}
-                            disabled={
-                              index === draft.photos.length - 1 ||
-                              Boolean(pending) ||
-                              uploadActive
-                            }
-                            onClick={() => movePhoto(photo.id, 1)}
-                          >
-                            Move later
-                          </button>
-                          {photo.status === "READY" && !photo.isCover ? (
-                            <button
-                              type="button"
-                              className="secondary-button"
-                              aria-label={`Make photo ${index + 1} cover`}
-                              disabled={Boolean(pending) || uploadActive}
-                              onClick={() => selectCover(photo.id)}
-                            >
-                              Make cover
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="danger-button"
-                            disabled={Boolean(pending) || uploadActive}
-                            onClick={() => removePhoto(photo.id)}
-                          >
-                            Delete
-                          </button>
-                        </div>
+                <div className="photo-library" hidden>
+                  <div
+                    className="photo-library-heading"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span>
+                      <Icon name="photo" size={19} />
+                      <strong>Photos uploaded</strong>
+                      <span className="photo-library-count">
+                        {readyPhotoCount} of {MAX_EVENT_PHOTOS}
+                      </span>
+                    </span>
+                    <small>
+                      {hasReadyCover
+                        ? `1 cover · ${String(Math.max(0, readyPhotoCount - 1))} additional`
+                        : `${String(readyPhotoCount)} ready · choose a cover`}
+                    </small>
+                  </div>
+
+                  {coverPhoto ? (
+                    <section
+                      className="photo-cover-card"
+                      aria-label="Selected cover photo"
+                    >
+                      <div className="photo-cover-card__heading">
+                        <span>Cover photo</span>
+                        <span className="status-badge status-badge--success">
+                          Ready
+                        </span>
                       </div>
-                    </li>
-                  ))}
-                </ol>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={coverPhoto.urls.thumbnail}
+                        alt={`Event photo ${coverPhotoIndex + 1}`}
+                      />
+                      <div>
+                        <strong>Photo {coverPhotoIndex + 1} - Cover</strong>
+                        <p>Status: {coverPhoto.status}</p>
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {additionalPhotos.length ? (
+                    <ol
+                      className="photo-list photo-list--compact"
+                      aria-label="Event photo order"
+                      style={
+                        {
+                          "--visible-photo-rows": Math.min(
+                            additionalPhotos.length,
+                            10,
+                          ),
+                        } as CSSProperties
+                      }
+                    >
+                      {additionalPhotos.map((photo) => {
+                        const index = draft.photos.findIndex(
+                          (candidate) => candidate.id === photo.id,
+                        );
+                        return (
+                          <li key={photo.id}>
+                            {photo.status === "READY" ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={photo.urls.thumbnail}
+                                alt={`Event photo ${index + 1}`}
+                              />
+                            ) : (
+                              <div className="photo-placeholder">
+                                {photo.status}
+                              </div>
+                            )}
+                            <div className="photo-list__details">
+                              <strong>Photo {index + 1}</strong>
+                              <p>Status: {photo.status}</p>
+                              {photo.errorCode ? (
+                                <p>Safe error: {photo.errorCode}</p>
+                              ) : null}
+                            </div>
+                            <PhotoActionDropdown
+                              photoId={photo.id}
+                              label={`photo ${index + 1}`}
+                              canMoveEarlier={index > 0}
+                              canMoveLater={index < draft.photos.length - 1}
+                              canMakeCover={
+                                photo.status === "READY" && !photo.isCover
+                              }
+                              disabled={Boolean(pending) || uploadActive}
+                              onMoveEarlier={() => movePhoto(photo.id, -1)}
+                              onMoveLater={() => movePhoto(photo.id, 1)}
+                              onMakeCover={() => selectCover(photo.id)}
+                              onDelete={() => removePhoto(photo.id)}
+                            />
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  ) : (
+                    <p className="photo-library-empty">
+                      Your cover is the only uploaded photo. Add more photos to
+                      build the gallery.
+                    </p>
+                  )}
+                </div>
               ) : (
-                <p>No server-stored photos yet.</p>
+                <p hidden>No server-stored photos yet.</p>
               )}
+              <div className="photo-manager">
+                <div
+                  className="photo-manager__heading"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span>
+                    <Icon name="photo" size={19} />
+                    <strong>Photos uploaded</strong>
+                    <span className="photo-manager__count">
+                      {readyPhotoCount} of {MAX_EVENT_PHOTOS}
+                    </span>
+                  </span>
+                  <small>
+                    {uploadInFlightCount
+                      ? `${String(uploadInFlightCount)} uploading`
+                      : uploadFailedCount
+                        ? `${String(uploadFailedCount)} failed`
+                        : hasReadyCover
+                          ? "Cover selected"
+                          : readyPhotoCount
+                            ? "Choose a cover"
+                            : "No photos uploaded yet"}
+                  </small>
+                </div>
+
+                {photoManagerRows.length ? (
+                  <ol
+                    className="photo-manager__list"
+                    aria-label="Photo uploads and event photo order"
+                    style={
+                      {
+                        "--visible-photo-rows": Math.min(
+                          photoManagerRows.length,
+                          10,
+                        ),
+                      } as CSSProperties
+                    }
+                  >
+                    {photoManagerRows.map((row) => {
+                      const { upload, photo, photoIndex } = row;
+                      const isReady = photo?.status === "READY";
+                      const status = upload
+                        ? UPLOAD_STATUS_LABELS[upload.status]
+                        : (photo?.status ?? "Queued");
+                      const displayName =
+                        upload?.fileName ?? `Photo ${String(photoIndex + 1)}`;
+                      const dataStatus =
+                        upload?.status ??
+                        photo?.status.toLowerCase() ??
+                        "selected";
+
+                      return (
+                        <li key={row.key} data-status={dataStatus}>
+                          <span
+                            className="photo-manager__state"
+                            aria-hidden="true"
+                          >
+                            {isReady || upload?.status === "ready" ? (
+                              <Icon name="check" size={15} />
+                            ) : upload?.status === "failed" ||
+                              photo?.status === "FAILED" ? (
+                              <Icon name="warning" size={15} />
+                            ) : (
+                              <span />
+                            )}
+                          </span>
+
+                          {upload ? (
+                            <UploadPreview item={upload} />
+                          ) : photo?.status === "READY" ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              className="upload-preview"
+                              src={photo.urls.thumbnail}
+                              alt={`Event photo ${photoIndex + 1}`}
+                            />
+                          ) : (
+                            <div className="upload-preview-fallback">
+                              {photo?.status ?? "Queued"}
+                            </div>
+                          )}
+
+                          <div className="photo-manager__details">
+                            <span>
+                              <strong>{displayName}</strong>
+                              {photo?.isCover ? (
+                                <span className="photo-cover-pill">Cover</span>
+                              ) : null}
+                            </span>
+                            <small>
+                              {upload
+                                ? formatFileSize(upload.fileSize)
+                                : `Status: ${status}`}
+                            </small>
+                          </div>
+
+                          <div className="photo-manager__progress">
+                            <span>
+                              <strong>{status}</strong>
+                              {upload && upload.status !== "ready" ? (
+                                <small>{upload.progress}%</small>
+                              ) : null}
+                            </span>
+                            {upload && upload.status !== "ready" ? (
+                              <progress
+                                aria-label={`Upload progress for ${upload.fileName}`}
+                                max={100}
+                                value={upload.progress}
+                              >
+                                {upload.progress}%
+                              </progress>
+                            ) : null}
+                            {upload?.error ? (
+                              <small>{upload.error}</small>
+                            ) : null}
+                            {!upload && photo?.errorCode ? (
+                              <small>Safe error: {photo.errorCode}</small>
+                            ) : null}
+                          </div>
+
+                          {isReady && photo ? (
+                            <PhotoActionDropdown
+                              photoId={photo.id}
+                              label={displayName}
+                              canMoveEarlier={photoIndex > 0}
+                              canMoveLater={
+                                photoIndex < draft.photos.length - 1
+                              }
+                              canMakeCover={!photo.isCover}
+                              disabled={Boolean(pending) || uploadActive}
+                              onMoveEarlier={() => movePhoto(photo.id, -1)}
+                              onMoveLater={() => movePhoto(photo.id, 1)}
+                              onMakeCover={() => selectCover(photo.id)}
+                              onDelete={() => removePhoto(photo.id)}
+                            />
+                          ) : upload ? (
+                            <div className="button-row photo-manager__actions">
+                              {uploadCanRetry(upload) ? (
+                                <button
+                                  type="button"
+                                  className="secondary-button"
+                                  disabled={Boolean(pending) || uploadActive}
+                                  onClick={() => void uploadSelected([upload])}
+                                >
+                                  Retry
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="danger-button"
+                                aria-busy={
+                                  pending === `remove-upload:${upload.id}`
+                                }
+                                disabled={Boolean(pending) || uploadActive}
+                                onClick={() => void removeUpload(upload)}
+                              >
+                                {pending === `remove-upload:${upload.id}`
+                                  ? "Removing…"
+                                  : "Remove"}
+                              </button>
+                            </div>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                ) : (
+                  <p className="photo-manager__empty">
+                    No server-stored photos yet.
+                  </p>
+                )}
+              </div>
               <p className="photo-readiness" role="status">
-                {readyPhotoCount === 0
-                  ? "No photos are READY yet. Uploaded files count only after server image processing succeeds."
-                  : !hasReadyCover
-                    ? `${String(readyPhotoCount)} ${readyPhotoCount === 1 ? "photo is" : "photos are"} READY. Select a READY photo as the cover to continue.`
-                    : `${String(readyPhotoCount)} ${readyPhotoCount === 1 ? "photo is" : "photos are"} READY and the cover is selected.`}
+                <Icon name="shield" size={20} />
+                <span>
+                  {readyPhotoCount === 0
+                    ? "No photos are READY yet. Uploaded files count only after server image processing succeeds."
+                    : !hasReadyCover
+                      ? `${String(readyPhotoCount)} ${readyPhotoCount === 1 ? "photo is" : "photos are"} READY. Select a READY photo as the cover to continue.`
+                      : `${String(readyPhotoCount)} ${readyPhotoCount === 1 ? "photo is" : "photos are"} READY and the cover is selected.`}
+                </span>
               </p>
               <StepFeedback feedback={currentFeedback} />
               <div className="wizard-actions">

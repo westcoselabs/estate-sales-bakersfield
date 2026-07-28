@@ -11,8 +11,9 @@ import {
   SelectedListingsSkeleton,
   SellerCallout,
 } from "@/features/marketing/components";
+import { HeroMarquee } from "@/features/marketing/hero-marquee";
 import { marketingMetadata } from "@/features/marketing/metadata";
-import { buildSearchHref, normalizeSearchQuery } from "@/modules/public-search";
+import { normalizeSearchQuery } from "@/modules/public-search";
 import { getServerApplicationUrl } from "@/platform/config/application-url";
 
 export const dynamic = "force-dynamic";
@@ -46,70 +47,57 @@ export default function HomePage() {
     },
   ];
   return (
-    <PublicShell>
+    <PublicShell variant="home">
       <div className="marketing-home">
         <section className="home-hero" aria-labelledby="home-title">
           <div className="home-hero__media" aria-hidden="true">
             <Image
-              src="/images/marketplace-hero.webp"
+              src="/images/background-estate-hero.webp"
               alt=""
               fill
               priority
-              sizes="(max-width: 767px) 100vw, 58vw"
+              sizes="100vw"
             />
           </div>
           <div className="home-hero__content">
-            <p className="eyebrow">
-              Bakersfield estate and yard sale directory
+            <p className="home-hero__location">
+              <Icon name="pin" size={18} />
+              Bakersfield, California
             </p>
             <h1 id="home-title">
-              Find local sales and one-of-a-kind finds near you
+              Discover local sales and one-of-a-kind finds.
             </h1>
             <p>
-              Browse upcoming published listings in Bakersfield, plan by date,
-              or prepare a sale listing of your own.
+              Browse upcoming estate and yard sales in Bakersfield and plan your
+              route to amazing finds.
             </p>
-            <div className="home-hero__actions">
-              <Link className="ui-button ui-button--primary" href="/search">
-                Find sales near me
-                <Icon name="search" size={19} />
-              </Link>
-              <Link
-                className="ui-button ui-button--secondary"
-                href="/list-your-sale"
-              >
-                List your sale
-              </Link>
-            </div>
-            <Link className="hero-search-entry" href="/search">
-              <span className="hero-search-entry__icon" aria-hidden="true">
+            <form className="home-hero__search" action="/search" method="get">
+              <div className="home-hero__location-field">
                 <Icon name="pin" size={21} />
-              </span>
-              <span>
-                <strong>Bakersfield, CA</strong>
-                <small>Browse all upcoming published sales</small>
-              </span>
-              <span className="hero-search-entry__go" aria-hidden="true">
+                <span>Bakersfield, CA</span>
+              </div>
+              <label className="home-hero__date-field">
+                <span className="sr-only">Sale dates</span>
+                <Icon name="calendar" size={20} />
+                <select name="date" defaultValue="all">
+                  <option value="all">Select dates</option>
+                  <option value="today">Today</option>
+                  <option value="weekend">This weekend</option>
+                  <option value="next-7-days">Next 7 days</option>
+                </select>
+                <Icon
+                  className="home-hero__date-chevron"
+                  name="chevron"
+                  size={18}
+                />
+              </label>
+              <button type="submit" aria-label="Search sales">
                 <Icon name="search" size={21} />
-              </span>
-            </Link>
-            <div className="home-date-links" aria-label="Browse by date">
-              <span>Popular dates</span>
-              <Link href={buildSearchHref(defaultSearch, { date: "today" })}>
-                Today
-              </Link>
-              <Link href={buildSearchHref(defaultSearch, { date: "weekend" })}>
-                This weekend
-              </Link>
-              <Link
-                href={buildSearchHref(defaultSearch, {
-                  date: "next-7-days",
-                })}
-              >
-                Next 7 days
-              </Link>
-            </div>
+                <span>Search</span>
+              </button>
+            </form>
           </div>
+          <HeroMarquee />
         </section>
 
         <Suspense fallback={<SelectedListingsSkeleton count={4} />}>

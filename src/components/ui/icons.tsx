@@ -24,6 +24,8 @@ export type IconName =
   | "pin"
   | "menu"
   | "close"
+  | "pause"
+  | "play"
   | "external"
   | "info";
 
@@ -140,6 +142,13 @@ const paths: Record<IconName, ReactNode> = {
   ),
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   close: <path d="m5 5 14 14M19 5 5 19" />,
+  pause: (
+    <>
+      <path d="M9 5.5v13" />
+      <path d="M15 5.5v13" />
+    </>
+  ),
+  play: <path d="m8 5 11 7-11 7V5Z" />,
   external: (
     <>
       <path d="M13 4h7v7M20 4l-9 9" />

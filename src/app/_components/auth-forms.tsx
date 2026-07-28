@@ -9,6 +9,7 @@ import {
   Button,
   ErrorSummary,
   Field,
+  FieldError,
   Input,
   PasswordInput,
   type FormIssue,
@@ -287,6 +288,9 @@ export function SignupForm() {
 export function LoginForm({ nextPath }: { readonly nextPath: string }) {
   const submission = useSubmission();
   const [issues, setIssues] = useState<readonly FormIssue[]>([]);
+  const passwordError = issues.find(
+    (item) => item.fieldId === "login-password",
+  )?.message;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -342,13 +346,18 @@ export function LoginForm({ nextPath }: { readonly nextPath: string }) {
           required
         />
       </Field>
-      <Field
-        id="login-password"
-        label="Password"
-        error={
-          issues.find((item) => item.fieldId === "login-password")?.message
-        }
-      >
+      <div className="ui-field auth-login-password-field">
+        <div className="auth-login-password-field__header">
+          <label className="ui-field__label" htmlFor="login-password">
+            Password
+          </label>
+          <Link
+            className="auth-login-password-field__forgot"
+            href="/forgot-password"
+          >
+            Forgot password?
+          </Link>
+        </div>
         <PasswordInput
           id="login-password"
           name="password"
@@ -357,9 +366,12 @@ export function LoginForm({ nextPath }: { readonly nextPath: string }) {
           invalid={issues.some((item) => item.fieldId === "login-password")}
           required
         />
-      </Field>
+        {passwordError ? (
+          <FieldError id="login-password-error">{passwordError}</FieldError>
+        ) : null}
+      </div>
       <Button loading={submission.pending} type="submit">
-        {submission.pending ? "Signing in…" : "Log in"}
+        {submission.pending ? "Signing in..." : "Sign in"}
       </Button>
       {submission.message ? (
         <Alert tone="error">{submission.message}</Alert>

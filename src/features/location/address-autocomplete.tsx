@@ -31,10 +31,14 @@ export function AddressAutocomplete({
   value,
   onChange,
   onSelect,
+  invalid = false,
+  validationMessage = "",
 }: {
   readonly value: string;
   readonly onChange: (value: string) => void;
   readonly onSelect: (suggestion: ClientAddressSuggestion) => void;
+  readonly invalid?: boolean;
+  readonly validationMessage?: string;
 }) {
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -128,7 +132,7 @@ export function AddressAutocomplete({
             : "";
 
   return (
-    <div className="address-combobox">
+    <div className={`address-combobox${invalid ? " is-invalid" : ""}`}>
       <label htmlFor={`${listId}-input`}>
         Search the sale property address
       </label>
@@ -153,12 +157,23 @@ export function AddressAutocomplete({
         aria-activedescendant={
           activeIndex >= 0 ? `${listId}-${String(activeIndex)}` : undefined
         }
+        aria-invalid={invalid || undefined}
+        aria-describedby={`${listId}-help${invalid ? ` ${listId}-error` : ""}`}
         autoComplete="off"
         placeholder="Start with the street number and name"
       />
-      <p className="ui-field-help">
+      <p id={`${listId}-help`} className="ui-field-help">
         Choose a structured suggestion before confirming the map pin.
       </p>
+      {invalid ? (
+        <p
+          id={`${listId}-error`}
+          className="address-combobox__validation"
+          role="alert"
+        >
+          {validationMessage}
+        </p>
+      ) : null}
       {suggestions.length ? (
         <ul id={listId} role="listbox" className="address-suggestions">
           {suggestions.map((suggestion, index) => (

@@ -14,12 +14,13 @@ export const metadata: Metadata = {
 export default function SignupPage() {
   return (
     <AuthShell
-      eyebrow="Organizer account"
-      title="Create your account"
-      description="Start your organizer profile and draft now. Verify your email before photos, approval, payment, or publication."
+      className="auth-shell--login-portal auth-shell--signup-portal"
+      eyebrow=""
+      title="Create account"
+      description=""
       secondary={
         <p>
-          Already registered? <Link href="/login">Log in</Link>
+          Already have an account? <Link href="/login">Log in</Link>
         </p>
       }
     >

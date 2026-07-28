@@ -320,9 +320,29 @@ export class PaymentService {
       return null;
     }
     if (!attempt.stripeCheckoutSessionId) return null;
-    const session = await stripe.retrieveCheckout(
-      attempt.stripeCheckoutSessionId,
-    );
+    let session: HostedCheckoutSession;
+    try {
+      session = await stripe.retrieveCheckout(attempt.stripeCheckoutSessionId);
+    } catch (error) {
+      // Local and test Checkout sessions live in process memory. A dev-server
+      // restart can leave a database attempt pointing at a fixture session that
+      // no longer exists. Retire only that deterministic attempt so this same
+      // request can safely create a fresh test session.
+      if (
+        (this.environment === "local" || this.environment === "test") &&
+        error instanceof StripeProviderError &&
+        error.providerCode === "SESSION_NOT_FOUND"
+      ) {
+        await this.payments.markAttemptExpired({
+          attemptId: attempt.id,
+          expectedVersion: attempt.version,
+          reconciledAt: this.now(),
+          audit,
+        });
+        return null;
+      }
+      throw error;
+    }
     if (
       session.status === "OPEN" &&
       session.paymentStatus === "UNPAID" &&

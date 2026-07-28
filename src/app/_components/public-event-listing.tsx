@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { Icon } from "@/components/ui/icons";
 import type { PublishedListing } from "@/modules/payments";
 import { getServerApplicationUrl } from "@/platform/config/application-url";
+
+import { PublicListingActions } from "./public-listing-actions";
+import { PublicListingGallery } from "./public-listing-gallery";
 
 function locationLabel(listing: PublishedListing): string {
   return `${listing.projection.address.city}, ${listing.projection.address.region}`;
@@ -15,11 +19,11 @@ export function publicListingMetadata(listing: PublishedListing): Metadata {
     projection.eventType === "ESTATE_SALE" ? "Estate Sale" : "Yard Sale";
   return {
     title: `${projection.title} | ${kind} in ${location}`,
-    description: `${projection.description.slice(0, 140)} — ${kind} in ${location}.`,
+    description: `${projection.description.slice(0, 140)}. ${kind} in ${location}.`,
     alternates: { canonical: listing.canonicalPath },
     openGraph: {
       type: "website",
-      title: `${projection.title} — ${location}`,
+      title: `${projection.title} | ${location}`,
       description: projection.description.slice(0, 180),
       url: listing.canonicalPath,
       images: [{ url: projection.coverPhotoUrl, alt: projection.title }],
@@ -48,10 +52,43 @@ function structuredAddress(listing: PublishedListing) {
       };
 }
 
+function visibleAddress(listing: PublishedListing): {
+  readonly primary: string;
+  readonly secondary: string;
+  readonly directionsQuery: string;
+} {
+  const address = listing.projection.address;
+  if (address.kind === "EXACT") {
+    const primary = [address.addressLine1, address.addressLine2]
+      .filter(Boolean)
+      .join(", ");
+    const secondary = `${address.city}, ${address.region} ${address.postalCode}`;
+    return {
+      primary,
+      secondary,
+      directionsQuery: `${primary}, ${secondary}`,
+    };
+  }
+  if (address.kind === "APPROXIMATE") {
+    return {
+      primary: address.label,
+      secondary: "Exact address is private",
+      directionsQuery: `${address.city}, ${address.region}`,
+    };
+  }
+  return {
+    primary: `${address.city}, ${address.region}`,
+    secondary: "Address releases when the sale starts",
+    directionsQuery: `${address.city}, ${address.region}`,
+  };
+}
+
 export function PublicEventListing({
   listing,
+  revisionNote,
 }: {
   readonly listing: PublishedListing;
+  readonly revisionNote?: string;
 }) {
   const projection = listing.projection;
   const format = new Intl.DateTimeFormat("en-US", {
@@ -61,6 +98,10 @@ export function PublicEventListing({
   });
   const kind =
     projection.eventType === "ESTATE_SALE" ? "Estate sale" : "Yard sale";
+  const listingTypePath =
+    projection.eventType === "ESTATE_SALE" ? "/estate-sales" : "/yard-sales";
+  const address = visibleAddress(listing);
+  const directionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address.directionsQuery)}`;
   const applicationUrl = getServerApplicationUrl();
   const structuredData = {
     "@context": "https://schema.org",
@@ -86,94 +127,132 @@ export function PublicEventListing({
         : {}),
     },
   };
+
   return (
-    <div className="preview-shell">
+    <div className="preview-shell public-listing-page">
       <nav className="listing-breadcrumb" aria-label="Breadcrumb">
-        <Link href="/">Bakersfield, CA</Link>
-        <span aria-hidden="true"> / </span>
-        <Link
-          href={
-            projection.eventType === "ESTATE_SALE"
-              ? "/estate-sales"
-              : "/yard-sales"
-          }
-        >
+        <Link href="/search">Bakersfield, CA</Link>
+        <Icon name="chevron" size={15} />
+        <Link href={listingTypePath}>
           {projection.eventType === "ESTATE_SALE"
             ? "Estate sales"
             : "Yard sales"}
         </Link>
-        <span aria-hidden="true"> / </span>
+        <Icon name="chevron" size={15} />
         <span>{projection.title}</span>
       </nav>
-      <article className="listing-preview">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          className="listing-cover"
-          src={projection.coverPhotoUrl}
-          alt={`${projection.title} cover`}
-        />
-        <div className="listing-content">
-          <p className="eyebrow">
-            {kind} · {locationLabel(listing)}
-          </p>
-          <h1>{projection.title}</h1>
-          <p className="listing-date">
-            {format.format(new Date(projection.startsAt))} –{" "}
-            {format.format(new Date(projection.endsAt))}
-          </p>
-          <h2>Location</h2>
-          {projection.address.kind === "EXACT" ? (
-            <address>
-              {projection.address.addressLine1}
-              {projection.address.addressLine2 ? (
-                <>, {projection.address.addressLine2}</>
-              ) : null}
-              <br />
-              {projection.address.city}, {projection.address.region}{" "}
-              {projection.address.postalCode}
-            </address>
-          ) : projection.address.kind === "APPROXIMATE" ? (
-            <p>{projection.address.label}. The exact address is private.</p>
-          ) : (
-            <p>
-              The exact address will be released when the sale starts. This
-              event is in {projection.address.city}, {projection.address.region}
-              .
+
+      <article className="public-listing">
+        <header className="public-listing-hero">
+          <div className="public-listing-hero__glow" aria-hidden="true" />
+          <div className="public-listing-hero__panel">
+            <p className="public-listing-hero__eyebrow">
+              {kind} <span aria-hidden="true">•</span> {locationLabel(listing)}
             </p>
-          )}
-          <h2>About this sale</h2>
-          <p className="preserve-lines">{projection.description}</p>
-          <h2>Hosted by</h2>
-          <p>
-            {projection.organizer.displayName}
-            {projection.organizer.websiteUrl ? (
-              <>
-                {" · "}
-                <a
-                  href={projection.organizer.websiteUrl}
-                  rel="noopener noreferrer nofollow"
-                >
-                  Organizer website
-                </a>
-              </>
-            ) : null}
-          </p>
-          <h2>Gallery</h2>
-          <div className="listing-gallery">
-            {projection.gallery.map((photo, index) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={photo.id}
-                src={photo.url}
-                alt={`${projection.title} item ${index + 1}`}
-              />
-            ))}
+            <h1>{projection.title}</h1>
+
+            <div className="public-listing-facts">
+              <div>
+                <span aria-hidden="true">
+                  <Icon name="calendar" size={24} />
+                </span>
+                <p>
+                  <strong>
+                    {format.format(new Date(projection.startsAt))}
+                  </strong>
+                  <span>{format.format(new Date(projection.endsAt))}</span>
+                </p>
+              </div>
+              <div>
+                <span aria-hidden="true">
+                  <Icon name="pin" size={24} />
+                </span>
+                <p>
+                  <strong>{address.primary}</strong>
+                  <span>{address.secondary}</span>
+                </p>
+              </div>
+              <div>
+                <span aria-hidden="true">
+                  <Icon name="user" size={24} />
+                </span>
+                <p>
+                  <span>Hosted by</span>
+                  <strong>{projection.organizer.displayName}</strong>
+                  {projection.organizer.websiteUrl ? (
+                    <a
+                      href={projection.organizer.websiteUrl}
+                      rel="noopener noreferrer nofollow"
+                    >
+                      Organizer website
+                    </a>
+                  ) : null}
+                </p>
+              </div>
+            </div>
+
+            <PublicListingActions
+              directionsUrl={directionsUrl}
+              title={projection.title}
+            />
           </div>
+        </header>
+
+        <div className="public-listing-content">
+          <section
+            className="public-listing-about"
+            aria-labelledby="about-sale-title"
+          >
+            <h2 id="about-sale-title">About this sale</h2>
+            <p className="preserve-lines">{projection.description}</p>
+          </section>
+
+          <PublicListingGallery
+            photos={projection.gallery}
+            title={projection.title}
+          />
+
+          <section
+            className="public-listing-trust"
+            aria-label="Listing highlights"
+          >
+            <div>
+              <Icon name="status" size={24} />
+              <p>
+                <strong>Quality finds</strong>
+                <span>Preview items before you visit</span>
+              </p>
+            </div>
+            <div>
+              <Icon name="clock" size={24} />
+              <p>
+                <strong>Exact timing</strong>
+                <span>Server-validated sale hours</span>
+              </p>
+            </div>
+            <div>
+              <Icon name="pin" size={24} />
+              <p>
+                <strong>Local listing</strong>
+                <span>Focused on Bakersfield</span>
+              </p>
+            </div>
+            <div>
+              <Icon name="shield" size={24} />
+              <p>
+                <strong>Privacy aware</strong>
+                <span>Location shared by the organizer</span>
+              </p>
+            </div>
+          </section>
+
           <p className="publication-proof">
-            Published from approved revision {listing.approvedRevision}.
+            {revisionNote ??
+              `Published from approved revision ${String(listing.approvedRevision)}.`}
           </p>
         </div>
       </article>
+
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

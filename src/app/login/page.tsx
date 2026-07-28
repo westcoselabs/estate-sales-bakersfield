@@ -23,12 +23,13 @@ export default async function LoginPage({
   const query = await searchParams;
   return (
     <AuthShell
-      eyebrow="Welcome back"
-      title="Log in"
-      description="Continue your organizer profile, sale drafts, and publication steps."
+      className="auth-shell--login-portal"
+      eyebrow=""
+      title="Welcome back"
+      description="Sign in to your account"
       secondary={
         <p>
-          New here? <Link href="/signup">Create an account</Link>
+          No account? <Link href="/signup">Create account</Link>
         </p>
       }
     >
@@ -47,9 +48,6 @@ export default async function LoginPage({
         </Alert>
       ) : null}
       <LoginForm nextPath={safeApplicationPath(query.next)} />
-      <p>
-        <Link href="/forgot-password">Forgot your password?</Link>
-      </p>
     </AuthShell>
   );
 }

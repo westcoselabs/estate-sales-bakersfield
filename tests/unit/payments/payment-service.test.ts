@@ -202,6 +202,66 @@ describe("Phase 4 payment service", () => {
     );
   });
 
+  it("replaces a local fixture Checkout lost after a server restart", async () => {
+    const event = approvedEvent();
+    const staleAttempt = paymentAttempt(event, {
+      stripeCheckoutSessionId: "cs_test_lost_after_restart",
+      checkoutState: "OPEN",
+      expiresAt: new Date(now.getTime() + 20 * 60_000),
+      version: 2,
+    });
+    const freshAttempt = paymentAttempt(event, {
+      id: "77777777-7777-4777-8777-777777777777",
+      attemptGeneration: 2,
+    });
+    const attached = paymentAttempt(event, {
+      ...freshAttempt,
+      stripeCheckoutSessionId: "cs_test_fresh_after_restart",
+      checkoutState: "OPEN",
+      expiresAt: new Date(now.getTime() + 31 * 60_000),
+      version: 2,
+    });
+    const markAttemptExpired = vi.fn(async () => undefined);
+    const payments = paymentRepository({
+      findActiveAttempt: vi.fn(async () => staleAttempt),
+      markAttemptExpired,
+      createAttempt: vi.fn(async () => freshAttempt),
+      attachCheckout: vi.fn(async () => attached),
+    });
+    const provider = stripeProvider({
+      retrieveCheckout: vi.fn(async () => {
+        throw new StripeProviderError("SESSION_NOT_FOUND");
+      }),
+      createHostedCheckout: vi.fn(async (input) => ({
+        ...paidSession(attached, {
+          id: "cs_test_fresh_after_restart",
+          url: "http://127.0.0.1:3417/test-checkout/cs_test_fresh_after_restart",
+          status: "OPEN",
+          paymentStatus: "UNPAID",
+          paymentIntentId: null,
+          expiresAt: input.expiresAt,
+        }),
+      })),
+    });
+
+    await expect(
+      service(payments, eventRepository(event), provider).createCheckout(
+        principal,
+        event.id,
+        event.version,
+      ),
+    ).resolves.toMatchObject({
+      attemptId: freshAttempt.id,
+      checkoutUrl: expect.stringContaining("fresh_after_restart"),
+    });
+    expect(markAttemptExpired).toHaveBeenCalledWith({
+      attemptId: staleAttempt.id,
+      expectedVersion: staleAttempt.version,
+      reconciledAt: now,
+      audit: {},
+    });
+  });
+
   it("records paid mismatch evidence but never publishes", async () => {
     const event = approvedEvent();
     const attempt = paymentAttempt(event, {

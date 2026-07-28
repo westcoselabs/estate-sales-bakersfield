@@ -48,6 +48,8 @@ export const eventLocationSchema = z.object({
   privacyMode: addressPrivacySchema,
   selectionToken: z.string().min(40).max(4096).nullable().optional(),
   confirmed: z.boolean().optional(),
+  pinLatitude: z.number().finite().min(-90).max(90).optional(),
+  pinLongitude: z.number().finite().min(-180).max(180).optional(),
 });
 
 export const photoReservationSchema = z.object({

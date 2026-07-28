@@ -75,6 +75,19 @@ function selectedLocationIsVerified(
   );
 }
 
+function pinIsNearSelectedLocation(
+  selected: NonNullable<EventLocationInput["selectedLocation"]>,
+  latitude: number,
+  longitude: number,
+): boolean {
+  const latitudeDelta = (latitude - selected.latitude) * 111_111;
+  const longitudeDelta =
+    (longitude - selected.longitude) *
+    111_111 *
+    Math.cos((selected.latitude * Math.PI) / 180);
+  return Math.hypot(latitudeDelta, longitudeDelta) <= 1_000;
+}
+
 const DATABASE_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -325,6 +338,16 @@ export class EventService {
         "Choose an address suggestion and confirm the marker.",
       );
     }
+    if (
+      selected &&
+      input.pinLatitude !== undefined &&
+      input.pinLongitude !== undefined &&
+      !pinIsNearSelectedLocation(selected, input.pinLatitude, input.pinLongitude)
+    ) {
+      throw new EventValidationError(
+        "Move the pin within about 0.6 miles of the selected address, or choose a different address result.",
+      );
+    }
     const reusableLocation = (() => {
       if (!addressUnchanged || !currentLocation) return null;
       const { id, eventId: locationEventId, ...value } = currentLocation;
@@ -341,8 +364,8 @@ export class EventService {
           postalCode: selected.postalCode,
           countryCode: selected.countryCode,
           normalizedAddress: selected.formattedAddress,
-          latitude: selected.latitude,
-          longitude: selected.longitude,
+          latitude: input.pinLatitude ?? selected.latitude,
+          longitude: input.pinLongitude ?? selected.longitude,
           timezone: input.timezone,
           providerPlaceId: selected.id,
           providerName: selected.provider.name,

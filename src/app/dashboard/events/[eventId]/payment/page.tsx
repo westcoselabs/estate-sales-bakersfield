@@ -29,6 +29,7 @@ export default async function EventPaymentPage({ params }: Props) {
   ].includes(payment.displayState);
   return (
     <BuilderShell
+      className="payment-page-shell"
       account={{ displayName: user.displayName }}
       eyebrow={
         payment.displayState === "PUBLISHED"
@@ -39,16 +40,15 @@ export default async function EventPaymentPage({ params }: Props) {
       }
       title={event.title ?? "Event payment"}
       meta={
-        <>
-          <p>
+        <div className="payment-page-meta">
+          <nav aria-label="Listing publication links">
             <Link href={`/dashboard/events/${eventId}/edit`}>
               Return to approved draft
             </Link>
-            {" · "}
             <Link href={`/dashboard/events/${eventId}/preview`}>
               Review listing preview
             </Link>
-          </p>
+          </nav>
           {payment.displayState === "PUBLISHED" ? (
             <p>This listing is published and no further payment is required.</p>
           ) : paymentCanBeResumed ? (
@@ -62,7 +62,7 @@ export default async function EventPaymentPage({ params }: Props) {
               is available only for the exact approved listing revision.
             </p>
           )}
-        </>
+        </div>
       }
     >
       <PaymentPanel

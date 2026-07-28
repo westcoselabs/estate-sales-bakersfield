@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { Icon } from "@/components/ui/icons";
+import { Button } from "@/components/ui/primitives";
 import type { PaymentStatusDto } from "@/modules/payments";
 
 interface PaymentPanelProps {
@@ -25,16 +27,43 @@ function stateTitle(state: PaymentStatusDto["displayState"]): string {
     READY_FOR_REVIEW: "Ready for review",
     APPROVED: "Approved",
     READY_FOR_PAYMENT: "Ready for payment",
-    CHECKOUT_CREATED: "Checkout created",
+    CHECKOUT_CREATED: "Checkout ready",
     PAYMENT_PENDING: "Payment pending",
-    PAYMENT_RECEIVED_PUBLISHING: "Payment received; publishing",
+    PAYMENT_RECEIVED_PUBLISHING: "Publishing",
     PUBLISHED: "Published",
     PAYMENT_CANCELED: "Payment canceled",
     CHECKOUT_EXPIRED: "Checkout expired",
-    PAID_PUBLICATION_BLOCKED: "Paid; publication blocked",
-    FULFILLMENT_RETRYING: "Fulfillment retrying",
+    PAID_PUBLICATION_BLOCKED: "Publication needs attention",
+    FULFILLMENT_RETRYING: "Publication retrying",
     MANUAL_REVIEW_REQUIRED: "Manual review required",
   }[state];
+}
+
+function stateTone(
+  state: PaymentStatusDto["displayState"],
+): "neutral" | "info" | "success" | "warning" | "error" {
+  if (state === "PUBLISHED") return "success";
+  if (
+    state === "PAID_PUBLICATION_BLOCKED" ||
+    state === "MANUAL_REVIEW_REQUIRED"
+  ) {
+    return "error";
+  }
+  if (
+    state === "PAYMENT_CANCELED" ||
+    state === "CHECKOUT_EXPIRED" ||
+    state === "FULFILLMENT_RETRYING"
+  ) {
+    return "warning";
+  }
+  if (
+    state === "CHECKOUT_CREATED" ||
+    state === "PAYMENT_PENDING" ||
+    state === "PAYMENT_RECEIVED_PUBLISHING"
+  ) {
+    return "info";
+  }
+  return "neutral";
 }
 
 export function PaymentPanel({
@@ -76,6 +105,7 @@ export function PaymentPanel({
   async function beginCheckout() {
     setBusy(true);
     setMessage(null);
+    let checkoutUrl: string | null = null;
     try {
       const response = await fetch(`/api/events/${eventId}/checkout`, {
         method: "POST",
@@ -91,11 +121,19 @@ export function PaymentPanel({
         setMessage(payload.error ?? "Checkout could not be created.");
         return;
       }
-      window.location.assign(payload.checkout.checkoutUrl);
+      checkoutUrl = payload.checkout.checkoutUrl;
     } catch {
       setMessage("Checkout is temporarily unavailable.");
     } finally {
       setBusy(false);
+    }
+    if (!checkoutUrl) return;
+    try {
+      window.location.assign(checkoutUrl);
+    } catch {
+      setMessage(
+        "Checkout was created, but this browser could not open it. Reload and try again.",
+      );
     }
   }
 
@@ -112,53 +150,142 @@ export function PaymentPanel({
           status.displayState === "PAYMENT_CANCELED"
         ? "Try payment again"
         : "Pay and publish";
+  const fixturePrice = Boolean(status.price?.fixture);
+  const tone = stateTone(status.displayState);
+  const panelTitle =
+    status.displayState === "PUBLISHED"
+      ? "Your listing is live"
+      : canPay
+        ? "Finish publishing your listing"
+        : "Publication status";
+
   return (
-    <section className="payment-panel" aria-live="polite">
-      <div>
-        <p className="eyebrow">Payment and publication</p>
-        <h2>{stateTitle(status.displayState)}</h2>
-        <p>{status.message}</p>
+    <section className="payment-panel" aria-labelledby="payment-panel-title">
+      <div className="payment-panel__main">
+        <div className="payment-panel__state-heading">
+          <span className={`payment-state payment-state--${tone}`}>
+            <Icon
+              name={
+                tone === "success"
+                  ? "check"
+                  : tone === "warning" || tone === "error"
+                    ? "warning"
+                    : "status"
+              }
+              size={18}
+            />
+            {stateTitle(status.displayState)}
+          </span>
+          <div>
+            <p className="eyebrow">Payment and publication</p>
+            <h2 id="payment-panel-title">{panelTitle}</h2>
+          </div>
+        </div>
+        <p className="payment-panel__status" aria-live="polite">
+          {status.message}
+        </p>
         {returnContext === "success" && status.displayState !== "PUBLISHED" ? (
-          <p>
-            Your return from Checkout is not proof of payment. This page is
-            waiting for the signed webhook and internal fulfillment state.
+          <p className="payment-panel__notice payment-panel__notice--info">
+            <Icon name="clock" size={19} />
+            <span>
+              Your return from Checkout is not proof of payment. This page is
+              waiting for the signed webhook and internal fulfillment state.
+            </span>
           </p>
         ) : null}
         {returnContext === "cancel" ? (
-          <p>No publication occurs from a canceled Checkout return.</p>
-        ) : null}
-        {priceLabel ? (
-          <p>
-            Publication price: <strong>{priceLabel}</strong>
-            {status.price?.fixture ? " (Local/Test fixture)" : ""}
+          <p className="payment-panel__notice payment-panel__notice--warning">
+            <Icon name="warning" size={19} />
+            <span>No publication occurs from a canceled Checkout return.</span>
           </p>
-        ) : (
-          <p>Preview publication pricing still needs server configuration.</p>
-        )}
-        {message ? <p className="form-message">{message}</p> : null}
+        ) : null}
+        <dl className="payment-summary">
+          <div>
+            <dt>
+              {fixturePrice ? "Test checkout amount" : "Listing publication"}
+            </dt>
+            <dd>{priceLabel ?? "Not configured"}</dd>
+          </div>
+          <div>
+            <dt>Payment</dt>
+            <dd>One time</dd>
+          </div>
+          <div>
+            <dt>Publishes</dt>
+            <dd>This approved revision</dd>
+          </div>
+        </dl>
+        {fixturePrice ? (
+          <p className="payment-panel__notice payment-panel__notice--warning">
+            <Icon name="info" size={19} />
+            <span>
+              Local test mode is active. {priceLabel} is a fixture amount, not
+              the public listing fee.
+            </span>
+          </p>
+        ) : null}
+        {!priceLabel ? (
+          <p className="payment-panel__notice payment-panel__notice--error">
+            <Icon name="warning" size={19} />
+            <span>
+              Publication pricing and Stripe Checkout still need server
+              configuration.
+            </span>
+          </p>
+        ) : null}
+        {message ? (
+          <p
+            className="payment-panel__notice payment-panel__notice--error"
+            role="alert"
+          >
+            <Icon name="warning" size={19} />
+            <span>{message}</span>
+          </p>
+        ) : null}
       </div>
-      <div className="payment-actions">
+      <aside className="payment-actions" aria-label="Checkout actions">
+        <div className="payment-actions__secure">
+          <Icon name="shield" size={22} />
+          <div>
+            <strong>
+              {fixturePrice ? "Safe local test" : "Secure checkout"}
+            </strong>
+            <p>
+              {fixturePrice
+                ? "No card is charged in local test mode."
+                : "Card details are handled by Stripe."}
+            </p>
+          </div>
+        </div>
         {canPay ? (
-          <button
+          <Button
             type="button"
             onClick={() => void beginCheckout()}
             disabled={busy || !status.price}
+            loading={busy}
+            className="payment-actions__primary"
           >
-            {busy ? "Opening Checkout…" : checkoutAction}
-          </button>
+            {busy ? "Opening checkout" : checkoutAction}
+          </Button>
         ) : null}
         {status.canonicalPath ? (
           <Link className="button-link" href={status.canonicalPath}>
             View live listing
           </Link>
         ) : null}
+        {canPay && !fixturePrice ? (
+          <p className="payment-actions__fine-print">
+            You will continue to Stripe to complete payment. Your listing is
+            published only after payment is confirmed.
+          </p>
+        ) : null}
         {status.recoverable ? (
-          <p>
+          <p className="payment-actions__fine-print">
             Recovery is queued automatically. Support can safely rerun the same
             payment reconciliation without another charge.
           </p>
         ) : null}
-      </div>
+      </aside>
     </section>
   );
 }

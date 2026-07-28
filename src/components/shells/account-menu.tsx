@@ -47,7 +47,13 @@ export function AccountAvatar({
   );
 }
 
-export function AccountMenu({ account }: { readonly account: ShellAccount }) {
+export function AccountMenu({
+  account,
+  variant = "default",
+}: {
+  readonly account: ShellAccount;
+  readonly variant?: "default" | "public";
+}) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const summaryRef = useRef<HTMLElement>(null);
@@ -72,7 +78,7 @@ export function AccountMenu({ account }: { readonly account: ShellAccount }) {
 
   return (
     <details
-      className="account-menu"
+      className={`account-menu account-menu--${variant}`}
       onKeyDown={(event) => {
         if (event.key !== "Escape") return;
         event.currentTarget.open = false;
@@ -85,7 +91,6 @@ export function AccountMenu({ account }: { readonly account: ShellAccount }) {
       >
         <AccountAvatar account={account} />
         <span className="account-menu__name">{account.displayName}</span>
-        <Icon name="chevron" size={18} />
       </summary>
       <div className="account-menu__popover">
         <div className="account-menu__identity">
@@ -95,6 +100,11 @@ export function AccountMenu({ account }: { readonly account: ShellAccount }) {
             <small>Organizer account</small>
           </span>
         </div>
+        {variant === "public" ? (
+          <Link href="/dashboard">
+            <Icon name="home" /> Dashboard
+          </Link>
+        ) : null}
         <Link href="/dashboard/profile">
           <Icon name="user" /> Profile
         </Link>

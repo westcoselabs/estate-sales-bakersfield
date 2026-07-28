@@ -10,10 +10,15 @@ export default function LocationConfirmationMap({
   latitude,
   longitude,
   label,
+  onPositionChange,
 }: {
   readonly latitude: number;
   readonly longitude: number;
   readonly label: string;
+  readonly onPositionChange?: (position: {
+    readonly latitude: number;
+    readonly longitude: number;
+  }) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
@@ -35,16 +40,23 @@ export default function LocationConfirmationMap({
     const markerElement = document.createElement("span");
     markerElement.className = "location-confirmation-marker";
     markerElement.setAttribute("aria-label", label);
-    new maplibregl.Marker({
+    const marker = new maplibregl.Marker({
       element: markerElement,
-      draggable: false,
+      draggable: true,
       anchor: "bottom",
     })
       .setLngLat([longitude, latitude])
       .addTo(map);
+    marker.on("dragend", () => {
+      const position = marker.getLngLat();
+      onPositionChange?.({
+        latitude: position.lat,
+        longitude: position.lng,
+      });
+    });
     map.on("error", () => setFailed(true));
     return () => map.remove();
-  }, [label, latitude, longitude]);
+  }, [label, latitude, longitude, onPositionChange]);
 
   if (failed) {
     return (
@@ -60,7 +72,7 @@ export default function LocationConfirmationMap({
       ref={container}
       className="location-confirmation-map"
       role="region"
-      aria-label={`Map showing the selected sale property at ${label}`}
+      aria-label={`Map showing the selected sale property at ${label}. Drag the pin to fine-tune its position.`}
     />
   );
 }

@@ -35,6 +35,76 @@ test.beforeAll(async () => {
   await mkdir(screenshotDirectory, { recursive: true });
 });
 
+test("adapts the signed-out navigation for desktop and mobile", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/");
+
+  const desktopHeader = page.locator(".public-header__actions");
+  await expect(
+    page.getByRole("navigation", { name: "Primary", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Primary", exact: true })
+      .getByRole("link", { name: "Explore", exact: true }),
+  ).toHaveAttribute("href", "/search");
+  await expect(
+    page
+      .getByRole("navigation", { name: "Primary", exact: true })
+      .getByRole("link", { name: "FAQs", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    desktopHeader.getByRole("link", { name: "Log in", exact: true }),
+  ).toBeVisible();
+  await expect(
+    desktopHeader.getByRole("link", { name: "List your sale", exact: true }),
+  ).toBeVisible();
+  const desktopListingBox = await desktopHeader
+    .getByRole("link", { name: "List your sale", exact: true })
+    .boundingBox();
+  const desktopLoginBox = await desktopHeader
+    .getByRole("link", { name: "Log in", exact: true })
+    .boundingBox();
+  expect(desktopListingBox).not.toBeNull();
+  expect(desktopLoginBox).not.toBeNull();
+  expect(desktopListingBox?.x ?? 0).toBeGreaterThan(desktopLoginBox?.x ?? 0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileActions = page.locator(".public-header__mobile-actions");
+  await expect(
+    mobileActions.getByRole("link", { name: "Log in", exact: true }),
+  ).toBeVisible();
+  const mobileMenuBox = await mobileActions
+    .getByLabel("Open navigation")
+    .boundingBox();
+  const mobileLoginBox = await mobileActions
+    .getByRole("link", { name: "Log in", exact: true })
+    .boundingBox();
+  expect(mobileMenuBox).not.toBeNull();
+  expect(mobileLoginBox).not.toBeNull();
+  expect(mobileMenuBox?.x ?? 0).toBeGreaterThan(mobileLoginBox?.x ?? 0);
+  await mobileActions.getByLabel("Open navigation").click();
+
+  const mobileNavigation = page.getByRole("navigation", {
+    name: "Mobile primary",
+  });
+  await expect(
+    mobileNavigation.getByRole("link", { name: "Explore", exact: true }),
+  ).toBeVisible();
+  await expect(
+    mobileNavigation.getByRole("link", { name: "Estate sales", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    mobileNavigation.getByRole("link", { name: "Yard sales", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    mobileNavigation.getByRole("link", { name: "Log in", exact: true }),
+  ).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+});
+
 test("serves the complete public route set with unique metadata", async ({
   page,
 }) => {
@@ -67,7 +137,9 @@ test("keeps category hubs and map presentation in one shared search", async ({
 }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("link", { name: "Explore", exact: true }),
+    page
+      .getByRole("navigation", { name: "Primary", exact: true })
+      .getByRole("link", { name: "Explore", exact: true }),
   ).toHaveAttribute("href", "/search");
   await expect(
     page.getByRole("link", { name: "Map preview", exact: true }),

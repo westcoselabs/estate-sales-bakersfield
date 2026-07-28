@@ -77,7 +77,9 @@ for (const width of [360, 390, 430, 768, 1280]) {
     await page.goto("/login");
     await expectNoHorizontalOverflow(page);
     await expect(page.getByRole("main")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Log in" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Welcome back" }),
+    ).toBeVisible();
     const transitionDuration = await page
       .locator(".ui-button")
       .evaluate((element) => getComputedStyle(element).transitionDuration);
@@ -122,7 +124,7 @@ test("dashboard shell is stable at 1440px", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Log in" }).click();
+  await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expectNoHorizontalOverflow(page);
   await expect(
@@ -133,4 +135,42 @@ test("dashboard shell is stable at 1440px", async ({ page }) => {
     fullPage: true,
     animations: "disabled",
   });
+
+  await page.goto("/");
+  const desktopAccount = page.locator(
+    ".public-header__actions .account-menu--public",
+  );
+  await expect(desktopAccount).toBeVisible();
+  await expect(
+    page
+      .locator(".public-header__actions")
+      .getByRole("link", { name: "Log in", exact: true }),
+  ).toHaveCount(0);
+  await desktopAccount.getByLabel(/Open account menu/).click();
+  await expect(
+    desktopAccount.getByRole("link", { name: "Dashboard", exact: true }),
+  ).toHaveAttribute("href", "/dashboard");
+  await expect(
+    desktopAccount.getByRole("link", { name: "Profile", exact: true }),
+  ).toHaveAttribute("href", "/dashboard/profile");
+  await expect(
+    desktopAccount.getByRole("link", { name: "Settings", exact: true }),
+  ).toHaveAttribute("href", "/dashboard/settings");
+  await expect(
+    desktopAccount.getByRole("button", { name: "Log out", exact: true }),
+  ).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileActions = page.locator(".public-header__mobile-actions");
+  const menuBox = await mobileActions
+    .getByLabel("Open navigation")
+    .boundingBox();
+  const accountBox = await mobileActions
+    .locator(".account-menu--public")
+    .getByLabel(/Open account menu/)
+    .boundingBox();
+  expect(menuBox).not.toBeNull();
+  expect(accountBox).not.toBeNull();
+  expect(accountBox?.x ?? 0).toBeLessThan(menuBox?.x ?? 0);
+  await expectNoHorizontalOverflow(page);
 });

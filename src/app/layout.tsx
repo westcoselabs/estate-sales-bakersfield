@@ -20,6 +20,9 @@ export const metadata: Metadata = {
   title: "Estate Sales Bakersfield",
   description: "Build and preview Bakersfield estate and yard sale listings",
   robots: prelaunchRobots,
+  icons: {
+    icon: [{ url: "/images/icon-favicon.webp", type: "image/webp" }],
+  },
 };
 
 export default function RootLayout({
