@@ -37,7 +37,7 @@ function ExploreViewToggle({
         onClick={() => onChange("map")}
       >
         <Icon name="map" size={20} />
-        Map View
+        <span className="explore-view-toggle__label">Map View</span>
       </button>
       <button
         type="button"
@@ -45,7 +45,7 @@ function ExploreViewToggle({
         onClick={() => onChange("list")}
       >
         <Icon name="list" size={20} />
-        List View
+        <span className="explore-view-toggle__label">List View</span>
       </button>
     </div>
   );

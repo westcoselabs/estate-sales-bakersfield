@@ -1933,10 +1933,14 @@
   }
 
   .public-header__mobile-actions .account-menu--public summary {
-    width: 2.75rem;
-    min-width: 2.75rem;
-    height: 2.75rem;
-    min-height: 2.75rem;
+    width: 3.15rem;
+    min-width: 3.15rem;
+    height: 3.15rem;
+    min-height: 3.15rem;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
   }
 
   .public-header__mobile-actions
@@ -1945,6 +1949,20 @@
     > .account-avatar {
     width: 100%;
     height: 100%;
+    border: 0;
+    box-shadow: 0 10px 24px rgb(18 53 40 / 20%);
+  }
+
+  .public-header__mobile-actions
+    .account-menu--public[open]
+    summary
+    > .account-avatar,
+  .public-header__mobile-actions
+    .account-menu--public
+    summary:hover
+    > .account-avatar {
+    border: 0;
+    box-shadow: 0 12px 26px rgb(18 53 40 / 23%);
   }
 
   .public-menu summary {
@@ -2370,10 +2388,10 @@
   }
 
   .public-header__mobile-actions .account-menu--public summary {
-    width: 2.65rem;
-    min-width: 2.65rem;
-    height: 2.65rem;
-    min-height: 2.65rem;
+    width: 3rem;
+    min-width: 3rem;
+    height: 3rem;
+    min-height: 3rem;
   }
 
   .home-hero {
@@ -3696,8 +3714,9 @@
     inset: auto auto max(0.75rem, var(--safe-bottom)) 50%;
     display: grid;
     isolation: isolate;
-    width: min(calc(100% - 2.5rem), 20rem);
+    width: min(calc(100% - 3.25rem), 18.75rem);
     min-width: 0;
+    align-items: stretch;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0;
     overflow: hidden;
@@ -3743,17 +3762,26 @@
   .mobile-explore-dock button[aria-pressed="true"] {
     position: relative;
     z-index: 1;
-    min-height: 3.5rem;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0.15rem;
+    display: grid;
+    width: 100%;
+    height: 100%;
+    min-height: 3.25rem;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    align-content: center;
+    align-self: stretch;
+    justify-self: stretch;
+    justify-items: center;
+    place-items: center;
+    row-gap: 0.1rem;
     border: 0 !important;
     background: transparent !important;
     box-shadow: none;
-    padding: 0.3rem 0.15rem;
+    padding: 0.25rem 0.2rem;
     color: var(--color-text-secondary) !important;
     font-size: 0.8125rem;
     font-weight: 750;
+    text-align: center;
   }
 
   .mobile-explore-dock button[aria-pressed="true"] {
@@ -3761,8 +3789,17 @@
   }
 
   .mobile-explore-dock button svg {
+    display: block;
     width: 1.25rem;
     height: 1.25rem;
+    flex: 0 0 auto;
+    justify-self: center;
+  }
+
+  .mobile-explore-dock .explore-view-toggle__label {
+    display: block;
+    justify-self: center;
+    line-height: 1.05;
   }
 
   .explore-results-shell[data-view="map"] .explore-mobile-toolbar {
