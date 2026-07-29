@@ -38,15 +38,22 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   return (
     <PublicShell>
-      <div className="content-page">
-        <header className="content-hero shell-container">
-          <p className="eyebrow">Help and support</p>
-          <h1>How can we help?</h1>
-          <p className="marketing-lede">
-            A direct public support channel is still being finalized for this
-            production beta. We will not ask you to use an unverified email,
-            phone number, or contact form.
-          </p>
+      <div className="content-page glass-page contact-page">
+        <header className="glass-hero glass-hero--aurora">
+          <div className="hero-chips" aria-hidden="true">
+            <span>@</span>
+            <span>?</span>
+            <span>!</span>
+          </div>
+          <div className="glass-hero__panel">
+            <p className="eyebrow">Help and support</p>
+            <h1>How can we help?</h1>
+            <p className="marketing-lede">
+              A direct public support channel is still being finalized for this
+              production beta. We will not ask you to use an unverified email,
+              phone number, or contact form.
+            </p>
+          </div>
         </header>
 
         <section
@@ -61,7 +68,7 @@ export default function ContactPage() {
             </p>
           </div>
           <div className="marketing-grid marketing-grid--three">
-            <article className="marketing-card">
+            <article className="marketing-card glass-card" data-reveal="">
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="info" />
               </span>
@@ -74,7 +81,7 @@ export default function ContactPage() {
                 Open the FAQ
               </Link>
             </article>
-            <article className="marketing-card">
+            <article className="marketing-card glass-card" data-reveal="">
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="home" />
               </span>
@@ -87,7 +94,7 @@ export default function ContactPage() {
                 Go to dashboard
               </Link>
             </article>
-            <article className="marketing-card">
+            <article className="marketing-card glass-card" data-reveal="">
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="user" />
               </span>
@@ -107,7 +114,7 @@ export default function ContactPage() {
           className="content-section shell-container"
           aria-labelledby="channel-update-title"
         >
-          <div className="marketing-card marketing-card--wide">
+          <div className="marketing-card marketing-card--wide" data-reveal="">
             <span className="marketing-card__icon" aria-hidden="true">
               <Icon name="status" />
             </span>

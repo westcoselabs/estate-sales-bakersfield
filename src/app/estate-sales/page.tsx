@@ -5,7 +5,7 @@ import { PublicShell } from "@/components/shells/shells";
 import { Icon } from "@/components/ui/icons";
 import {
   Breadcrumbs,
-  ProfessionalServiceCallout,
+  EstateHelpCallout,
   SelectedListings,
   SelectedListingsSkeleton,
   SellerCallout,
@@ -138,7 +138,7 @@ export default function EstateSalesHubPage() {
         </section>
 
         <SellerCallout compact />
-        <ProfessionalServiceCallout />
+        <EstateHelpCallout />
       </div>
       <script
         type="application/ld+json"

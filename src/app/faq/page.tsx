@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { PublicShell } from "@/components/shells/shells";
 import { Icon } from "@/components/ui/icons";
-import { ExternalLink } from "@/components/ui/primitives";
+import { EstateHelpCallout } from "@/features/marketing/components";
 
 const title = "Estate Sales Bakersfield FAQ";
 const description =
@@ -95,14 +95,21 @@ export default function FaqPage() {
 
   return (
     <PublicShell>
-      <div className="content-page">
-        <header className="content-hero shell-container">
-          <p className="eyebrow">Common questions</p>
-          <h1>Estate Sales Bakersfield FAQ</h1>
-          <p className="marketing-lede">
-            Straight answers about public sale discovery and the real organizer
-            workflow.
-          </p>
+      <div className="content-page glass-page faq-page">
+        <header className="glass-hero glass-hero--aurora">
+          <div className="hero-chips" aria-hidden="true">
+            <span>?</span>
+            <span>?</span>
+            <span>?</span>
+          </div>
+          <div className="glass-hero__panel">
+            <p className="eyebrow">Common questions</p>
+            <h1>Estate Sales Bakersfield FAQ</h1>
+            <p className="marketing-lede">
+              Straight answers about public sale discovery and the real
+              organizer workflow.
+            </p>
+          </div>
         </header>
 
         <section
@@ -114,12 +121,22 @@ export default function FaqPage() {
           </h2>
           <div className="content-faq">
             {questions.map(({ question, answer }) => (
-              <details key={question} className="content-faq__item">
+              <details
+                key={question}
+                className="content-faq__item"
+                data-reveal=""
+              >
                 <summary>
                   <span>{question}</span>
                   <Icon name="plus" size={19} />
                 </summary>
-                <p>{answer}</p>
+                {/* The extra wrappers exist so the answer can animate from
+                    grid-template-rows 0fr to 1fr without measuring height. */}
+                <div className="content-faq__answer">
+                  <div>
+                    <p>{answer}</p>
+                  </div>
+                </div>
               </details>
             ))}
           </div>
@@ -129,7 +146,7 @@ export default function FaqPage() {
           className="marketing-section shell-container"
           aria-labelledby="faq-next-title"
         >
-          <div className="marketing-card marketing-card--wide">
+          <div className="marketing-card marketing-card--wide" data-reveal="">
             <div>
               <p className="eyebrow">Need another next step?</p>
               <h2 id="faq-next-title">Choose the path that fits your need.</h2>
@@ -151,31 +168,11 @@ export default function FaqPage() {
           </div>
         </section>
 
-        <section
-          className="marketing-section shell-container"
-          aria-labelledby="faq-service-title"
-        >
-          <div className="service-cta">
-            <div>
-              <p className="eyebrow">A separate professional service</p>
-              <h2 id="faq-service-title">
-                Need hands-on help with your estate sale?
-              </h2>
-              <p>
-                Explore professional help with organizing, pricing, staging, and
-                promoting a sale through Simply Decorated.
-              </p>
-            </div>
-            <ExternalLink
-              className="ui-button ui-button--secondary service-cta__link"
-              href="https://decoratedbyriley.com/estate-sale-companies-bakersfield/"
-              aria-label="Explore Simply Decorated estate-sale services, opens in a new tab"
-            >
-              <span>Explore Simply Decorated estate-sale services</span>
-              <Icon name="external" size={18} />
-            </ExternalLink>
-          </div>
-        </section>
+        <EstateHelpCallout
+          eyebrow="A separate professional service"
+          description="Explore professional help with organizing, pricing, staging, and promoting a sale through Simply Decorated."
+          headingId="faq-service-title"
+        />
 
         <script
           type="application/ld+json"

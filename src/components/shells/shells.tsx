@@ -11,13 +11,16 @@ export function Brand() {
   return (
     <Link className="brand" href="/" aria-label="Estate Sales Bakersfield home">
       <picture className="brand__logo">
-        <source media="(max-width: 767px)" srcSet="/images/Logo.svg" />
+        <source
+          media="(max-width: 767px)"
+          srcSet="/images/Logo-gold-black-02.webp"
+        />
         <img
           alt=""
           aria-hidden="true"
           className="brand__logo-image"
           height={340}
-          src="/images/Logo-01.webp"
+          src="/images/Logo-gold-black-01.webp"
           width={2000}
         />
       </picture>

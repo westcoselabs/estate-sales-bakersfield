@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 
 import { PublicShell } from "@/components/shells/shells";
 import { Icon } from "@/components/ui/icons";
-import { ExternalLink } from "@/components/ui/primitives";
+import { EstateHelpCallout } from "@/features/marketing/components";
 
 const title = "How Estate Sales Bakersfield Works";
 const description =
@@ -39,32 +40,45 @@ export const metadata: Metadata = {
 export default function HowItWorksPage() {
   return (
     <PublicShell>
-      <div className="marketing-page">
+      <div className="marketing-page glass-page how-page">
         <section
-          className="marketing-hero marketing-hero--compact"
+          className="glass-hero glass-hero--steps"
           aria-labelledby="how-it-works-title"
         >
-          <div className="shell-container marketing-hero__inner">
-            <div className="marketing-hero__copy">
-              <p className="eyebrow">How it works</p>
-              <h1 id="how-it-works-title">
-                Find a local sale or publish your own listing.
-              </h1>
-              <p className="marketing-lede">
-                Estate Sales Bakersfield brings local estate and yard sale
-                discovery together with a clear self-service listing workflow.
-              </p>
-              <div className="marketing-actions">
-                <Link className="ui-button ui-button--primary" href="/search">
-                  Find upcoming sales
-                </Link>
-                <Link
-                  className="ui-button ui-button--accent"
-                  href="/list-your-sale"
-                >
-                  Learn about listing
-                </Link>
-              </div>
+          <div className="glass-hero__media" aria-hidden="true">
+            <Image
+              src="/images/background-estate-hero.webp"
+              alt=""
+              fill
+              priority
+              sizes="100vw"
+            />
+          </div>
+          <div className="glass-hero__scrim" aria-hidden="true" />
+          <div className="glass-hero__panel">
+            <p className="eyebrow">How it works</p>
+            <h1 id="how-it-works-title">
+              Find a local sale or publish your own listing.
+            </h1>
+            <p className="marketing-lede">
+              Estate Sales Bakersfield brings local estate and yard sale
+              discovery together with a clear self-service listing workflow.
+            </p>
+            <ol className="hero-steprail" aria-hidden="true">
+              <li>Search</li>
+              <li>Review</li>
+              <li>Visit</li>
+            </ol>
+            <div className="marketing-actions">
+              <Link className="ui-button ui-button--primary" href="/search">
+                Find upcoming sales
+              </Link>
+              <Link
+                className="ui-button ui-button--accent"
+                href="/list-your-sale"
+              >
+                Learn about listing
+              </Link>
             </div>
           </div>
         </section>
@@ -84,7 +98,7 @@ export default function HowItWorksPage() {
             </p>
           </div>
           <ol className="marketing-grid marketing-grid--three content-list content-list--steps">
-            <li className="marketing-card">
+            <li className="marketing-card glass-card" data-reveal="">
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="search" />
               </span>
@@ -94,7 +108,7 @@ export default function HowItWorksPage() {
                 results.
               </p>
             </li>
-            <li className="marketing-card">
+            <li className="marketing-card glass-card" data-reveal="">
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="calendar" />
               </span>
@@ -104,7 +118,7 @@ export default function HowItWorksPage() {
                 range.
               </p>
             </li>
-            <li className="marketing-card">
+            <li className="marketing-card glass-card" data-reveal="">
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="pin" />
               </span>
@@ -198,32 +212,11 @@ export default function HowItWorksPage() {
           </div>
         </section>
 
-        <section
-          className="marketing-section shell-container"
-          aria-labelledby="service-help-title"
-        >
-          <div className="service-cta">
-            <div>
-              <p className="eyebrow">Professional estate-sale help</p>
-              <h2 id="service-help-title">
-                Need hands-on help with your estate sale?
-              </h2>
-              <p>
-                Simply Decorated offers professional help with organizing,
-                pricing, staging, and promotion. This is a separate service and
-                is not included in platform listing payment.
-              </p>
-            </div>
-            <ExternalLink
-              className="ui-button ui-button--secondary service-cta__link"
-              href="https://decoratedbyriley.com/estate-sale-companies-bakersfield/"
-              aria-label="Explore Simply Decorated estate-sale services, opens in a new tab"
-            >
-              <span>Explore Simply Decorated estate-sale services</span>
-              <Icon name="external" size={18} />
-            </ExternalLink>
-          </div>
-        </section>
+        <EstateHelpCallout
+          eyebrow="Professional estate-sale help"
+          description="Simply Decorated offers professional help with organizing, pricing, staging, and promotion. This is a separate service and is not included in platform listing payment."
+          headingId="service-help-title"
+        />
       </div>
     </PublicShell>
   );

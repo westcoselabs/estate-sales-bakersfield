@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 
 import { PublicShell } from "@/components/shells/shells";
 import { Icon } from "@/components/ui/icons";
+import { EstateHelpCallout } from "@/features/marketing/components";
 
 const title = "About Estate Sales Bakersfield";
 const description =
@@ -38,33 +40,38 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <PublicShell>
-      <div className="marketing-page">
-        <section
-          className="marketing-hero marketing-hero--compact"
-          aria-labelledby="about-title"
-        >
-          <div className="shell-container marketing-hero__inner">
-            <div className="marketing-hero__copy">
-              <p className="eyebrow">About the marketplace</p>
-              <h1 id="about-title">
-                A focused local directory for Bakersfield sales.
-              </h1>
-              <p className="marketing-lede">
-                Estate Sales Bakersfield is being built to make nearby estate
-                and yard sales easier to discover while giving organizers a
-                clear way to prepare their own listings.
-              </p>
-              <div className="marketing-actions">
-                <Link className="ui-button ui-button--primary" href="/search">
-                  Explore sales
-                </Link>
-                <Link
-                  className="ui-button ui-button--secondary"
-                  href="/how-it-works"
-                >
-                  See how it works
-                </Link>
-              </div>
+      <div className="marketing-page glass-page about-page">
+        <section className="glass-hero" aria-labelledby="about-title">
+          <div className="glass-hero__media" aria-hidden="true">
+            <Image
+              src="/images/marketplace-hero.webp"
+              alt=""
+              fill
+              priority
+              sizes="100vw"
+            />
+          </div>
+          <div className="glass-hero__scrim" aria-hidden="true" />
+          <div className="glass-hero__panel">
+            <p className="eyebrow">About the marketplace</p>
+            <h1 id="about-title">
+              A focused local directory for Bakersfield sales.
+            </h1>
+            <p className="marketing-lede">
+              Estate Sales Bakersfield is being built to make nearby estate and
+              yard sales easier to discover while giving organizers a clear way
+              to prepare their own listings.
+            </p>
+            <div className="marketing-actions">
+              <Link className="ui-button ui-button--primary" href="/search">
+                Explore sales
+              </Link>
+              <Link
+                className="ui-button ui-button--secondary"
+                href="/how-it-works"
+              >
+                See how it works
+              </Link>
             </div>
           </div>
         </section>
@@ -85,14 +92,14 @@ export default function AboutPage() {
             </p>
           </div>
           <div className="marketing-grid marketing-grid--three">
-            <article className="marketing-card">
+            <article className="marketing-card glass-card" data-reveal="">
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="pin" />
               </span>
               <h3>Local by design</h3>
               <p>Search and practical sale guides focus on Bakersfield.</p>
             </article>
-            <article className="marketing-card">
+            <article className="marketing-card glass-card" data-reveal="">
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="photo" />
               </span>
@@ -102,7 +109,7 @@ export default function AboutPage() {
                 public details carry the experience.
               </p>
             </article>
-            <article className="marketing-card">
+            <article className="marketing-card glass-card" data-reveal="">
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="shield" />
               </span>
@@ -132,34 +139,26 @@ export default function AboutPage() {
               </p>
             </div>
             <ul className="content-list content-list--checks">
-              <li>Organizers review their listing before payment.</li>
-              <li>Important edits can require another review.</li>
-              <li>Location visibility follows the selected privacy mode.</li>
-              <li>The dashboard shows the current publication status.</li>
+              <li data-reveal="">
+                Organizers review their listing before payment.
+              </li>
+              <li data-reveal="">
+                Important edits can require another review.
+              </li>
+              <li data-reveal="">
+                Location visibility follows the selected privacy mode.
+              </li>
+              <li data-reveal="">
+                The dashboard shows the current publication status.
+              </li>
             </ul>
           </div>
         </section>
 
-        <section
-          className="marketing-section shell-container"
-          aria-labelledby="beta-title"
-        >
-          <div className="marketing-card marketing-card--wide">
-            <span className="marketing-card__icon" aria-hidden="true">
-              <Icon name="info" />
-            </span>
-            <div>
-              <p className="eyebrow">Production beta</p>
-              <h2 id="beta-title">The marketplace is still in beta.</h2>
-              <p>
-                Public indexing remains disabled while content, inventory,
-                privacy, accessibility, and performance are reviewed for a
-                future launch. Current pages and workflows may continue to be
-                refined before that approval.
-              </p>
-            </div>
-          </div>
-        </section>
+        <EstateHelpCallout
+          eyebrow="Professional estate-sale help"
+          headingId="about-service-title"
+        />
       </div>
     </PublicShell>
   );

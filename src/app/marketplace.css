@@ -28,7 +28,6 @@
     .marketing-section,
     .home-discovery-pair,
     .seller-cta,
-    .service-cta,
     .category-hero,
     .search-controls,
     .search-state,
@@ -997,8 +996,7 @@
   font-size: 0.82rem;
 }
 
-.seller-cta,
-.service-cta {
+.seller-cta {
   display: grid;
   align-items: center;
   gap: 1.5rem;
@@ -1019,38 +1017,14 @@
     #fffaf2;
 }
 
-.seller-cta h2,
-.service-cta h2 {
+.seller-cta h2 {
   margin: 0;
 }
 
-.seller-cta p:last-child,
-.service-cta p:last-child {
+.seller-cta p:last-child {
   max-width: 48rem;
   margin-bottom: 0;
   color: var(--color-text-secondary);
-}
-
-.service-cta {
-  grid-template-columns: auto 1fr minmax(12rem, auto);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-1);
-}
-
-.service-cta__icon {
-  display: grid;
-  width: 4rem;
-  height: 4rem;
-  place-items: center;
-  border-radius: 1.1rem;
-  background: var(--color-success-surface);
-  color: var(--color-primary);
-}
-
-.service-cta .ui-text-link {
-  gap: 0.5rem;
-  justify-self: end;
 }
 
 .home-faq-preview__grid,
@@ -1189,7 +1163,6 @@
   min-height: auto;
 }
 
-.marketing-hero,
 .content-hero {
   position: relative;
   overflow: hidden;
@@ -1205,16 +1178,6 @@
   box-shadow: var(--shadow-2);
 }
 
-.marketing-hero__inner {
-  width: 100%;
-  padding: clamp(2rem, 7vw, 5rem);
-}
-
-.marketing-hero__copy {
-  max-width: 54rem;
-}
-
-.marketing-hero__copy h1,
 .content-hero h1 {
   max-width: 18ch;
   font-size: clamp(2.35rem, 5.4vw, 4.25rem);
@@ -1228,14 +1191,9 @@
   font-size: clamp(1.05rem, 2vw, 1.2rem);
 }
 
-.marketing-hero .marketing-actions {
-  margin-top: 1.5rem;
-}
-
 .marketing-section.shell-container,
 .content-section.shell-container,
-.content-hero.shell-container,
-.marketing-hero .shell-container {
+.content-hero.shell-container {
   width: 100%;
 }
 
@@ -1849,14 +1807,6 @@
   padding: 1rem 0 calc(1rem + var(--safe-bottom));
 }
 
-.service-cta {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.service-cta:has(.service-cta__icon) {
-  grid-template-columns: auto minmax(0, 1fr) minmax(12rem, auto);
-}
-
 @media (max-width: 1100px) {
   .public-footer__grid {
     grid-template-columns: 1.35fr repeat(3, 0.7fr);
@@ -2277,24 +2227,12 @@
     border-left: 0;
   }
 
-  .seller-cta,
-  .service-cta,
-  .service-cta:has(.service-cta__icon) {
+  .seller-cta {
     grid-template-columns: 1fr;
   }
 
-  .seller-cta .ui-button,
-  .service-cta .ui-button {
+  .seller-cta .ui-button {
     width: 100%;
-  }
-
-  .service-cta__icon {
-    width: 3.25rem;
-    height: 3.25rem;
-  }
-
-  .service-cta .ui-text-link {
-    justify-self: start;
   }
 
   .category-hero > div {
@@ -2303,18 +2241,15 @@
 
   .category-hero > div,
   .category-hero > aside,
-  .marketing-hero__inner,
   .content-hero {
     padding: 1.35rem;
   }
 
   .category-hero h1,
-  .marketing-hero__copy h1,
   .content-hero h1 {
     font-size: clamp(2.25rem, 11vw, 3rem);
   }
 
-  .marketing-hero,
   .content-hero {
     border-radius: var(--radius-card);
   }
@@ -3653,7 +3588,9 @@
     border-radius: 0;
   }
 
-  .explore-results-shell[data-view="map"] .explore-map .maplibregl-ctrl-top-right {
+  .explore-results-shell[data-view="map"]
+    .explore-map
+    .maplibregl-ctrl-top-right {
     top: 5.6rem;
     right: 1.25rem;
   }
@@ -6017,5 +5954,1161 @@
 
   .search-filter-sheet .premium-calendar {
     width: min(21rem, calc(100vw - 4rem));
+  }
+}
+
+/* Refracted local light — the shared marketing glass system
+ *
+ * Translucent panels float over real Bakersfield photography and the ambient
+ * shell wash, so depth comes from layered material rather than added ornament.
+ *
+ * Everything is scoped to `.glass-page`, which a redesigned page opts into
+ * alongside its own modifier (`.about-page`, `.how-page`, `.list-page`,
+ * `.faq-page`, `.contact-page`). Pages that have not opted in — /privacy,
+ * /terms, the category hubs — keep the original flat styling, which is what
+ * makes the shared classes these rules decorate safe to touch.
+ */
+/* Declared on the shell, not on `.glass-page`, so shared components such as the
+ * estate-help callout can use the glass recipe on pages that have not opted
+ * into the full page treatment (home and the category hubs). */
+.public-shell {
+  --glass-edge-gradient: linear-gradient(
+    135deg,
+    rgb(255 255 255 / 96%) 0%,
+    rgb(185 121 23 / 40%) 34%,
+    rgb(255 255 255 / 72%) 62%,
+    rgb(23 58 45 / 28%) 100%
+  );
+  --glass-fill: linear-gradient(
+    145deg,
+    rgb(255 255 255 / 82%),
+    rgb(255 253 249 / 56%)
+  );
+  --glass-sheen:
+    radial-gradient(circle at 88% 6%, rgb(185 121 23 / 12%), transparent 32%),
+    linear-gradient(
+      120deg,
+      transparent 22%,
+      rgb(255 255 255 / 22%),
+      transparent 64%
+    );
+}
+
+/* The legacy globals.css `section` rule still contributes 2rem of padding here,
+ * which insets the content sections relative to the hero and the tinted band.
+ * `.content-section` is included because /faq and /contact build on the
+ * `content-page` skeleton rather than `marketing-page`. The tinted band is
+ * excluded because it depends on its own inline padding to hold its contents at
+ * container width while it spans the viewport. */
+.glass-page
+  :is(.marketing-section, .content-section):not(.marketing-section--tinted) {
+  padding: 0;
+}
+
+/* Hero: a true glass panel over photography. The scrim lightens the photo
+ * rather than darkening it, following the homepage hero, and that is what lets
+ * the panel stay genuinely translucent — the backdrop is bright, so dark text
+ * still clears AA through 40% of glass. */
+.glass-page .glass-hero {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  overflow: hidden;
+  align-items: end;
+
+  /* `.glass-hero` is not in the legacy-neutralizer list near the top of this
+   * file, so the globals.css `section` rule would otherwise cap it at 42rem. */
+  width: auto;
+  min-height: clamp(28rem, 62vh, 40rem);
+  max-width: none;
+  margin-inline: 0;
+  border: 1px solid rgb(255 255 255 / 62%);
+  border-radius: var(--radius-shell);
+  background: var(--color-surface);
+  padding: clamp(1.25rem, 4vw, 3rem);
+  box-shadow: var(--explore-shadow);
+}
+
+.glass-page .glass-hero__media {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+}
+
+.glass-page .glass-hero__media img {
+  object-fit: cover;
+  object-position: center 42%;
+}
+
+.glass-page .glass-hero__scrim {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    radial-gradient(
+      circle at 80% 10%,
+      rgb(255 246 230 / 32%),
+      transparent 24rem
+    ),
+    linear-gradient(
+      112deg,
+      rgb(255 253 248 / 84%) 0%,
+      rgb(255 253 248 / 64%) 38%,
+      rgb(253 247 236 / 34%) 72%,
+      rgb(23 58 45 / 14%) 100%
+    );
+}
+
+.glass-page .glass-hero__panel {
+  --glass-sweep-angle: 0deg;
+
+  position: relative;
+  isolation: isolate;
+  max-width: 40rem;
+  border: 1px solid transparent;
+  border-radius: 1.4rem;
+  /* Translucent enough to read as glass, bright enough that secondary text
+   * still clears AA over the lightened scrim. Verified, not guessed. */
+  background:
+    linear-gradient(
+        145deg,
+        rgb(255 255 255 / 72%),
+        rgb(255 252 247 / 52%) 58%,
+        rgb(250 245 236 / 58%)
+      )
+      padding-box,
+    var(--glass-edge-gradient) border-box;
+  padding: clamp(1.35rem, 3.4vw, 2.4rem);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 96%),
+    inset 0 0 0 1px rgb(255 255 255 / 28%),
+    inset 0 -1px 0 rgb(23 58 45 / 7%),
+    0 26px 60px rgb(13 33 25 / 28%),
+    0 6px 18px rgb(13 33 25 / 12%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%) brightness(1.06);
+  backdrop-filter: blur(40px) saturate(180%) brightness(1.06);
+}
+
+.glass-page .glass-hero__panel::after {
+  position: absolute;
+  z-index: -1;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--glass-sweep-angle) at 50% 50%,
+    transparent 0deg,
+    rgb(218 166 57 / 70%) 68deg,
+    rgb(255 255 255 / 88%) 118deg,
+    transparent 198deg,
+    transparent 360deg
+  );
+  content: "";
+  opacity: 0.9;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.glass-page .glass-hero__panel h1 {
+  max-width: 18ch;
+  margin: 0;
+  font-size: clamp(2.1rem, 4.6vw, 3.4rem);
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+}
+
+/* Darker than `--color-text-secondary`, which is tuned for opaque surfaces. On
+ * translucent glass over photography it lands near the AA floor, so the lede
+ * takes a deeper tone here — that buys the panel its transparency back rather
+ * than spending it on an opaque fill. Still lighter than the h1. */
+.glass-page .glass-hero__panel .marketing-lede {
+  max-width: 44rem;
+  margin-bottom: 0;
+  color: #2c3a32;
+}
+
+.glass-page .glass-hero__panel .marketing-actions {
+  margin-top: 1.5rem;
+}
+
+/* Purpose pillars: gradient-bordered glass with a diagonal sheen. */
+.glass-page .glass-card {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid transparent;
+  border-radius: var(--radius-card);
+  background:
+    var(--glass-fill) padding-box,
+    var(--glass-edge-gradient) border-box;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 92%),
+    inset 0 -1px 0 rgb(23 58 45 / 5%),
+    0 16px 40px rgb(33 43 37 / 10%);
+  -webkit-backdrop-filter: blur(24px) saturate(155%);
+  backdrop-filter: blur(24px) saturate(155%);
+  transition:
+    box-shadow var(--motion-base) ease,
+    transform var(--motion-base) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-page .glass-card::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--glass-sheen);
+  content: "";
+  pointer-events: none;
+}
+
+.glass-page .glass-card:hover {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 96%),
+    inset 0 -1px 0 rgb(23 58 45 / 6%),
+    0 26px 56px rgb(33 43 37 / 16%);
+  transform: translateY(-4px);
+}
+
+.glass-page .glass-card .marketing-card__icon {
+  border: 1px solid rgb(255 255 255 / 88%);
+  border-radius: 1.1rem;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 96%), rgb(230 243 235 / 78%)),
+    var(--color-success-surface);
+  color: var(--color-primary);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 6px 16px rgb(23 58 45 / 12%);
+  transition:
+    background var(--motion-base) ease,
+    border-color var(--motion-base) ease,
+    color var(--motion-base) ease,
+    box-shadow var(--motion-base) ease;
+}
+
+.glass-page .glass-card:hover .marketing-card__icon {
+  border-color: rgb(255 255 255 / 30%);
+  background: var(--premium-green);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 28%),
+    0 10px 22px rgb(16 41 31 / 26%);
+}
+
+/* Editorial rhythm: the middle pillar rides low. `top` is used rather than a
+ * transform so it never collides with the reveal or hover transforms. */
+@media (min-width: 901px) {
+  .glass-page .marketing-grid--three > .glass-card:nth-child(2) {
+    top: 1.75rem;
+  }
+}
+
+/* Clear roles: a warm full-bleed band with a faint grain overlay.
+ *
+ * The extra class raises specificity above the legacy neutralizer near the top
+ * of this file, which would otherwise flatten `margin-inline` back to 0 and
+ * leave the band boxed at container width. `50% - 50vw` is measured from the
+ * centered container, so the band spans the viewport without counting the
+ * scrollbar the way a flat `100vw` would. */
+.glass-page .marketing-section.marketing-section--tinted {
+  margin-inline: calc(50% - 50vw);
+}
+
+.glass-page .marketing-section--tinted {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-block: 1px solid rgb(255 255 255 / 64%);
+  background:
+    radial-gradient(circle at 88% 6%, rgb(185 121 23 / 16%), transparent 26rem),
+    radial-gradient(circle at 6% 92%, rgb(23 58 45 / 10%), transparent 28rem),
+    linear-gradient(150deg, #fffaf2 0%, #f4f7f2 52%, #fdf7ec 100%);
+}
+
+.glass-page .marketing-section--tinted::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  content: "";
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+.glass-page .content-list--checks li {
+  border: 1px solid rgb(255 255 255 / 88%);
+  border-radius: var(--radius-control);
+
+  /* Brightened deliberately: the grain overlay sits in these capsules' backdrop
+   * and a thinner fill let it read through as a grey cast. */
+  background: linear-gradient(
+    145deg,
+    rgb(255 255 255 / 94%),
+    rgb(255 253 249 / 78%)
+  );
+  padding: 1.05rem 1.15rem 1.05rem 3.35rem;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 88%),
+    0 10px 26px rgb(33 43 37 / 8%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+  transition:
+    box-shadow var(--motion-base) ease,
+    transform var(--motion-base) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-page .content-list--checks li:hover {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 92%),
+    0 16px 34px rgb(33 43 37 / 12%);
+  transform: translateY(-2px);
+}
+
+.glass-page .content-list--checks li::before {
+  display: grid;
+  top: 1rem;
+  left: 1rem;
+  width: 1.65rem;
+  height: 1.65rem;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: var(--premium-green);
+  color: #fff;
+  font-size: 0.82rem;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 26%),
+    0 4px 10px rgb(16 41 31 / 24%);
+}
+
+/* Wide feature panel, shared by how-it-works, list-your-sale, faq and contact. */
+.glass-page .marketing-card--wide {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid transparent;
+  border-radius: var(--radius-card);
+  background:
+    var(--glass-fill) padding-box,
+    var(--glass-edge-gradient) border-box;
+  padding: clamp(1.35rem, 3.2vw, 2.25rem);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 92%),
+    inset 0 -1px 0 rgb(23 58 45 / 5%),
+    0 18px 44px rgb(33 43 37 / 11%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+}
+
+.glass-page .marketing-card--wide::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--glass-sheen);
+  content: "";
+  pointer-events: none;
+}
+
+.glass-page .marketing-card--wide .marketing-card__icon {
+  border: 1px solid rgb(255 255 255 / 88%);
+  border-radius: 1.1rem;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 96%), rgb(230 243 235 / 78%)),
+    var(--color-success-surface);
+  color: var(--color-primary);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 6px 16px rgb(23 58 45 / 12%);
+}
+
+/* Aurora hero: no photograph. Depth is built from the same radial blooms the
+ * shell already uses, so /faq and /contact stay quieter than the photo-led
+ * pages without falling back to a flat panel. */
+.glass-page .glass-hero--aurora {
+  align-items: center;
+  min-height: clamp(20rem, 44vh, 27rem);
+  border-color: rgb(255 255 255 / 70%);
+  background:
+    radial-gradient(
+      circle at 12% 14%,
+      rgb(185 121 23 / 18%),
+      transparent 26rem
+    ),
+    radial-gradient(circle at 86% 8%, rgb(23 58 45 / 15%), transparent 30rem),
+    radial-gradient(
+      circle at 62% 96%,
+      rgb(255 255 255 / 92%),
+      transparent 26rem
+    ),
+    linear-gradient(145deg, #fffdf8 0%, #f2f6f1 52%, #fdf7ec 100%);
+}
+
+.glass-page .glass-hero--aurora .glass-hero__panel {
+  max-width: 46rem;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 78%), rgb(255 252 247 / 56%))
+      padding-box,
+    var(--glass-edge-gradient) border-box;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 96%),
+    inset 0 -1px 0 rgb(23 58 45 / 6%),
+    0 20px 44px rgb(33 43 37 / 12%);
+}
+
+/* Contact tilts the same aurora warm-left instead of gold-left, so the two
+ * pages read as siblings rather than duplicates. */
+.glass-page.contact-page .glass-hero--aurora {
+  background:
+    radial-gradient(
+      circle at 88% 16%,
+      rgb(185 121 23 / 17%),
+      transparent 26rem
+    ),
+    radial-gradient(circle at 8% 6%, rgb(23 58 45 / 14%), transparent 30rem),
+    radial-gradient(
+      circle at 40% 98%,
+      rgb(255 255 255 / 92%),
+      transparent 26rem
+    ),
+    linear-gradient(200deg, #fffdf8 0%, #f1f6f2 54%, #fdf6ea 100%);
+}
+
+/* Drifting question chips. Decorative and inert: the wrapper is aria-hidden and
+ * the chips carry no text of their own. */
+.glass-page .hero-chips {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.glass-page .hero-chips span {
+  position: absolute;
+  display: grid;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 82%);
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    145deg,
+    rgb(255 255 255 / 82%),
+    rgb(255 252 247 / 52%)
+  );
+  color: var(--color-primary);
+  font-size: 1.05rem;
+  font-weight: 750;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 92%),
+    0 10px 26px rgb(33 43 37 / 10%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+}
+
+.glass-page .hero-chips span:nth-child(1) {
+  top: 14%;
+  right: 8%;
+}
+
+.glass-page .hero-chips span:nth-child(2) {
+  top: 54%;
+  right: 21%;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  font-size: 0.9rem;
+}
+
+.glass-page .hero-chips span:nth-child(3) {
+  top: 76%;
+  right: 6%;
+  min-width: 3.25rem;
+  min-height: 3.25rem;
+  font-size: 1.2rem;
+}
+
+@property --glass-sweep-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes glass-sweep {
+  to {
+    --glass-sweep-angle: 1turn;
+  }
+}
+
+/* The reveal animates `translate`, not `transform`, so pillar hover lift and
+ * the entrance animation never overwrite one another. */
+@keyframes glass-reveal {
+  from {
+    opacity: 0;
+    translate: 0 2rem;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes glass-parallax {
+  from {
+    transform: scale(1.12) translateY(-2.6%);
+  }
+
+  to {
+    transform: scale(1.12) translateY(2.6%);
+  }
+}
+
+@keyframes glass-chip-drift {
+  from {
+    transform: translateY(-0.5rem);
+  }
+
+  to {
+    transform: translateY(0.5rem);
+  }
+}
+
+/* The step rail draws itself left-to-right on load. `scaleX` on a 1px hairline
+ * is compositor-friendly; animating `width` would not be. */
+@keyframes glass-rail-draw {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .glass-page .hero-chips span {
+    animation: glass-chip-drift 6s ease-in-out infinite alternate;
+  }
+
+  .glass-page .hero-chips span:nth-child(2) {
+    animation-duration: 7.5s;
+    animation-delay: -2s;
+  }
+
+  .glass-page .hero-chips span:nth-child(3) {
+    animation-duration: 9s;
+    animation-delay: -4s;
+  }
+
+  .how-page .content-list--workflow > li:not(:last-child)::after {
+    transform-origin: left center;
+    animation: glass-rail-draw 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .how-page .content-list--workflow > li:nth-child(2)::after {
+    animation-delay: 160ms;
+  }
+
+  .how-page .content-list--workflow > li:nth-child(3)::after {
+    animation-delay: 320ms;
+  }
+
+  .how-page .content-list--workflow > li:nth-child(4)::after {
+    animation-delay: 480ms;
+  }
+
+  .glass-page .glass-hero__panel::after {
+    animation: glass-sweep 12s linear infinite;
+  }
+}
+
+/* Scroll-driven reveals. The hidden state lives only inside this block: engines
+ * without `animation-timeline` never apply it and render the page at full
+ * opacity. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* Ranges stay inside the `entry` phase and finish well before it ends. A
+     * `cover` endpoint is unreachable for anything in the last viewport of the
+     * document — the page runs out of scroll first — which strands those
+     * elements part-way through the reveal, permanently faded. */
+    .glass-page [data-reveal] {
+      animation: glass-reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 45%;
+    }
+
+    .glass-page .marketing-grid--three > [data-reveal]:nth-child(2) {
+      animation-range: entry 6% entry 51%;
+    }
+
+    .glass-page .marketing-grid--three > [data-reveal]:nth-child(3) {
+      animation-range: entry 12% entry 57%;
+    }
+
+    .glass-page .content-list--checks > [data-reveal]:nth-child(2) {
+      animation-range: entry 5% entry 50%;
+    }
+
+    .glass-page .content-list--checks > [data-reveal]:nth-child(3) {
+      animation-range: entry 10% entry 55%;
+    }
+
+    .glass-page .content-list--checks > [data-reveal]:nth-child(4) {
+      animation-range: entry 15% entry 60%;
+    }
+
+    .glass-page .glass-hero__media {
+      animation: glass-parallax linear both;
+      animation-timeline: view();
+      animation-range: entry 0% exit 100%;
+    }
+  }
+}
+
+@media (max-width: 900px) {
+  .glass-page .glass-hero {
+    min-height: clamp(26rem, 58vh, 34rem);
+  }
+
+  .glass-page .glass-hero__panel {
+    max-width: none;
+  }
+}
+
+@media (max-width: 767px) {
+  /* On small screens the panel nearly fills the frame, so the hero is sized by
+   * its content and the top padding reserves a band of visible photography
+   * rather than a fixed height fighting the panel. */
+  .glass-page .glass-hero {
+    min-height: auto;
+    border-radius: var(--radius-card);
+    padding: 9rem 0.85rem 0.85rem;
+  }
+
+  .glass-page .glass-hero__panel {
+    border-radius: var(--radius-card);
+    padding: 1.35rem;
+  }
+
+  .glass-page .glass-hero__panel h1 {
+    font-size: clamp(1.95rem, 8.5vw, 2.5rem);
+  }
+
+  .glass-page .content-list--checks li {
+    padding-left: 3.15rem;
+  }
+}
+
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .glass-page .glass-hero__panel,
+  .glass-page .glass-card,
+  .glass-page .content-list--checks li {
+    border-color: var(--color-border);
+    background: #fffdf9;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  /* The panel goes opaque below, so the scrim only has to keep the surrounding
+   * photography calm rather than carry any text contrast. */
+  .glass-page .glass-hero__scrim {
+    background: linear-gradient(
+      112deg,
+      rgb(255 253 248 / 92%) 0%,
+      rgb(255 253 248 / 78%) 46%,
+      rgb(253 247 236 / 62%) 100%
+    );
+  }
+
+  .glass-page .glass-hero__panel,
+  .glass-page .glass-card,
+  .glass-page .content-list--checks li {
+    border-color: var(--color-border);
+    background: var(--color-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .glass-page .marketing-section--tinted {
+    background: var(--color-surface-muted);
+  }
+
+  .glass-page .glass-hero__panel::after,
+  .glass-page .glass-card::before,
+  .glass-page .marketing-section--tinted::after {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-page [data-reveal] {
+    animation: none;
+    opacity: 1;
+    translate: none;
+  }
+
+  .glass-page .glass-hero__media,
+  .glass-page .glass-hero__panel::after {
+    animation: none;
+    transform: none;
+  }
+
+  .glass-page .glass-card,
+  .glass-page .glass-card:hover,
+  .glass-page .content-list--checks li,
+  .glass-page .content-list--checks li:hover {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Estate-help callout
+ *
+ * One component replaces the three hand-rolled `service-cta` blocks and the old
+ * ProfessionalServiceCallout. It is deliberately calmer than the seller CTA:
+ * this is a separate professional service, not a marketplace action, and
+ * DESIGN.md requires it read as secondary to self-service listing creation.
+ */
+.estate-help {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  align-items: center;
+  gap: 1.5rem;
+  grid-template-columns: auto minmax(0, 1fr) minmax(14rem, auto);
+  width: auto;
+  max-width: none;
+  margin-inline: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-shell);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 82%), rgb(255 251 244 / 56%))
+      padding-box,
+    var(--glass-edge-gradient) border-box;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 94%),
+    inset 0 -1px 0 rgb(23 58 45 / 5%),
+    0 20px 46px rgb(33 43 37 / 12%);
+  -webkit-backdrop-filter: blur(26px) saturate(160%);
+  backdrop-filter: blur(26px) saturate(160%);
+}
+
+.estate-help::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 92% 8%, rgb(185 121 23 / 14%), transparent 30%),
+    linear-gradient(
+      120deg,
+      transparent 24%,
+      rgb(255 255 255 / 20%),
+      transparent 66%
+    );
+  content: "";
+  pointer-events: none;
+}
+
+.estate-help__icon {
+  display: grid;
+  width: 4rem;
+  height: 4rem;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 1.25rem;
+  background: var(--premium-green);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 28%),
+    0 10px 24px rgb(16 41 31 / 26%);
+}
+
+.estate-help h2 {
+  margin: 0;
+  font-size: clamp(1.4rem, 2.6vw, 1.85rem);
+}
+
+.estate-help p {
+  max-width: 48rem;
+  margin: 0.5rem 0 0;
+  color: var(--color-text-secondary);
+}
+
+.estate-help .ui-button {
+  justify-self: end;
+}
+
+@media (max-width: 900px) {
+  .estate-help {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .estate-help .ui-button {
+    justify-self: start;
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 767px) {
+  .estate-help {
+    grid-template-columns: 1fr;
+  }
+
+  .estate-help__icon {
+    width: 3.25rem;
+    height: 3.25rem;
+  }
+
+  .estate-help .ui-button {
+    width: 100%;
+  }
+}
+
+/* Hero step rail: three connected glass nodes that draw in on load. Decorative
+ * and aria-hidden — the real shopper steps are the cards further down. */
+.how-page .hero-steprail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 1.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.how-page .hero-steprail li {
+  position: relative;
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 84%);
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    145deg,
+    rgb(255 255 255 / 88%),
+    rgb(255 252 247 / 58%)
+  );
+  padding: 0.4rem 0.9rem 0.4rem 0.55rem;
+  color: var(--color-primary);
+  font-size: 0.82rem;
+  font-weight: 750;
+  counter-increment: steprail;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 92%),
+    0 8px 20px rgb(23 58 45 / 10%);
+}
+
+.how-page .hero-steprail {
+  counter-reset: steprail;
+}
+
+.how-page .hero-steprail li::before {
+  display: grid;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: var(--premium-green);
+  color: #fff;
+  content: counter(steprail);
+  font-size: 0.72rem;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 26%),
+    0 4px 10px rgb(16 41 31 / 24%);
+}
+
+.how-page .hero-steprail li:not(:last-child)::after {
+  width: 1.1rem;
+  height: 1px;
+  margin-right: -0.55rem;
+  margin-left: 0.35rem;
+  background: linear-gradient(
+    90deg,
+    rgb(23 58 45 / 34%),
+    rgb(185 121 23 / 40%)
+  );
+  content: "";
+}
+
+/* How it works — the five-step workflow rail */
+.how-page .content-list--workflow > li::before {
+  border: 1px solid rgb(255 255 255 / 30%);
+  background: var(--premium-green);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 28%),
+    0 8px 20px rgb(16 41 31 / 26%);
+}
+
+.how-page .content-list--workflow > li:not(:last-child)::after {
+  background: linear-gradient(
+    90deg,
+    rgb(23 58 45 / 34%),
+    rgb(185 121 23 / 40%),
+    rgb(23 58 45 / 12%)
+  );
+}
+
+.how-page .content-list--workflow > li strong {
+  color: var(--color-text);
+}
+
+/* The ghost step numerals become embossed rather than flat grey. */
+.how-page .content-list--steps > li::before {
+  color: rgb(23 58 45 / 14%);
+  text-shadow: 0 1px 0 rgb(255 255 255 / 80%);
+}
+
+/* Seller hero: the same photograph as how-it-works, but cropped lower and
+ * washed warmer so the two pages do not read as duplicates. Gold leads here
+ * because this is the seller-conversion page. */
+.list-page .glass-hero--seller .glass-hero__media img {
+  object-position: center 68%;
+}
+
+.list-page .glass-hero--seller .glass-hero__scrim {
+  background:
+    radial-gradient(circle at 76% 8%, rgb(185 121 23 / 34%), transparent 26rem),
+    linear-gradient(
+      104deg,
+      rgb(255 252 244 / 86%) 0%,
+      rgb(255 250 240 / 66%) 40%,
+      rgb(253 244 228 / 34%) 74%,
+      rgb(185 121 23 / 16%) 100%
+    );
+}
+
+/* List your sale — a floating preview of the payoff */
+.list-page .hero-listing-preview {
+  position: absolute;
+  z-index: -1;
+  right: clamp(1rem, 4vw, 3rem);
+  bottom: clamp(1rem, 4vw, 3rem);
+  display: grid;
+  width: min(20rem, 34%);
+  gap: 0.55rem;
+  border: 1px solid rgb(255 255 255 / 78%);
+  border-radius: var(--radius-card);
+  background: linear-gradient(
+    145deg,
+    rgb(255 255 255 / 86%),
+    rgb(255 252 247 / 62%)
+  );
+  padding: 0.85rem;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 94%),
+    0 22px 50px rgb(13 33 25 / 24%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  rotate: -2.5deg;
+}
+
+.list-page .hero-listing-preview__media {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  border-radius: 0.7rem;
+  background: linear-gradient(145deg, #d9e3da, #b9cabd);
+}
+
+.list-page .hero-listing-preview__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 38%;
+}
+
+.list-page .hero-listing-preview__line {
+  height: 0.6rem;
+  border-radius: var(--radius-full);
+  background: rgb(23 58 45 / 20%);
+}
+
+.list-page .hero-listing-preview__line--short {
+  width: 55%;
+  background: rgb(185 121 23 / 34%);
+}
+
+.list-page .hero-listing-preview__badge {
+  justify-self: start;
+  border-radius: var(--radius-full);
+  background: var(--color-success-surface);
+  padding: 0.25rem 0.6rem;
+  color: var(--color-success);
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+@media (max-width: 900px) {
+  .list-page .hero-listing-preview {
+    display: none;
+  }
+}
+
+/* FAQ — glass accordions.
+ *
+ * The answer wrapper animates `grid-template-rows` from 0fr to 1fr, which is the
+ * only way to transition to intrinsic height without JS measurement. There were
+ * no responsive rules for this accordion before, so mobile is authored here. */
+.faq-page .content-faq {
+  gap: 0.75rem;
+}
+
+.faq-page .content-faq__item {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid transparent;
+  border-radius: var(--radius-card);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 88%), rgb(255 252 247 / 62%))
+      padding-box,
+    var(--glass-edge-gradient) border-box;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 92%),
+    0 12px 30px rgb(33 43 37 / 9%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  transition:
+    box-shadow var(--motion-base) ease,
+    transform var(--motion-base) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.faq-page .content-faq__item:hover {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 96%),
+    0 20px 44px rgb(33 43 37 / 14%);
+  transform: translateY(-2px);
+}
+
+.faq-page .content-faq__item[open] {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 96%),
+    0 22px 48px rgb(33 43 37 / 15%);
+}
+
+.faq-page .content-faq__item summary {
+  min-height: 4.25rem;
+  padding: 1.1rem 1.35rem;
+  color: var(--color-text);
+}
+
+.faq-page .content-faq__item summary svg {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  border: 1px solid rgb(255 255 255 / 84%);
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    145deg,
+    rgb(255 255 255 / 94%),
+    rgb(230 243 235 / 74%)
+  );
+  padding: 0.4rem;
+  color: var(--color-primary);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 4px 12px rgb(23 58 45 / 12%);
+}
+
+.faq-page .content-faq__item[open] summary svg {
+  border-color: rgb(255 255 255 / 30%);
+  background: var(--premium-green);
+  color: #fff;
+}
+
+.faq-page .content-faq__answer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--motion-slow)
+    cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.faq-page .content-faq__item[open] .content-faq__answer {
+  grid-template-rows: 1fr;
+}
+
+.faq-page .content-faq__answer > div {
+  overflow: hidden;
+}
+
+.faq-page .content-faq__item p {
+  border-top: 1px solid rgb(23 58 45 / 10%);
+  padding: 1rem 1.35rem 1.25rem;
+}
+
+@media (max-width: 767px) {
+  .faq-page .content-faq__item summary {
+    min-height: 3.5rem;
+    padding: 0.9rem 1rem;
+    font-size: 0.98rem;
+  }
+
+  .faq-page .content-faq__item p {
+    padding: 0.9rem 1rem 1.1rem;
+  }
+}
+
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .estate-help,
+  .glass-page .marketing-card--wide,
+  .glass-page .hero-chips span,
+  .list-page .hero-listing-preview,
+  .faq-page .content-faq__item {
+    border-color: var(--color-border);
+    background: #fffdf9;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .estate-help,
+  .glass-page .marketing-card--wide,
+  .glass-page .hero-chips span,
+  .list-page .hero-listing-preview,
+  .faq-page .content-faq__item {
+    border-color: var(--color-border);
+    background: var(--color-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .glass-page .glass-hero--aurora {
+    background: var(--color-surface-muted);
+  }
+
+  .estate-help::before,
+  .glass-page .marketing-card--wide::before {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-page .hero-chips span,
+  .how-page .content-list--workflow > li:not(:last-child)::after {
+    animation: none;
+    transform: none;
+  }
+
+  .faq-page .content-faq__item,
+  .faq-page .content-faq__item:hover {
+    transform: none;
+    transition: none;
+  }
+
+  .faq-page .content-faq__answer {
+    transition: none;
   }
 }

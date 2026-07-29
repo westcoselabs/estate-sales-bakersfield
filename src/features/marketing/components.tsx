@@ -191,32 +191,48 @@ export function SellerCallout({
   );
 }
 
-export function ProfessionalServiceCallout({
+/**
+ * The single estate-sale help callout.
+ *
+ * Replaces both the hand-rolled `service-cta` blocks that were duplicated across
+ * how-it-works, list-your-sale and faq, and the older ProfessionalServiceCallout.
+ * The heading and link label are fixed because DESIGN.md specifies them; only
+ * the eyebrow and description vary per page.
+ *
+ * `headingId` is a prop rather than `useId()` because these are server
+ * components, where hooks are unavailable. No page renders this twice, so the
+ * default is safe.
+ */
+export function EstateHelpCallout({
+  eyebrow = "Professional estate-sale help",
+  description = "Simply Decorated can help with organizing, pricing, staging, and promotion. This is a separate professional service and is not included with marketplace listing payment.",
+  headingId = "estate-help-title",
   className = "",
 }: {
+  readonly eyebrow?: string;
+  readonly description?: string;
+  readonly headingId?: string;
   readonly className?: string;
 }) {
   return (
     <aside
-      className={`service-cta ${className}`.trim()}
-      aria-labelledby="service-cta-title"
+      className={`estate-help ${className}`.trim()}
+      aria-labelledby={headingId}
+      data-reveal=""
     >
-      <span className="service-cta__icon" aria-hidden="true">
-        <Icon name="estate" size={28} />
+      <span className="estate-help__icon" aria-hidden="true">
+        <Icon name="estate" size={30} />
       </span>
       <div>
-        <p className="eyebrow">Professional estate-sale support</p>
-        <h2 id="service-cta-title">
-          Need hands-on help with your estate sale?
-        </h2>
-        <p>
-          Simply Decorated can help with organizing, pricing, staging, and
-          promotion. This is a separate professional service and is not included
-          with marketplace listing payment.
-        </p>
+        <p className="eyebrow">{eyebrow}</p>
+        <h2 id={headingId}>Need hands-on help with your estate sale?</h2>
+        <p>{description}</p>
       </div>
-      <ExternalLink href="https://decoratedbyriley.com/estate-sale-companies-bakersfield/">
-        Explore Simply Decorated estate-sale services
+      <ExternalLink
+        className="ui-button ui-button--secondary"
+        href="https://decoratedbyriley.com/estate-sale-companies-bakersfield/"
+      >
+        <span>Explore Simply Decorated estate-sale services</span>
         <span className="sr-only"> (opens in a new tab)</span>
         <Icon name="external" size={18} />
       </ExternalLink>

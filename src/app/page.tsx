@@ -6,7 +6,7 @@ import { PublicShell } from "@/components/shells/shells";
 import { Icon } from "@/components/ui/icons";
 import {
   MarketingCard,
-  ProfessionalServiceCallout,
+  EstateHelpCallout,
   SelectedListings,
   SelectedListingsSkeleton,
   SellerCallout,
@@ -228,7 +228,7 @@ export default function HomePage() {
         </section>
 
         <SellerCallout />
-        <ProfessionalServiceCallout />
+        <EstateHelpCallout />
 
         <section
           className="marketing-section home-faq-preview"

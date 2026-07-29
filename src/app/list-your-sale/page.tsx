@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 
 import { PublicShell } from "@/components/shells/shells";
 import { Icon } from "@/components/ui/icons";
-import { ExternalLink } from "@/components/ui/primitives";
+import { EstateHelpCallout } from "@/features/marketing/components";
 
 const title = "List Your Estate or Yard Sale in Bakersfield";
 const description =
@@ -39,30 +40,53 @@ export const metadata: Metadata = {
 export default function ListYourSalePage() {
   return (
     <PublicShell>
-      <div className="marketing-page">
+      <div className="marketing-page glass-page list-page">
         <section
-          className="marketing-hero marketing-hero--compact"
+          className="glass-hero glass-hero--seller"
           aria-labelledby="list-sale-title"
         >
-          <div className="shell-container marketing-hero__inner">
-            <div className="marketing-hero__copy">
-              <p className="eyebrow">Self-service listing</p>
-              <h1 id="list-sale-title">
-                Give your Bakersfield sale a clear place to be found.
-              </h1>
-              <p className="marketing-lede">
-                Build a photo-forward estate or yard sale listing, review the
-                exact version, and follow its approval, payment, and publication
-                status from your dashboard.
-              </p>
-              <div className="marketing-actions">
-                <Link className="ui-button ui-button--accent" href="/signup">
-                  Create an account
-                </Link>
-                <Link className="ui-text-link" href="/login">
-                  Log in to continue a draft
-                </Link>
-              </div>
+          <div className="glass-hero__media" aria-hidden="true">
+            <Image
+              src="/images/background-estate-hero.webp"
+              alt=""
+              fill
+              priority
+              sizes="100vw"
+            />
+          </div>
+          <div className="glass-hero__scrim" aria-hidden="true" />
+          {/* A mock of the published result. The portrait source is only
+              381px wide, which suits this card but not a full-bleed hero. */}
+          <div className="hero-listing-preview" aria-hidden="true">
+            <div className="hero-listing-preview__media">
+              <Image
+                src="/images/estate-sales-bakersfield (3).webp"
+                alt=""
+                width={381}
+                height={572}
+              />
+            </div>
+            <span className="hero-listing-preview__badge">Published</span>
+            <div className="hero-listing-preview__line" />
+            <div className="hero-listing-preview__line hero-listing-preview__line--short" />
+          </div>
+          <div className="glass-hero__panel">
+            <p className="eyebrow">Self-service listing</p>
+            <h1 id="list-sale-title">
+              Give your Bakersfield sale a clear place to be found.
+            </h1>
+            <p className="marketing-lede">
+              Build a photo-forward estate or yard sale listing, review the
+              exact version, and follow its approval, payment, and publication
+              status from your dashboard.
+            </p>
+            <div className="marketing-actions">
+              <Link className="ui-button ui-button--accent" href="/signup">
+                Create an account
+              </Link>
+              <Link className="ui-text-link" href="/login">
+                Log in to continue a draft
+              </Link>
             </div>
           </div>
         </section>
@@ -81,7 +105,7 @@ export default function ListYourSalePage() {
             </p>
           </div>
           <div className="marketing-grid marketing-grid--three">
-            <article className="marketing-card">
+            <article className="marketing-card glass-card" data-reveal="">
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="edit" />
               </span>
@@ -91,7 +115,7 @@ export default function ListYourSalePage() {
                 required steps are complete.
               </p>
             </article>
-            <article className="marketing-card">
+            <article className="marketing-card glass-card" data-reveal="">
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="shield" />
               </span>
@@ -101,7 +125,7 @@ export default function ListYourSalePage() {
                 treatment for the public listing.
               </p>
             </article>
-            <article className="marketing-card">
+            <article className="marketing-card glass-card" data-reveal="">
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="status" />
               </span>
@@ -128,12 +152,14 @@ export default function ListYourSalePage() {
               </p>
             </div>
             <ul className="content-list content-list--checks">
-              <li>A public title and description</li>
-              <li>The estate sale or yard sale type</li>
-              <li>Start and end dates and times</li>
-              <li>A verified location and privacy choice</li>
-              <li>Uploaded photos with a selected cover</li>
-              <li>A verified email and completed organizer profile</li>
+              <li data-reveal="">A public title and description</li>
+              <li data-reveal="">The estate sale or yard sale type</li>
+              <li data-reveal="">Start and end dates and times</li>
+              <li data-reveal="">A verified location and privacy choice</li>
+              <li data-reveal="">Uploaded photos with a selected cover</li>
+              <li data-reveal="">
+                A verified email and completed organizer profile
+              </li>
             </ul>
           </div>
         </section>
@@ -166,31 +192,11 @@ export default function ListYourSalePage() {
           </div>
         </section>
 
-        <section
-          className="marketing-section shell-container"
-          aria-labelledby="service-title"
-        >
-          <div className="service-cta">
-            <div>
-              <p className="eyebrow">Prefer professional support?</p>
-              <h2 id="service-title">
-                Need hands-on help with your estate sale?
-              </h2>
-              <p>
-                Simply Decorated offers a separate professional service for
-                organizing, pricing, staging, and promoting an estate sale.
-              </p>
-            </div>
-            <ExternalLink
-              className="ui-button ui-button--secondary service-cta__link"
-              href="https://decoratedbyriley.com/estate-sale-companies-bakersfield/"
-              aria-label="Explore Simply Decorated estate-sale services, opens in a new tab"
-            >
-              <span>Explore Simply Decorated estate-sale services</span>
-              <Icon name="external" size={18} />
-            </ExternalLink>
-          </div>
-        </section>
+        <EstateHelpCallout
+          eyebrow="Prefer professional support?"
+          description="Simply Decorated offers a separate professional service for organizing, pricing, staging, and promoting an estate sale."
+          headingId="service-title"
+        />
       </div>
     </PublicShell>
   );
