@@ -1,6 +1,6 @@
 export type PublicSaleFilter = "all" | "estate" | "yard";
 export type PublicDateFilter =
-  "all" | "today" | "weekend" | "next-7-days" | "custom";
+  "all" | "today" | "tomorrow" | "weekend" | "next-7-days" | "custom";
 export type PublicSearchView = "list" | "map";
 export interface PublicMapBounds {
   readonly west: number;

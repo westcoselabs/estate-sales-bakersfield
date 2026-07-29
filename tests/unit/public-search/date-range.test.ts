@@ -101,6 +101,13 @@ describe("public search date ranges in America/Los_Angeles", () => {
     ]);
   });
 
+  it("maps Tomorrow to the following Bakersfield calendar day", () => {
+    expect(isoRange("tomorrow", "2026-12-31T20:00:00.000Z")).toEqual([
+      "2027-01-01T08:00:00.000Z",
+      "2027-01-02T08:00:00.000Z",
+    ]);
+  });
+
   it("treats a custom range as inclusive calendar dates and an exclusive end boundary", () => {
     expect(
       isoRange("custom", "2026-01-01T20:00:00.000Z", {

@@ -24,7 +24,7 @@ import type {
   EventPhotoReservationDto,
   EventType,
 } from "@/modules/events";
-import { PhotoUploadError, uploadPrivateMedia } from "@/modules/media/client";
+import { uploadPrivateMedia } from "@/modules/media/client";
 
 import {
   completedWizardSteps,
@@ -226,9 +226,20 @@ function PhotoActionDropdown({
 
 type UploadAttemptResult = "ready" | "failed" | "pending";
 
+interface ReservedPhotoUpload {
+  readonly item: UploadItem;
+  readonly reservation: EventPhotoReservationDto;
+}
+
+interface TransferredPhotoUpload {
+  readonly reserved: ReservedPhotoUpload;
+  readonly pathname: string;
+}
+
 const PHOTO_RECONCILIATION_ATTEMPTS = 3;
 const PHOTO_RECONCILIATION_DELAY_MS = 750;
 const PHOTO_RECONCILIATION_REQUEST_TIMEOUT_MS = 5_000;
+const MAX_PARALLEL_PHOTO_TRANSFERS = 3;
 
 function formatListingDate(
   startsAt: string | null,
@@ -1085,9 +1096,9 @@ export function EventBuilder({
     acceptEvent(response.event);
   }
 
-  async function uploadOne(item: UploadItem): Promise<UploadAttemptResult> {
-    let photoId: string | undefined;
-    let finalizeAttempted = false;
+  async function reserveUpload(
+    item: UploadItem,
+  ): Promise<ReservedPhotoUpload | undefined> {
     const file = item.file;
     if (!file) {
       updateUpload(item.id, {
@@ -1095,7 +1106,7 @@ export function EventBuilder({
         progress: 0,
         error: "Select this file again before retrying.",
       });
-      return "failed";
+      return undefined;
     }
     try {
       if (
@@ -1108,7 +1119,7 @@ export function EventBuilder({
       }
       updateUpload(item.id, {
         status: "reserving",
-        progress: 10,
+        progress: 80,
         error: undefined,
       });
       const reserved = await request<ReservationResponse>(
@@ -1120,139 +1131,150 @@ export function EventBuilder({
           fileName: item.fileName,
         },
       );
-      photoId = reserved.reservation.photoId;
       acceptEvent(reserved.reservation.event);
-      updateUpload(item.id, { status: "uploading", progress: 35, photoId });
+      return { item, reservation: reserved.reservation };
+    } catch (error) {
+      updateUpload(item.id, {
+        status: "failed",
+        progress: 0,
+        error: error instanceof Error ? error.message : "Photo upload failed.",
+      });
+      return undefined;
+    }
+  }
 
-      const controller = new AbortController();
-      controllers.current.add(controller);
-      let uploadTimedOut = false;
-      const timer = window.setTimeout(() => {
-        uploadTimedOut = true;
-        controller.abort();
-      }, photoUploadTimeoutMs(file.size));
-      let uploadedPathname: string;
-      try {
-        if (reserved.reservation.transport === "vercel-client") {
-          const uploaded = await uploadPrivateMedia({
-            pathname: reserved.reservation.uploadPathname,
-            file,
-            handleUploadUrl: `/api/events/${draftRef.current.id}/photos/upload`,
-            clientPayload: JSON.stringify({
-              expectedVersion: draftRef.current.version,
-              reservationId: reserved.reservation.reservationId,
-              photoId: reserved.reservation.photoId,
-            }),
-            contentType: file.type,
-            abortSignal: controller.signal,
-            onProgress(percentage) {
-              updateUpload(item.id, {
-                progress: 35 + Math.round(percentage * 0.4),
-              });
-            },
-          });
-          uploadedPathname = uploaded.pathname;
-        } else {
-          const upload = await fetch(reserved.reservation.uploadUrl, {
-            method: reserved.reservation.method,
-            headers: {
-              ...reserved.reservation.uploadHeaders,
-              "Content-Type": file.type,
-            },
-            body: file,
-            signal: controller.signal,
-          });
-          if (!upload.ok) {
-            throw new Error(
-              `The isolated test upload failed (${String(upload.status)}).`,
-            );
-          }
-          uploadedPathname = reserved.reservation.uploadPathname;
-        }
-      } catch (error) {
-        if (
-          error instanceof PhotoUploadError &&
-          error.code === "POLICY_BLOCKED"
-        ) {
-          throw error;
-        }
-        if (uploadTimedOut) {
+  async function transferReservedUpload(
+    reserved: ReservedPhotoUpload,
+    expectedVersion: number,
+  ): Promise<TransferredPhotoUpload | undefined> {
+    const { item, reservation } = reserved;
+    const file = item.file;
+    if (!file) return undefined;
+    updateUpload(item.id, {
+      status: "uploading",
+      progress: 80,
+      photoId: reservation.photoId,
+      error: undefined,
+    });
+    const controller = new AbortController();
+    controllers.current.add(controller);
+    let uploadTimedOut = false;
+    const timer = window.setTimeout(() => {
+      uploadTimedOut = true;
+      controller.abort();
+    }, photoUploadTimeoutMs(file.size));
+    try {
+      let pathname: string;
+      if (reservation.transport === "vercel-client") {
+        const uploaded = await uploadPrivateMedia({
+          pathname: reservation.uploadPathname,
+          file,
+          handleUploadUrl: `/api/events/${draftRef.current.id}/photos/upload`,
+          clientPayload: JSON.stringify({
+            expectedVersion,
+            reservationId: reservation.reservationId,
+            photoId: reservation.photoId,
+          }),
+          contentType: file.type,
+          abortSignal: controller.signal,
+          onProgress(percentage) {
+            updateUpload(item.id, {
+              progress: Math.min(95, 80 + Math.round(percentage * 0.15)),
+            });
+          },
+        });
+        pathname = uploaded.pathname;
+      } else {
+        const upload = await fetch(reservation.uploadUrl, {
+          method: reservation.method,
+          headers: {
+            ...reservation.uploadHeaders,
+            "Content-Type": file.type,
+          },
+          body: file,
+          signal: controller.signal,
+        });
+        if (!upload.ok) {
           throw new Error(
-            "Upload timed out before the Blob transfer completed. Check your connection and retry.",
-            { cause: error },
+            `The isolated test upload failed (${String(upload.status)}).`,
           );
         }
-        throw error;
-      } finally {
-        window.clearTimeout(timer);
-        controllers.current.delete(controller);
+        pathname = reservation.uploadPathname;
       }
-      if (uploadedPathname !== reserved.reservation.uploadPathname) {
+      if (pathname !== reservation.uploadPathname) {
         throw new Error("The uploaded Blob did not match its reservation.");
       }
+      updateUpload(item.id, { status: "processing", progress: 96 });
+      return { reserved, pathname };
+    } catch (error) {
+      const message = uploadTimedOut
+        ? "Upload timed out before the Blob transfer completed. Check your connection and retry."
+        : error instanceof Error
+          ? error.message
+          : "Photo upload failed.";
+      updateUpload(item.id, {
+        status: "failed",
+        progress: 0,
+        photoId: reservation.photoId,
+        error: message,
+      });
+      return undefined;
+    } finally {
+      window.clearTimeout(timer);
+      controllers.current.delete(controller);
+    }
+  }
 
-      updateUpload(item.id, { status: "processing", progress: 75 });
-      let completed: EventResponse;
-      try {
-        finalizeAttempted = true;
-        completed = await request<EventResponse>(
-          `/api/events/${draftRef.current.id}/photos/${photoId}/finalize`,
-          "POST",
-          {
-            expectedVersion: draftRef.current.version,
-            reservationId: reserved.reservation.reservationId,
-            pathname: uploadedPathname,
-          },
-          90_000,
-        );
-      } catch (error) {
-        throw new Error(
-          `Image processing failed. ${
-            error instanceof Error
-              ? error.message
-              : "The server did not complete the photo."
-          }`,
-          { cause: error },
-        );
-      }
+  async function finalizeTransferredUpload(
+    transfer: TransferredPhotoUpload,
+  ): Promise<UploadAttemptResult> {
+    const { item, reservation } = transfer.reserved;
+    const photoId = reservation.photoId;
+    let finalizeAttempted = false;
+    try {
+      finalizeAttempted = true;
+      const completed = await request<EventResponse>(
+        `/api/events/${draftRef.current.id}/photos/${photoId}/finalize`,
+        "POST",
+        {
+          expectedVersion: draftRef.current.version,
+          reservationId: reservation.reservationId,
+          pathname: transfer.pathname,
+        },
+        90_000,
+      );
       acceptEvent(completed.event);
       if (
         !completed.event.photos.some(
           (photo) => photo.id === photoId && photo.status === "READY",
-        )
+        ) ||
+        !markUploadReady(item, photoId, completed.event)
       ) {
         throw new Error(
-          "Image processing failed. The server did not confirm this photo as READY.",
-        );
-      }
-      if (!markUploadReady(item, photoId, completed.event)) {
-        throw new Error(
-          "Image processing failed. The server did not provide the processed thumbnail.",
+          "Image processing failed. The server did not provide a ready photo.",
         );
       }
       return "ready";
     } catch (error) {
-      if (photoId) {
-        const reconciliation = await reconcilePhotoAfterFailure(
+      const reconciliation = await reconcilePhotoAfterFailure(
+        photoId,
+        finalizeAttempted,
+      );
+      if (
+        reconciliation === "ready" &&
+        markUploadReady(item, photoId, draftRef.current)
+      ) {
+        return "ready";
+      }
+      if (reconciliation === "pending" || reconciliation === "ready") {
+        updateUpload(item.id, {
+          status: "processing",
+          progress: 96,
           photoId,
-          finalizeAttempted,
-        );
-        if (
-          reconciliation === "ready" &&
-          markUploadReady(item, photoId, draftRef.current)
-        ) {
-          return "ready";
-        }
-        if (reconciliation === "pending" || reconciliation === "ready") {
-          updateUpload(item.id, {
-            status: "processing",
-            progress: 75,
-            photoId,
-            error:
-              "Server processing is still being confirmed. Reload before taking another action; retry is disabled to prevent a duplicate photo.",
-          });
-          return "pending";
-        }
+          error:
+            "Server processing is still being confirmed. Reload before taking another action; retry is disabled to prevent a duplicate photo.",
+        });
+        return "pending";
       }
       updateUpload(item.id, {
         status: "failed",
@@ -1288,11 +1310,44 @@ export function EventBuilder({
           Boolean(item.file) &&
           (!item.error || item.photoId),
       );
-      let succeeded = 0;
-      let failed = batch.length - candidates.length;
-      let awaitingConfirmation = 0;
+      const reserved: ReservedPhotoUpload[] = [];
       for (const item of candidates) {
-        const result = await uploadOne(item);
+        const reservation = await reserveUpload(item);
+        if (reservation) reserved.push(reservation);
+      }
+      const transferVersion = draftRef.current.version;
+      const transfers: Array<TransferredPhotoUpload | undefined> = Array(
+        reserved.length,
+      );
+      let nextTransferIndex = 0;
+      await Promise.all(
+        Array.from(
+          { length: Math.min(MAX_PARALLEL_PHOTO_TRANSFERS, reserved.length) },
+          async () => {
+            while (nextTransferIndex < reserved.length) {
+              const index = nextTransferIndex;
+              nextTransferIndex += 1;
+              const reservation = reserved[index];
+              if (!reservation) continue;
+              transfers[index] = await transferReservedUpload(
+                reservation,
+                transferVersion,
+              );
+            }
+          },
+        ),
+      );
+
+      let succeeded = 0;
+      let failed =
+        batch.length - candidates.length + candidates.length - reserved.length;
+      let awaitingConfirmation = 0;
+      for (const transfer of transfers) {
+        if (!transfer) {
+          failed += 1;
+          continue;
+        }
+        const result = await finalizeTransferredUpload(transfer);
         if (result === "ready") succeeded += 1;
         else if (result === "pending") awaitingConfirmation += 1;
         else failed += 1;
@@ -1622,9 +1677,36 @@ export function EventBuilder({
       Number(Boolean(right.photo?.isCover)) -
       Number(Boolean(left.photo?.isCover)),
   );
+  const currentStepIndex = EVENT_WIZARD_STEPS.indexOf(step);
+  const previousStep =
+    currentStepIndex > 0 ? EVENT_WIZARD_STEPS[currentStepIndex - 1] : undefined;
+  const nextStep = EVENT_WIZARD_STEPS[currentStepIndex + 1];
+  const canAdvanceToNextStep = Boolean(
+    nextStep && wizardStepAvailable(nextStep, draft.steps),
+  );
 
   return (
     <div className="builder-layout">
+      <div
+        className="wizard-mobile-navigation"
+        aria-label="Event builder navigation"
+      >
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={!previousStep || Boolean(pending) || uploadActive}
+          onClick={() => previousStep && setStep(previousStep)}
+        >
+          Back
+        </button>
+        <button
+          type="button"
+          disabled={!canAdvanceToNextStep || Boolean(pending) || uploadActive}
+          onClick={() => nextStep && setStep(nextStep)}
+        >
+          Next
+        </button>
+      </div>
       <nav aria-label="Event builder progress" className="wizard-timeline">
         {EVENT_WIZARD_STEPS.map((item, index) => {
           const available = wizardStepAvailable(item, draft.steps);
@@ -1743,7 +1825,7 @@ export function EventBuilder({
                         aria-label="Previous month"
                         onClick={() => changeScheduleMonth(-1)}
                       >
-                        <Icon name="chevron" size={20} />
+                        <Icon name="chevron" size={26} />
                       </button>
                       <h3>
                         {new Intl.DateTimeFormat("en-US", {
@@ -1757,7 +1839,7 @@ export function EventBuilder({
                         aria-label="Next month"
                         onClick={() => changeScheduleMonth(1)}
                       >
-                        <Icon name="chevron" size={20} />
+                        <Icon name="chevron" size={26} />
                       </button>
                     </div>
                     <div

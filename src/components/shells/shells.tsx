@@ -45,20 +45,81 @@ function PublicListingCta() {
   );
 }
 
-function PublicMobileMenu({ home = false }: { readonly home?: boolean }) {
+const PUBLIC_NAV_LINKS: ReadonlyArray<{ href: string; label: string }> = [
+  { href: "/search", label: "Find sales" },
+  { href: "/how-it-works", label: "How it works" },
+  { href: "/about", label: "About" },
+  { href: "/faq", label: "FAQs" },
+];
+
+function PublicNavigation({ className = "" }: { readonly className?: string }) {
+  return (
+    <nav className={`public-nav ${className}`.trim()} aria-label="Primary">
+      {PUBLIC_NAV_LINKS.map((link) => (
+        <TextLink key={link.href} href={link.href}>
+          {link.label}
+        </TextLink>
+      ))}
+    </nav>
+  );
+}
+
+function PublicMobileMenu() {
   return (
     <details className="public-menu">
       <summary aria-label="Open navigation">
         <Icon name="menu" size={22} />
       </summary>
       <nav aria-label="Mobile primary">
-        <TextLink href="/search">{home ? "Explore" : "Find sales"}</TextLink>
-        <TextLink href="/how-it-works">How it works</TextLink>
-        <TextLink href="/about">About</TextLink>
-        <TextLink href="/faq">FAQs</TextLink>
+        {PUBLIC_NAV_LINKS.map((link) => (
+          <TextLink key={link.href} href={link.href}>
+            {link.label}
+          </TextLink>
+        ))}
         <TextLink href="/list-your-sale">List your sale</TextLink>
       </nav>
     </details>
+  );
+}
+
+export function PublicHeader({
+  account,
+}: {
+  readonly account: ShellAccount | null;
+}) {
+  return (
+    <header className="public-header">
+      <div className="shell-container public-header__inner">
+        <Brand />
+        <PublicNavigation className="public-nav--desktop" />
+        <div className="public-header__actions">
+          <PublicListingCta />
+          {!account ? (
+            <TextLink
+              className="public-login public-login--button"
+              href="/login"
+            >
+              Log in
+            </TextLink>
+          ) : (
+            <AccountMenu account={account} variant="public" />
+          )}
+        </div>
+        <div className="public-header__mobile-actions">
+          {!account ? (
+            <TextLink
+              className="public-login public-login--button"
+              href="/login"
+            >
+              Log in
+            </TextLink>
+          ) : (
+            <AccountMenu account={account} variant="public" />
+          )}
+          <PublicMobileMenu />
+        </div>
+      </div>
+    </header>
   );
 }
 
@@ -78,52 +139,7 @@ export async function PublicShell({
   return (
     <div className={`public-shell${home ? " public-shell--home" : ""}`}>
       <SkipLink />
-      <header className="public-header">
-        <div className="shell-container public-header__inner">
-          <Brand />
-          <nav className="public-nav public-nav--desktop" aria-label="Primary">
-            <TextLink href="/search">
-              {home ? "Explore" : "Find sales"}
-            </TextLink>
-            <TextLink href="/how-it-works">How it works</TextLink>
-            <TextLink href="/about">About</TextLink>
-            {!home ? <TextLink href="/faq">FAQs</TextLink> : null}
-          </nav>
-          <div className="public-header__actions">
-            {!home ? <PublicListingCta /> : null}
-            {!account ? (
-              <TextLink
-                className="public-login public-login--button"
-                href="/login"
-              >
-                Log in
-              </TextLink>
-            ) : null}
-            {account ? (
-              <AccountMenu account={account} variant="public" />
-            ) : null}
-            {home ? <PublicListingCta /> : null}
-          </div>
-          <div className="public-header__mobile-actions">
-            {!account ? (
-              <>
-                <TextLink
-                  className="public-login public-login--button"
-                  href="/login"
-                >
-                  Log in
-                </TextLink>
-                <PublicMobileMenu home={home} />
-              </>
-            ) : (
-              <>
-                <AccountMenu account={account} variant="public" />
-                <PublicMobileMenu home={home} />
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+      <PublicHeader account={account} />
       <main id="main-content">{children}</main>
       <footer className="public-footer">
         <div className="shell-container public-footer__grid">

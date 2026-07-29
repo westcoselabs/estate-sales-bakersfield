@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import type { TouchEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "@/components/ui/icons";
 
@@ -23,7 +24,7 @@ function GalleryImage({
   return (
     <button
       type="button"
-      className={`public-gallery__item public-gallery__item--${index % 3 === 1 ? "portrait" : "square"}`}
+      className="public-gallery__item"
       aria-label={`Open ${title} photo ${index + 1}`}
       onClick={onOpen}
     >
@@ -36,12 +37,15 @@ function GalleryImage({
 export function PublicListingGallery({
   photos,
   title,
+  heading = "Gallery",
 }: {
   readonly photos: readonly GalleryPhoto[];
   readonly title: string;
+  readonly heading?: string;
 }) {
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const previewPhotos = photos.slice(0, 6);
 
   useEffect(() => {
@@ -74,13 +78,36 @@ export function PublicListingGallery({
     );
   }
 
+  function rememberTouchStart(event: TouchEvent<HTMLDivElement>) {
+    const touch = event.changedTouches[0];
+    if (!touch) return;
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }
+
+  function moveFromSwipe(event: TouchEvent<HTMLDivElement>) {
+    if (photos.length < 2) return;
+    const start = touchStartRef.current;
+    const touch = event.changedTouches[0];
+    touchStartRef.current = null;
+    if (!start || !touch) return;
+
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaX) < 44 || Math.abs(deltaX) < Math.abs(deltaY) * 1.2) {
+      return;
+    }
+
+    if (deltaX < 0) showNext();
+    else showPrevious();
+  }
+
   if (!photos.length) {
     return (
       <section
         className="public-gallery-section"
         aria-labelledby="gallery-title"
       >
-        <h2 id="gallery-title">Gallery</h2>
+        <h2 id="gallery-title">{heading}</h2>
         <p className="public-gallery__empty">
           No gallery photos are available yet.
         </p>
@@ -91,7 +118,7 @@ export function PublicListingGallery({
   return (
     <section className="public-gallery-section" aria-labelledby="gallery-title">
       <div className="public-gallery__heading">
-        <h2 id="gallery-title">Gallery</h2>
+        <h2 id="gallery-title">{heading}</h2>
         <button type="button" onClick={() => setGalleryOpen(true)}>
           View all ({photos.length})
         </button>
@@ -153,6 +180,8 @@ export function PublicListingGallery({
           role="dialog"
           aria-modal="true"
           aria-label={`${title} photo ${lightboxIndex + 1} of ${photos.length}`}
+          onTouchStart={rememberTouchStart}
+          onTouchEnd={moveFromSwipe}
         >
           <button
             type="button"

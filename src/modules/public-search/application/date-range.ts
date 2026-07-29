@@ -97,7 +97,10 @@ export function resolvePublicDateInterval(
   let from = today;
   let endExclusive = addDays(today, 1);
 
-  if (criteria.date === "weekend") {
+  if (criteria.date === "tomorrow") {
+    from = addDays(today, 1);
+    endExclusive = addDays(from, 1);
+  } else if (criteria.date === "weekend") {
     const parts = parseCalendarDate(today);
     const weekday = new Date(
       Date.UTC(parts.year, parts.month - 1, parts.day),

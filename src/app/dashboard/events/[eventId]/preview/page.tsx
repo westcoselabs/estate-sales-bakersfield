@@ -58,25 +58,32 @@ export default async function EventPreviewPage({ params }: Props) {
       title={preview.title}
       backHref={`/dashboard/events/${eventId}/edit`}
       backLabel="Return to editor"
+      className="builder-app--listing-preview"
       meta={<p>Revision {editor.contentRevision}</p>}
     >
-      <div className="preview-toolbar">
-        <strong>
-          Exact future listing preview, revision {editor.contentRevision}
-        </strong>
-        {editor.publication ? (
-          <Link className="button-link" href={editor.publication.canonicalPath}>
-            View live listing
-          </Link>
-        ) : editor.approvalStatus === "APPROVED" &&
-          editor.approvedRevision === editor.contentRevision ? (
-          <Link
-            className="button-link"
-            href={`/dashboard/events/${eventId}/payment`}
-          >
-            Make payment
-          </Link>
-        ) : null}
+      <div className="preview-toolbar listing-preview-toolbar">
+        <Link
+          className="button-link listing-preview-toolbar__exit"
+          href={`/dashboard/events/${eventId}/edit`}
+        >
+          Exit preview
+        </Link>
+        <strong>Previewing revision {editor.contentRevision}</strong>
+        <div className="listing-preview-toolbar__actions">
+          {editor.publication ? (
+            <Link className="button-link" href={editor.publication.canonicalPath}>
+              View live listing
+            </Link>
+          ) : editor.approvalStatus === "APPROVED" &&
+            editor.approvedRevision === editor.contentRevision ? (
+            <Link
+              className="button-link"
+              href={`/dashboard/events/${eventId}/payment`}
+            >
+              Make payment
+            </Link>
+          ) : null}
+        </div>
       </div>
       <PublicEventListing
         listing={previewListing}

@@ -216,6 +216,9 @@ describe("public search query criteria", () => {
       activeFilterCount({ ...defaults, sale: "yard", date: "next-7-days" }),
     ).toBe(2);
     expect(dateFilterLabel({ ...defaults, date: "today" })).toBe("Today");
+    expect(dateFilterLabel({ ...defaults, date: "tomorrow" })).toBe(
+      "Tomorrow",
+    );
     expect(dateFilterLabel({ ...defaults, date: "weekend" })).toBe(
       "This weekend",
     );

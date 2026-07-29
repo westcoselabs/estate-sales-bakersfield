@@ -27,6 +27,7 @@ function ExploreViewToggle({
   return (
     <div
       className={`explore-view-toggle ${className}`.trim()}
+      data-active={view}
       role="group"
       aria-label="Results view"
     >
@@ -84,6 +85,30 @@ export function ExploreResultsShell({
     return () => window.removeEventListener("popstate", restoreView);
   }, []);
 
+  useEffect(() => {
+    if (view !== "map") return;
+    const mobileQuery = window.matchMedia("(max-width: 63.999rem)");
+    if (!mobileQuery.matches) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousBodyOverscroll = document.body.style.overscrollBehavior;
+    const previousHtmlOverscroll =
+      document.documentElement.style.overscrollBehavior;
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
+    document.documentElement.style.overscrollBehavior = "none";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overscrollBehavior = previousBodyOverscroll;
+      document.documentElement.style.overscrollBehavior = previousHtmlOverscroll;
+    };
+  }, [view]);
+
   const navigate = useCallback(
     (changes: Partial<PublicSearchCriteria>) => {
       startTransition(() => {
@@ -131,20 +156,6 @@ export function ExploreResultsShell({
         <header className="explore-results-header">
           <h1 id="explore-title">{countLabel}</h1>
           <ExploreViewToggle view={view} onChange={changeView} />
-          <label
-            className="explore-sort-control explore-sort-control--desktop"
-            hidden={view !== "list"}
-          >
-            <span className="sr-only">Sort results</span>
-            <select
-              aria-label="Sort results"
-              value="soonest"
-              onChange={() => {}}
-            >
-              <option value="soonest">Sort: Soonest</option>
-            </select>
-            <Icon name="chevron" size={18} />
-          </label>
         </header>
         <div
           className="explore-results-status"

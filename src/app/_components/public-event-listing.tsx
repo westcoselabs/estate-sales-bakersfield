@@ -6,7 +6,7 @@ import type { PublishedListing } from "@/modules/payments";
 import { getServerApplicationUrl } from "@/platform/config/application-url";
 
 import { PublicListingActions } from "./public-listing-actions";
-import { PublicListingGallery } from "./public-listing-gallery";
+import { PublicListingDetailTabs } from "./public-listing-detail-tabs";
 
 function locationLabel(listing: PublishedListing): string {
   return `${listing.projection.address.city}, ${listing.projection.address.region}`;
@@ -199,15 +199,8 @@ export function PublicEventListing({
         </header>
 
         <div className="public-listing-content">
-          <section
-            className="public-listing-about"
-            aria-labelledby="about-sale-title"
-          >
-            <h2 id="about-sale-title">About this sale</h2>
-            <p className="preserve-lines">{projection.description}</p>
-          </section>
-
-          <PublicListingGallery
+          <PublicListingDetailTabs
+            description={projection.description}
             photos={projection.gallery}
             title={projection.title}
           />

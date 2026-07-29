@@ -100,11 +100,9 @@ export function AccountMenu({
             <small>Organizer account</small>
           </span>
         </div>
-        {variant === "public" ? (
-          <Link href="/dashboard">
-            <Icon name="home" /> Dashboard
-          </Link>
-        ) : null}
+        <Link href="/dashboard">
+          <Icon name="home" /> Dashboard
+        </Link>
         <Link href="/dashboard/profile">
           <Icon name="user" /> Profile
         </Link>

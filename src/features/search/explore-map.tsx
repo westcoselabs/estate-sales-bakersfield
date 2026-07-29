@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import * as Sentry from "@sentry/nextjs";
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map, MapLayerMouseEvent } from "maplibre-gl";
@@ -33,11 +32,9 @@ export default function ExploreMap({
   readonly active: boolean;
   readonly onSelect: (id: string | null) => void;
 }) {
-  const router = useRouter();
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const selectedIdRef = useRef(selectedId);
-  const [bounds, setBounds] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -64,7 +61,7 @@ export default function ExploreMap({
       center: BAKERSFIELD_CENTER,
       zoom: 10.5,
       maxBounds: BAKERSFIELD_MAX_BOUNDS,
-      cooperativeGestures: true,
+      cooperativeGestures: false,
       attributionControl: { compact: true },
     });
     mapRef.current = map;
@@ -80,14 +77,6 @@ export default function ExploreMap({
       "top-right",
     );
 
-    const updateBounds = () => {
-      const next = map.getBounds();
-      setBounds(
-        [next.getWest(), next.getSouth(), next.getEast(), next.getNorth()]
-          .map((value) => value.toFixed(5))
-          .join(","),
-      );
-    };
     const reportDiagnostic = ({ category, host }: SafeMapDiagnostic) => {
       const details = { category, host: host ?? "unknown" };
       console.warn("map_render_failure", details);
@@ -198,8 +187,6 @@ export default function ExploreMap({
         map.on("mouseleave", "sale-points", () => {
           map.getCanvas().style.cursor = "";
         });
-        updateBounds();
-        map.on("moveend", updateBounds);
       },
       onFallback: () => setFailed(true),
       onDiagnostic: reportDiagnostic,
@@ -247,15 +234,6 @@ export default function ExploreMap({
     if (active) mapRef.current?.resize();
   }, [active]);
 
-  function searchArea() {
-    if (!bounds) return;
-    const parameters = new URLSearchParams(window.location.search);
-    parameters.delete("view");
-    parameters.set("bounds", bounds);
-    parameters.delete("cursor");
-    router.push(`/search?${parameters.toString()}`, { scroll: false });
-  }
-
   if (failed) {
     return (
       <div className="explore-map__failure" role="alert">
@@ -271,14 +249,6 @@ export default function ExploreMap({
   return (
     <section className="explore-map" aria-label="Interactive sale map">
       <div ref={container} className="explore-map__canvas" />
-      <button
-        className="explore-map__search-area"
-        type="button"
-        disabled={!bounds}
-        onClick={searchArea}
-      >
-        Search this area
-      </button>
       <div className="explore-map__keyboard-markers" aria-label="Map results">
         {markers.map((marker) => (
           <button

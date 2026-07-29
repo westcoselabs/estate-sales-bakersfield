@@ -69,7 +69,7 @@ export function isCalendarDate(value: string): boolean {
 }
 
 function normalizedDate(value: string): PublicDateFilter {
-  return ["today", "weekend", "next-7-days", "custom"].includes(value)
+  return ["today", "tomorrow", "weekend", "next-7-days", "custom"].includes(value)
     ? (value as PublicDateFilter)
     : "all";
 }
@@ -209,6 +209,7 @@ export function activeFilterCount(criteria: PublicSearchCriteria): number {
 
 export function dateFilterLabel(criteria: PublicSearchCriteria): string | null {
   if (criteria.date === "today") return "Today";
+  if (criteria.date === "tomorrow") return "Tomorrow";
   if (criteria.date === "weekend") return "This weekend";
   if (criteria.date === "next-7-days") return "Next 7 days";
   if (criteria.date === "custom" && criteria.from && criteria.to) {

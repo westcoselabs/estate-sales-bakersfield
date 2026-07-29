@@ -30,7 +30,7 @@ export default function LocationConfirmationMap({
       style: configuredMapStyle(),
       center: [longitude, latitude],
       zoom: 15,
-      cooperativeGestures: true,
+      cooperativeGestures: false,
       attributionControl: { compact: false },
     });
     map.addControl(

@@ -39,7 +39,7 @@ export function PublicListingActions({
       </a>
       <button type="button" onClick={() => void shareListing()}>
         <Icon name="external" size={20} />
-        {copied ? "Link copied" : "Share"}
+        {copied ? "Copied" : "Share"}
       </button>
     </div>
   );
