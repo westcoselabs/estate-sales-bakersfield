@@ -5994,6 +5994,13 @@
     );
 }
 
+.public-shell:has(
+    > main
+      .glass-page:is(.how-page, .about-page, .contact-page, .list-page, .faq-page)
+  ) {
+  background: #fff;
+}
+
 /* The legacy globals.css `section` rule still contributes 2rem of padding here,
  * which insets the content sections relative to the hero and the tinted band.
  * `.content-section` is included because /faq and /contact build on the
@@ -6002,6 +6009,9 @@
  * container width while it spans the viewport. */
 .glass-page
   :is(.marketing-section, .content-section):not(.marketing-section--tinted) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   padding: 0;
 }
 

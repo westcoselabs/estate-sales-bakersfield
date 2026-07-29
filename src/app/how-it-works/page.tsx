@@ -188,30 +188,6 @@ export default function HowItWorksPage() {
           </div>
         </section>
 
-        <section
-          className="marketing-section shell-container"
-          aria-labelledby="publication-title"
-        >
-          <div className="marketing-card marketing-card--wide">
-            <span className="marketing-card__icon" aria-hidden="true">
-              <Icon name="shield" />
-            </span>
-            <div>
-              <p className="eyebrow">Clear checkpoints</p>
-              <h2 id="publication-title">
-                A draft is not the same as a published listing.
-              </h2>
-              <p>
-                Organizers verify their email, complete the required listing
-                information, preview and approve an exact revision, and then
-                complete payment. A checkout return alone does not prove
-                publication. The dashboard shows the authoritative status and
-                any recovery action.
-              </p>
-            </div>
-          </div>
-        </section>
-
         <EstateHelpCallout
           eyebrow="Professional estate-sale help"
           description="Simply Decorated offers professional help with organizing, pricing, staging, and promotion. This is a separate service and is not included in platform listing payment."
