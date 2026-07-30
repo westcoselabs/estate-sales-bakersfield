@@ -48,11 +48,12 @@ export default async function SettingsPage() {
               {!user.emailVerifiedAt ? (
                 <>
                   <p>
-                    Verify before photos, approval, payment, or publication.
+                    You can keep building your event and adding photos. Verify
+                    before approval and payment.
                   </p>
                   <EmailRequestForm
                     endpoint="/api/auth/resend-verification"
-                    buttonLabel="Resend verification"
+                    buttonLabel="Send verification email"
                     initialEmail={user.email}
                     hideEmailInput
                   />

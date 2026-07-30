@@ -1,4 +1,8 @@
-import { AuthenticationError, AuthorizationError } from "../domain/errors";
+import {
+  AuthenticationError,
+  AuthorizationError,
+  EmailVerificationRequiredError,
+} from "../domain/errors";
 import type { AuthPrincipal } from "../domain/types";
 
 export function requireUserPrincipal(
@@ -28,7 +32,7 @@ export function requireVerifiedPublishingPrincipal(
 ): AuthPrincipal {
   const user = requireUserPrincipal(principal);
   if (!user.emailVerifiedAt) {
-    throw new AuthorizationError(
+    throw new EmailVerificationRequiredError(
       "Email verification is required for publishing actions",
     );
   }

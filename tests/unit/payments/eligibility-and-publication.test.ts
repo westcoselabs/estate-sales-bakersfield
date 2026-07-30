@@ -66,6 +66,7 @@ describe("Phase 4 payment eligibility and publication projection", () => {
       approvedRevision: event.approvedRevision!,
       canonicalPath: snapshot.projection.path,
       publishedAt: now,
+      verifiedEmail: "seller@example.test",
       snapshot,
       now,
     });
@@ -73,6 +74,7 @@ describe("Phase 4 payment eligibility and publication projection", () => {
       kind: "HIDDEN",
       city: "Bakersfield",
     });
+    expect(beforeStart.verifiedEmail).toBe("seller@example.test");
     expect(JSON.stringify(beforeStart)).not.toContain("123 Main Street");
 
     const afterStart = publishedListing({
@@ -80,6 +82,7 @@ describe("Phase 4 payment eligibility and publication projection", () => {
       approvedRevision: event.approvedRevision!,
       canonicalPath: snapshot.projection.path,
       publishedAt: now,
+      verifiedEmail: "seller@example.test",
       snapshot,
       now: new Date("2026-08-25T16:00:01.000Z"),
     });

@@ -5,6 +5,7 @@ import {
   AuthenticationError,
   AuthenticationServiceUnavailableError,
   AuthorizationError,
+  EmailVerificationRequiredError,
   InvalidCredentialsError,
   InvalidPasswordError,
   InvalidTokenError,
@@ -138,6 +139,16 @@ export function authenticationApiError(
     return authJson(
       { error: "The request could not be authenticated.", requestId },
       { status: 401, requestId },
+    );
+  }
+  if (error instanceof EmailVerificationRequiredError) {
+    return authJson(
+      {
+        error: "Verify your email before approving or paying for this event.",
+        code: "EMAIL_VERIFICATION_REQUIRED",
+        requestId,
+      },
+      { status: 403, requestId },
     );
   }
   if (error instanceof AuthorizationError) {

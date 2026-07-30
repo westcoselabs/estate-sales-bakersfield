@@ -94,7 +94,7 @@ export default function HowItWorksPage() {
             </h2>
             <p>
               Browse one shared search experience, narrow it to a useful date,
-              and open a listing for the organizer&apos;s published details.
+              and open a listing for the seller&apos;s published details.
             </p>
           </div>
           <ol className="marketing-grid marketing-grid--three content-list content-list--steps">
@@ -125,7 +125,7 @@ export default function HowItWorksPage() {
               <h3>Review the listing</h3>
               <p>
                 See the published schedule, photos, and the location detail the
-                organizer chose to share.
+                seller chose to share.
               </p>
             </li>
           </ol>
@@ -137,7 +137,7 @@ export default function HowItWorksPage() {
         >
           <div className="shell-container">
             <div className="marketing-section__heading">
-              <p className="eyebrow">For organizers</p>
+              <p className="eyebrow">For sellers</p>
               <h2 id="seller-process-title">
                 Build a listing in five focused steps.
               </h2>
@@ -179,7 +179,7 @@ export default function HowItWorksPage() {
             </ol>
             <div className="marketing-actions">
               <Link className="ui-button ui-button--accent" href="/signup">
-                Create an organizer account
+                Create an account
               </Link>
               <Link className="ui-text-link" href="/faq">
                 Read common questions

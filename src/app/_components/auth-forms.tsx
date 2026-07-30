@@ -639,14 +639,14 @@ export function OrganizerForm({
         "/api/organizer",
         {
           displayName: String(data.get("displayName") ?? ""),
-          contactName: String(data.get("contactName") ?? ""),
-          contactEmail: String(data.get("contactEmail") ?? ""),
+          contactName: null,
+          contactEmail: null,
           contactPhone: String(data.get("contactPhone") ?? ""),
           websiteUrl: String(data.get("websiteUrl") ?? ""),
         },
         "PUT",
       );
-      submission.setMessage("Organizer profile saved.");
+      submission.setMessage("Profile saved.");
       router.refresh();
     } catch (error) {
       submission.setMessage(
@@ -660,7 +660,7 @@ export function OrganizerForm({
   return (
     <form onSubmit={submit}>
       <label>
-        Organizer or business name
+        Business name (optional)
         <input
           defaultValue={initial?.displayName ?? ""}
           name="displayName"
@@ -668,24 +668,7 @@ export function OrganizerForm({
         />
       </label>
       <label>
-        Contact name
-        <input
-          defaultValue={initial?.contactName ?? ""}
-          name="contactName"
-          maxLength={100}
-        />
-      </label>
-      <label>
-        Contact email
-        <input
-          defaultValue={initial?.contactEmail ?? ""}
-          name="contactEmail"
-          type="email"
-          maxLength={320}
-        />
-      </label>
-      <label>
-        Contact phone
+        Phone (optional)
         <input
           defaultValue={initial?.contactPhone ?? ""}
           name="contactPhone"
@@ -694,16 +677,21 @@ export function OrganizerForm({
         />
       </label>
       <label>
-        Website
+        Website (optional)
         <input
           defaultValue={initial?.websiteUrl ?? ""}
           name="websiteUrl"
-          type="url"
+          type="text"
+          inputMode="url"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="yourbusiness.com"
           maxLength={2048}
         />
       </label>
       <button disabled={submission.pending} type="submit">
-        {submission.pending ? "Saving…" : "Save organizer profile"}
+        {submission.pending ? "Saving…" : "Save"}
       </button>
       <p aria-live="polite">{submission.message}</p>
     </form>

@@ -102,6 +102,14 @@ export function PublicEventListing({
     projection.eventType === "ESTATE_SALE" ? "/estate-sales" : "/yard-sales";
   const address = visibleAddress(listing);
   const directionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address.directionsQuery)}`;
+  const emailHref = listing.verifiedEmail
+    ? `mailto:${encodeURIComponent(listing.verifiedEmail)}`
+    : null;
+  const hasContactDetails = Boolean(
+    listing.verifiedEmail ||
+    projection.organizer.displayName ||
+    projection.organizer.websiteUrl,
+  );
   const applicationUrl = getServerApplicationUrl();
   const structuredData = {
     "@context": "https://schema.org",
@@ -119,13 +127,22 @@ export function PublicEventListing({
       name: locationLabel(listing),
       address: structuredAddress(listing),
     },
-    organizer: {
-      "@type": "Organization",
-      name: projection.organizer.displayName,
-      ...(projection.organizer.websiteUrl
-        ? { url: projection.organizer.websiteUrl }
-        : {}),
-    },
+    ...(hasContactDetails
+      ? {
+          organizer: {
+            "@type": projection.organizer.displayName
+              ? "Organization"
+              : "Person",
+            ...(projection.organizer.displayName
+              ? { name: projection.organizer.displayName }
+              : {}),
+            ...(listing.verifiedEmail ? { email: listing.verifiedEmail } : {}),
+            ...(projection.organizer.websiteUrl
+              ? { url: projection.organizer.websiteUrl }
+              : {}),
+          },
+        }
+      : {}),
   };
 
   return (
@@ -172,23 +189,32 @@ export function PublicEventListing({
                   <span>{address.secondary}</span>
                 </p>
               </div>
-              <div>
-                <span aria-hidden="true">
-                  <Icon name="user" size={24} />
-                </span>
-                <p>
-                  <span>Hosted by</span>
-                  <strong>{projection.organizer.displayName}</strong>
-                  {projection.organizer.websiteUrl ? (
-                    <a
-                      href={projection.organizer.websiteUrl}
-                      rel="noopener noreferrer nofollow"
-                    >
-                      Organizer website
-                    </a>
-                  ) : null}
-                </p>
-              </div>
+              {hasContactDetails ? (
+                <div>
+                  <span aria-hidden="true">
+                    <Icon name="user" size={24} />
+                  </span>
+                  <p>
+                    <span>Contact</span>
+                    {listing.verifiedEmail && emailHref ? (
+                      <strong>
+                        <a href={emailHref}>{listing.verifiedEmail}</a>
+                      </strong>
+                    ) : null}
+                    {projection.organizer.displayName ? (
+                      <span>Listed by {projection.organizer.displayName}</span>
+                    ) : null}
+                    {projection.organizer.websiteUrl ? (
+                      <a
+                        href={projection.organizer.websiteUrl}
+                        rel="noopener noreferrer nofollow"
+                      >
+                        Website
+                      </a>
+                    ) : null}
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             <PublicListingActions
@@ -234,7 +260,7 @@ export function PublicEventListing({
               <Icon name="shield" size={24} />
               <p>
                 <strong>Privacy aware</strong>
-                <span>Location shared by the organizer</span>
+                <span>Location details provided for this event</span>
               </p>
             </div>
           </section>

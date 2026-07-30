@@ -291,7 +291,7 @@ export function DashboardShell({
       <SkipLink />
       <aside className="dashboard-sidebar">
         <Brand />
-        <nav aria-label="Organizer dashboard">{nav}</nav>
+        <nav aria-label="Dashboard navigation">{nav}</nav>
         <TextLink
           className="dashboard-exit-link"
           href="/"
@@ -314,7 +314,7 @@ export function DashboardShell({
       </main>
       <nav
         className="dashboard-bottom-nav"
-        aria-label="Organizer mobile"
+        aria-label="Mobile dashboard navigation"
         data-active={active}
       >
         {nav}

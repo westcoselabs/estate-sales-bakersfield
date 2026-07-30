@@ -1,12 +1,15 @@
 import { ZodError } from "zod";
 
-import { AuthenticationError, AuthorizationError } from "@/modules/auth";
+import {
+  AuthenticationError,
+  AuthorizationError,
+  EmailVerificationRequiredError,
+} from "@/modules/auth";
 import {
   EventConflictError,
   EventNotFoundError,
   EventStateError,
   EventValidationError,
-  OrganizerOnboardingRequiredError,
   PhotoProcessingError,
 } from "@/modules/events";
 import {
@@ -49,16 +52,20 @@ export function eventApiError(
       { status: 401, requestId },
     );
   }
+  if (error instanceof EmailVerificationRequiredError) {
+    return authJson(
+      {
+        error: "Verify your email before approving or paying for this event.",
+        code: "EMAIL_VERIFICATION_REQUIRED",
+        requestId,
+      },
+      { status: 403, requestId },
+    );
+  }
   if (error instanceof AuthorizationError) {
     return authJson(
       { error: "You do not have access to this action.", requestId },
       { status: 403, requestId },
-    );
-  }
-  if (error instanceof OrganizerOnboardingRequiredError) {
-    return authJson(
-      { error: error.message, requestId },
-      { status: 409, requestId },
     );
   }
   if (error instanceof EventNotFoundError) {

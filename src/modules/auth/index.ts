@@ -38,6 +38,7 @@ export {
   AuthenticationError,
   AuthenticationServiceUnavailableError,
   AuthorizationError,
+  EmailVerificationRequiredError,
   EmailDeliveryError,
   InvalidCredentialsError,
   InvalidPasswordError,

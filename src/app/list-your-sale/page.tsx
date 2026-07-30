@@ -99,8 +99,8 @@ export default function ListYourSalePage() {
             <p className="eyebrow">A practical fit</p>
             <h2 id="self-service-title">Self-service keeps you in control.</h2>
             <p>
-              This workflow is for organizers who want to prepare and manage
-              their own public listing. It does not include professional sale
+              This workflow is for sellers who want to prepare and manage their
+              own public listing. It does not include professional sale
               organization or staging services.
             </p>
           </div>
@@ -157,9 +157,7 @@ export default function ListYourSalePage() {
               <li data-reveal="">Start and end dates and times</li>
               <li data-reveal="">A verified location and privacy choice</li>
               <li data-reveal="">Uploaded photos with a selected cover</li>
-              <li data-reveal="">
-                A verified email and completed organizer profile
-              </li>
+              <li data-reveal="">A verified account email</li>
             </ul>
           </div>
         </section>

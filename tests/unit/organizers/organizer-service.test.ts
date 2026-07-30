@@ -17,7 +17,7 @@ const profile = {
 };
 
 describe("OrganizerService", () => {
-  it("accepts only safe HTTP(S) organizer website links", () => {
+  it("normalizes scheme-less websites and accepts only safe HTTP(S) links", () => {
     const base = {
       displayName: "Organizer",
       contactName: "Owner",
@@ -30,10 +30,17 @@ describe("OrganizerService", () => {
         websiteUrl: "https://organizer.example.test/about",
       }).success,
     ).toBe(true);
+    expect(
+      organizerProfileSchema.parse({
+        ...base,
+        websiteUrl: "organizer.example.test/about",
+      }).websiteUrl,
+    ).toBe("https://organizer.example.test/about");
     for (const websiteUrl of [
       "javascript:alert(1)",
       "data:text/html,unsafe",
       "https://user:password@example.test/",
+      "not a website",
     ]) {
       expect(
         organizerProfileSchema.safeParse({ ...base, websiteUrl }).success,
@@ -41,7 +48,7 @@ describe("OrganizerService", () => {
     }
   });
 
-  it("normalizes appropriate fields and marks complete onboarding", async () => {
+  it("normalizes appropriate fields and preserves the legacy profile status", async () => {
     const repository = {
       findByUserId: vi.fn(async () => profile),
       saveForUser: vi.fn(async () => profile),
@@ -67,7 +74,7 @@ describe("OrganizerService", () => {
     expect(result).not.toHaveProperty("userId");
   });
 
-  it("keeps partial onboarding incomplete and scopes lookup to the user", async () => {
+  it("accepts optional profile fields and scopes lookup to the user", async () => {
     const repository = {
       findByUserId: vi.fn(async () => null),
       saveForUser: vi.fn(async () => ({

@@ -8,7 +8,7 @@ import { EstateHelpCallout } from "@/features/marketing/components";
 
 const title = "About Estate Sales Bakersfield";
 const description =
-  "Learn about the local purpose, organizer responsibilities, and privacy boundaries behind Estate Sales Bakersfield.";
+  "Learn about the local purpose, seller responsibilities, and privacy boundaries behind Estate Sales Bakersfield.";
 
 export const metadata: Metadata = {
   title,
@@ -59,8 +59,8 @@ export default function AboutPage() {
             </h1>
             <p className="marketing-lede">
               Estate Sales Bakersfield is being built to make nearby estate and
-              yard sales easier to discover while giving organizers a clear way
-              to prepare their own listings.
+              yard sales easier to discover while giving sellers a clear way to
+              prepare their own listings.
             </p>
             <div className="marketing-actions">
               <Link className="ui-button ui-button--primary" href="/search">
@@ -105,7 +105,7 @@ export default function AboutPage() {
               </span>
               <h3>Listing-led</h3>
               <p>
-                Real sale photos, schedule information, and organizer-approved
+                Real sale photos, schedule information, and seller-approved
                 public details carry the experience.
               </p>
             </article>
@@ -115,8 +115,8 @@ export default function AboutPage() {
               </span>
               <h3>Privacy-aware</h3>
               <p>
-                Public pages show only the location details the organizer chose
-                to share.
+                Public pages show only the location details the seller chose to
+                share.
               </p>
             </article>
           </div>
@@ -130,17 +130,17 @@ export default function AboutPage() {
             <div className="marketing-section__heading">
               <p className="eyebrow">Clear roles</p>
               <h2 id="responsibility-title">
-                Organizers remain responsible for their listing.
+                Sellers remain responsible for their listing.
               </h2>
               <p>
                 The platform provides the account, builder, approval, payment,
-                and publication workflow. Organizers provide and review the sale
+                and publication workflow. Sellers provide and review the sale
                 information they submit.
               </p>
             </div>
             <ul className="content-list content-list--checks">
               <li data-reveal="">
-                Organizers review their listing before payment.
+                Sellers review their listing before payment.
               </li>
               <li data-reveal="">
                 Important edits can require another review.

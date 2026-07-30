@@ -29,7 +29,6 @@ export {
   EventNotFoundError,
   EventStateError,
   EventValidationError,
-  OrganizerOnboardingRequiredError,
   PhotoProcessingError,
 } from "./domain/errors";
 export { createConfiguredEventService } from "./infrastructure/configured-events";

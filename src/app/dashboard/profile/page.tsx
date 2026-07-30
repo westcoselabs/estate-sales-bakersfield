@@ -22,12 +22,9 @@ export default async function ProfilePage() {
       <div className="dashboard-content">
         <header className="dashboard-page-header">
           <div>
-            <p className="eyebrow">Organizer profile</p>
+            <p className="eyebrow">Account</p>
             <h1>Profile</h1>
-            <p>
-              Manage your public organizer identity and private operational
-              contact details.
-            </p>
+            <p>Add optional business details to your public events.</p>
           </div>
         </header>
         <div className="profile-layout">
@@ -41,19 +38,7 @@ export default async function ProfilePage() {
                 {organizer?.displayName ?? user.displayName}
               </h2>
               <p>Account email: {user.email}</p>
-              <span
-                className={`status-badge status-badge--${organizer?.status === "COMPLETE" ? "success" : "warning"}`}
-              >
-                {organizer?.status === "COMPLETE"
-                  ? "Profile complete"
-                  : "Profile incomplete"}
-              </span>
             </div>
-            <p className="profile-photo-note">
-              Initials are the accessible account-avatar fallback. A persistent
-              profile photo requires a separately approved profile-media
-              contract.
-            </p>
           </aside>
           <section
             className="profile-form-panel"
@@ -61,17 +46,11 @@ export default async function ProfilePage() {
           >
             <div className="dashboard-section-heading">
               <div>
-                <p className="eyebrow">Organizer details</p>
-                <h2 id="profile-form-title">Identity and contact details</h2>
+                <p className="eyebrow">Optional details</p>
+                <h2 id="profile-form-title">Business details</h2>
               </div>
             </div>
-            <p>
-              Organizer name and website may appear publicly. Contact name,
-              email, and phone are private operational details and are not part
-              of the current public listing projection. Organizer name, contact
-              name, and contact email are required to complete onboarding; phone
-              and website remain optional.
-            </p>
+            <p>Leave any field blank if it does not apply.</p>
             <OrganizerForm initial={organizer} />
           </section>
         </div>

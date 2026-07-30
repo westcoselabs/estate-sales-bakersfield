@@ -23,17 +23,17 @@ const questions = [
   {
     question: "Why is a street address not always visible?",
     answer:
-      "An organizer chooses an exact address, an approximate location, or a location hidden until the sale starts. Public cards, details, and map behavior must honor that choice.",
+      "A seller chooses an exact address, an approximate location, or a location hidden until the sale starts. Public cards, details, and map behavior must honor that choice.",
   },
   {
     question: "How do I create a listing?",
     answer:
-      "Create an account, verify your email, complete the required organizer profile, and work through Details, Schedule, Address and privacy, Photos, then Review and payment.",
+      "Create an account, start your event, then work through Details, Schedule, Address and privacy, Photos, and Review and payment. Verify your email before approval and payment. Profile details are optional.",
   },
   {
     question: "When can I upload photos?",
     answer:
-      "Photo actions require a verified email and the required workflow state. A photo is treated as saved only after the server confirms it, and the listing needs a selected cover before review.",
+      "You can upload and manage photos while building an unverified draft. A photo is treated as saved after processing finishes, and the listing needs a selected cover before review.",
   },
   {
     question: "What happens if I edit an approved listing?",
@@ -106,8 +106,8 @@ export default function FaqPage() {
             <p className="eyebrow">Common questions</p>
             <h1>Estate Sales Bakersfield FAQ</h1>
             <p className="marketing-lede">
-              Straight answers about public sale discovery and the real
-              organizer workflow.
+              Straight answers about public sale discovery and the real seller
+              workflow.
             </p>
           </div>
         </header>

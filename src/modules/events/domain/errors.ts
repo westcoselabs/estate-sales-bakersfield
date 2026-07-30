@@ -14,8 +14,6 @@ export class EventValidationError extends EventError {}
 
 export class EventStateError extends EventError {}
 
-export class OrganizerOnboardingRequiredError extends EventError {}
-
 export type PhotoProcessingStage =
   | "reservation_validation"
   | "upload_validation"

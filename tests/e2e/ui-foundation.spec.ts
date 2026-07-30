@@ -128,7 +128,7 @@ test("dashboard shell is stable at 1440px", async ({ page }) => {
   await expect(page).toHaveURL(/\/dashboard$/);
   await expectNoHorizontalOverflow(page);
   await expect(
-    page.getByRole("navigation", { name: "Organizer" }),
+    page.getByRole("navigation", { name: "Dashboard navigation" }),
   ).toBeVisible();
   await page.screenshot({
     path: path.join(screenshotDirectory, "dashboard-1440.png"),

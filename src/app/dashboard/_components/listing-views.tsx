@@ -189,7 +189,7 @@ export function ListingCollection({
             className="ui-button ui-button--primary"
             href="/dashboard/events/new"
           >
-            <Icon name="plus" /> Create listing
+            <Icon name="plus" /> Create event
           </Link>
         ) : null}
       </section>

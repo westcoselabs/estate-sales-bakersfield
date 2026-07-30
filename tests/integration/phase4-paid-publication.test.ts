@@ -78,11 +78,7 @@ async function createPrincipal(label: string): Promise<{
       emailVerifiedAt: new Date(),
       organizerProfile: {
         create: {
-          displayName: `${label} Estate Sales`,
-          contactName: `${label} Contact`,
-          contactEmail: email,
-          websiteUrl: "https://organizer.example.test/",
-          status: "COMPLETE",
+          status: "INCOMPLETE",
         },
       },
     },
@@ -354,6 +350,7 @@ describe("Phase 4 paid publication against isolated Test Neon", () => {
     expect(
       await fixture.service.published("ESTATE_SALE", fixture.event.publicId),
     ).toMatchObject({
+      verifiedEmail: fixture.principal.email,
       projection: { title: fixture.event.title },
     });
     expect(

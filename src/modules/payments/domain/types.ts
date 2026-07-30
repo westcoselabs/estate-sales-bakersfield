@@ -105,6 +105,10 @@ export interface PublicationRecord {
   readonly publishedAt: Date;
 }
 
+export interface PublishedPublicationRecord extends PublicationRecord {
+  readonly verifiedEmail: string | null;
+}
+
 export type PaymentDisplayState =
   | "DRAFT_INCOMPLETE"
   | "READY_FOR_REVIEW"
@@ -157,5 +161,6 @@ export interface PublishedListing {
   readonly approvedRevision: number;
   readonly canonicalPath: string;
   readonly publishedAt: Date;
+  readonly verifiedEmail: string | null;
   readonly projection: PublicEventProjection;
 }

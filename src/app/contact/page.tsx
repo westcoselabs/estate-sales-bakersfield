@@ -6,7 +6,7 @@ import { Icon } from "@/components/ui/icons";
 
 const title = "Contact Estate Sales Bakersfield";
 const description =
-  "Find the current help paths for Estate Sales Bakersfield shoppers and listing organizers during the production beta.";
+  "Find the current help paths for Estate Sales Bakersfield shoppers and sellers during the production beta.";
 
 export const metadata: Metadata = {
   title,
@@ -87,7 +87,7 @@ export default function ContactPage() {
               </span>
               <h3>Check your dashboard</h3>
               <p>
-                Signed-in organizers can review account verification, drafts,
+                Signed-in sellers can review account verification, drafts,
                 listings, and the next action shown by the application.
               </p>
               <Link className="ui-text-link" href="/dashboard">

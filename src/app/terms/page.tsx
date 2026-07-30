@@ -52,7 +52,7 @@ export default function TermsPage() {
           <section aria-labelledby="terms-platform-title">
             <h2 id="terms-platform-title">Platform role</h2>
             <p>
-              Estate Sales Bakersfield provides a workflow for organizers to
+              Estate Sales Bakersfield provides a workflow for sellers to
               prepare estate and yard sale listings and a public directory for
               eligible published listings. The platform listing flow is separate
               from any professional estate-sale service.
@@ -60,19 +60,21 @@ export default function TermsPage() {
           </section>
 
           <section aria-labelledby="terms-account-title">
-            <h2 id="terms-account-title">Accounts and organizer information</h2>
+            <h2 id="terms-account-title">
+              Accounts and public contact information
+            </h2>
             <p>
-              Organizers use an authenticated account, verify their email, and
-              complete required profile information before restricted listing
-              actions become available. Existing authentication, session, and
-              abuse-control rules remain authoritative.
+              Sellers use an authenticated account and verify their email before
+              restricted listing actions become available. Profile details are
+              optional. Publishing makes the verified account email visible on
+              the live listing.
             </p>
           </section>
 
           <section aria-labelledby="terms-content-title">
             <h2 id="terms-content-title">Listing content</h2>
             <p>
-              Organizers provide and review the title, description, sale type,
+              Sellers provide and review the title, description, sale type,
               schedule, location, privacy choice, and photos submitted for their
               listing. Only the supported estate sale and yard sale types are
               currently accepted by the builder.
@@ -104,7 +106,7 @@ export default function TermsPage() {
           <section aria-labelledby="terms-privacy-title">
             <h2 id="terms-privacy-title">Location and public information</h2>
             <p>
-              The public listing follows the organizer&apos;s supported location
+              The public listing follows the seller&apos;s supported location
               privacy choice. Public surfaces must use the approved publication
               projection and must not substitute private draft, account,
               payment, or exact-coordinate data.

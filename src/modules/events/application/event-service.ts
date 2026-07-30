@@ -20,7 +20,6 @@ import {
   EventNotFoundError,
   EventStateError,
   EventValidationError,
-  OrganizerOnboardingRequiredError,
   PhotoProcessingError,
   type PhotoProcessingStage,
 } from "../domain/errors";
@@ -62,30 +61,6 @@ export const EVENT_PHOTO_CONTENT_TYPES = [
 
 function publicId(): string {
   return randomBytes(6).toString("hex");
-}
-
-function selectedLocationIsVerified(
-  location: NonNullable<EventLocationInput["selectedLocation"]>,
-): boolean {
-  return (
-    (location.confidence ?? 0) >= 0.9 &&
-    ["building", "full_match", "match_by_building"].includes(
-      location.matchType ?? "",
-    )
-  );
-}
-
-function pinIsNearSelectedLocation(
-  selected: NonNullable<EventLocationInput["selectedLocation"]>,
-  latitude: number,
-  longitude: number,
-): boolean {
-  const latitudeDelta = (latitude - selected.latitude) * 111_111;
-  const longitudeDelta =
-    (longitude - selected.longitude) *
-    111_111 *
-    Math.cos((selected.latitude * Math.PI) / 180);
-  return Math.hypot(latitudeDelta, longitudeDelta) <= 1_000;
 }
 
 const DATABASE_ID =
@@ -170,17 +145,6 @@ export class EventService {
     private readonly environment: MediaEnvironment,
   ) {}
 
-  private async requireOrganizer(principal: AuthPrincipal | null) {
-    const user = requireUserPrincipal(principal);
-    const organizer = await this.events.findEligibleOrganizer(user.id);
-    if (!organizer || organizer.status !== "COMPLETE") {
-      throw new OrganizerOnboardingRequiredError(
-        "Complete organizer onboarding before managing event drafts.",
-      );
-    }
-    return { user, organizer };
-  }
-
   private async loadOwned(
     eventId: string,
     userId: string,
@@ -211,9 +175,8 @@ export class EventService {
     eventType: EventType,
     audit: EventAuditContext = {},
   ): Promise<EventEditorDto> {
-    const { user, organizer } = await this.requireOrganizer(principal);
+    const user = requireUserPrincipal(principal);
     const event = await this.events.createOwned({
-      organizerId: organizer.id,
       ownerUserId: user.id,
       eventType,
       publicId: publicId(),
@@ -226,7 +189,7 @@ export class EventService {
   async list(
     principal: AuthPrincipal | null,
   ): Promise<readonly EventListItemDto[]> {
-    const { user } = await this.requireOrganizer(principal);
+    const user = requireUserPrincipal(principal);
     return (await this.events.listOwned(user.id)).map(listItem);
   }
 
@@ -234,7 +197,7 @@ export class EventService {
     principal: AuthPrincipal | null,
     eventId: string,
   ): Promise<EventEditorDto> {
-    const { user } = await this.requireOrganizer(principal);
+    const user = requireUserPrincipal(principal);
     return toEventEditorDto(await this.loadOwned(eventId, user.id));
   }
 
@@ -244,7 +207,7 @@ export class EventService {
     input: EventDetailsInput,
     audit: EventAuditContext = {},
   ): Promise<EventEditorDto> {
-    const { user } = await this.requireOrganizer(principal);
+    const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
     const hypothetical = withChanges(current, {
@@ -273,7 +236,7 @@ export class EventService {
     input: EventScheduleInput,
     audit: EventAuditContext = {},
   ): Promise<EventEditorDto> {
-    const { user } = await this.requireOrganizer(principal);
+    const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
     if (current.location && current.location.timezone !== input.timezone) {
@@ -311,7 +274,7 @@ export class EventService {
     input: EventLocationInput,
     audit: EventAuditContext = {},
   ): Promise<EventEditorDto> {
-    const { user } = await this.requireOrganizer(principal);
+    const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
     if (current.timezone && current.timezone !== input.timezone) {
@@ -335,17 +298,7 @@ export class EventService {
     );
     if (input.confirmed && !selected && !addressUnchanged) {
       throw new EventValidationError(
-        "Choose an address suggestion and confirm the marker.",
-      );
-    }
-    if (
-      selected &&
-      input.pinLatitude !== undefined &&
-      input.pinLongitude !== undefined &&
-      !pinIsNearSelectedLocation(selected, input.pinLatitude, input.pinLongitude)
-    ) {
-      throw new EventValidationError(
-        "Move the pin within about 0.6 miles of the selected address, or choose a different address result.",
+        "Select an address from the results to continue.",
       );
     }
     const reusableLocation = (() => {
@@ -364,8 +317,8 @@ export class EventService {
           postalCode: selected.postalCode,
           countryCode: selected.countryCode,
           normalizedAddress: selected.formattedAddress,
-          latitude: input.pinLatitude ?? selected.latitude,
-          longitude: input.pinLongitude ?? selected.longitude,
+          latitude: selected.latitude,
+          longitude: selected.longitude,
           timezone: input.timezone,
           providerPlaceId: selected.id,
           providerName: selected.provider.name,
@@ -378,9 +331,7 @@ export class EventService {
           publicZone: "bakersfield",
           precision: selected.matchType,
           confidence: selected.confidence,
-          validationStatus: selectedLocationIsVerified(selected)
-            ? "VERIFIED"
-            : "LOW_CONFIDENCE",
+          validationStatus: "VERIFIED",
         }
       : (reusableLocation ?? {
           addressLine1: input.addressLine1,
@@ -441,8 +392,7 @@ export class EventService {
     },
     audit: EventAuditContext = {},
   ): Promise<EventPhotoReservationDto> {
-    const user = requireVerifiedPublishingPrincipal(principal);
-    await this.requireOrganizer(user);
+    const user = requireUserPrincipal(principal);
     this.assertEditable(await this.loadOwned(eventId, user.id));
     const reservationId = randomUUID();
     const photoId = randomUUID();
@@ -510,8 +460,7 @@ export class EventService {
     readonly maximumSizeInBytes: number;
     readonly expiresAt: Date;
   }> {
-    const user = requireVerifiedPublishingPrincipal(principal);
-    await this.requireOrganizer(user);
+    const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
     if (current.version !== input.expectedVersion)
@@ -557,8 +506,7 @@ export class EventService {
     },
     audit: EventAuditContext = {},
   ): Promise<EventEditorDto> {
-    const user = requireVerifiedPublishingPrincipal(principal);
-    await this.requireOrganizer(user);
+    const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
     if (current.version !== input.expectedVersion)
@@ -758,8 +706,7 @@ export class EventService {
     expectedVersion: number,
     audit: EventAuditContext = {},
   ): Promise<EventEditorDto> {
-    const user = requireVerifiedPublishingPrincipal(principal);
-    await this.requireOrganizer(user);
+    const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
     const photo = current.photos.find(
@@ -791,8 +738,7 @@ export class EventService {
     expectedVersion: number,
     audit: EventAuditContext = {},
   ): Promise<EventEditorDto> {
-    const user = requireVerifiedPublishingPrincipal(principal);
-    await this.requireOrganizer(user);
+    const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
     const expectedIds = new Set(current.photos.map((photo) => photo.id));
@@ -835,8 +781,7 @@ export class EventService {
     expectedVersion: number,
     audit: EventAuditContext = {},
   ): Promise<EventEditorDto> {
-    const user = requireVerifiedPublishingPrincipal(principal);
-    await this.requireOrganizer(user);
+    const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
     if (!current.photos.some((photo) => photo.id === photoId)) {
@@ -870,8 +815,7 @@ export class EventService {
     eventId: string,
     now = new Date(),
   ): Promise<PublicEventProjection> {
-    const user = requireVerifiedPublishingPrincipal(principal);
-    await this.requireOrganizer(user);
+    const user = requireUserPrincipal(principal);
     return publicEventProjection(await this.loadOwned(eventId, user.id), now);
   }
 
@@ -886,7 +830,6 @@ export class EventService {
     audit: EventAuditContext = {},
   ): Promise<EventEditorDto> {
     const user = requireVerifiedPublishingPrincipal(principal);
-    await this.requireOrganizer(user);
     if (input.termsVersion !== PUBLISHING_TERMS_VERSION) {
       throw new EventStateError(
         "The publishing terms have changed. Review them again.",

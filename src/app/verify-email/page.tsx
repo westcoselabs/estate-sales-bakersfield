@@ -26,7 +26,7 @@ export default async function VerifyEmailPage({
     <AuthShell
       eyebrow="Email security"
       title="Verify your email"
-      description="Verification protects your organizer account and unlocks photo, approval, payment, and publication steps."
+      description="Verification protects your account and unlocks photo, approval, payment, and publication steps."
       secondary={
         <p>
           <Link href="/login">Return to login</Link>

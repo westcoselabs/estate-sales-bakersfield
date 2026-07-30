@@ -6,7 +6,6 @@ import { CreateEventForm } from "@/app/_components/event-builder";
 import { DashboardShell } from "@/components/shells/shells";
 import { Icon } from "@/components/ui/icons";
 import { getCurrentUser } from "@/modules/auth";
-import { createConfiguredOrganizerService } from "@/modules/organizers";
 
 import { ListingCollection } from "./_components/listing-views";
 import { loadDashboardListings } from "./_lib/listings";
@@ -32,19 +31,14 @@ export default async function DashboardPage({
           <p className="eyebrow">Account status</p>
           <h1>Account restricted</h1>
           <p>
-            This account cannot access organizer tools. Contact support for
-            help.
+            This account cannot access event tools. Contact support for help.
           </p>
           <LogoutButton />
         </section>
       </DashboardShell>
     );
   }
-  const organizer = await createConfiguredOrganizerService().getForUser(
-    user.id,
-  );
-  const listings =
-    organizer?.status === "COMPLETE" ? await loadDashboardListings(user) : [];
+  const listings = await loadDashboardListings(user);
   const attentionCount = listings.filter((item) =>
     [
       "PAYMENT_CANCELED",
@@ -60,7 +54,7 @@ export default async function DashboardPage({
       <div className="dashboard-content dashboard-overview">
         <header className="dashboard-page-header">
           <div>
-            <p className="eyebrow">Organizer workspace</p>
+            <p className="eyebrow">Dashboard</p>
             <h1>Welcome, {user.displayName}</h1>
             <p>Manage each sale from first draft through publication.</p>
           </div>
@@ -83,50 +77,45 @@ export default async function DashboardPage({
           </div>
         ) : null}
 
+        <section
+          className="dashboard-create-strip"
+          aria-labelledby="quick-create-title"
+        >
+          <div>
+            <p className="eyebrow">New event</p>
+            <h2 id="quick-create-title">Create an event</h2>
+            <p>
+              Choose a sale type. You can add the details on the next screen.
+            </p>
+          </div>
+          <CreateEventForm />
+        </section>
+
         {!user.emailVerifiedAt ? (
           <section
-            className="dashboard-priority dashboard-priority--warning"
+            className="dashboard-priority dashboard-priority--verification"
             aria-labelledby="verify-title"
           >
             <span className="dashboard-priority__icon">
               <Icon name="shield" />
             </span>
             <div>
-              <p className="eyebrow">Your next step</p>
               <h2 id="verify-title">Verify your email</h2>
               <p>
-                Draft now, then verify before photos, approval, payment, or
-                publication.
+                You can keep building your event now. Verify before review and
+                approval.
               </p>
             </div>
             <EmailRequestForm
               endpoint="/api/auth/resend-verification"
-              buttonLabel="Resend verification"
+              buttonLabel="Send verification email"
               initialEmail={user.email}
               hideEmailInput
             />
           </section>
-        ) : organizer?.status !== "COMPLETE" ? (
-          <section
-            className="dashboard-priority"
-            aria-labelledby="profile-title"
-          >
-            <span className="dashboard-priority__icon">
-              <Icon name="user" />
-            </span>
-            <div>
-              <p className="eyebrow">Your next step</p>
-              <h2 id="profile-title">Complete your organizer profile</h2>
-              <p>Add the contact details required before creating a listing.</p>
-            </div>
-            <Link
-              className="ui-button ui-button--primary"
-              href="/dashboard/profile"
-            >
-              Continue onboarding <Icon name="arrow" size={18} />
-            </Link>
-          </section>
-        ) : attentionCount > 0 ? (
+        ) : null}
+
+        {attentionCount > 0 ? (
           <section className="dashboard-priority dashboard-priority--error">
             <span className="dashboard-priority__icon">
               <Icon name="warning" />
@@ -152,41 +141,16 @@ export default async function DashboardPage({
           </section>
         ) : null}
 
-        <p className="dashboard-onboarding-status">
-          Organizer onboarding: {organizer?.status ?? "Not started"}.
-        </p>
-
-        {organizer?.status === "COMPLETE" ? (
-          <>
-            <section
-              className="dashboard-create-strip"
-              aria-labelledby="quick-create-title"
-            >
-              <div>
-                <p className="eyebrow">New sale</p>
-                <h2 id="quick-create-title">Start a fresh draft</h2>
-                <p>
-                  Choose the real sale type. You can add details on the next
-                  screen.
-                </p>
-              </div>
-              <CreateEventForm />
-            </section>
-            <section
-              className="dashboard-recent"
-              aria-labelledby="recent-title"
-            >
-              <div className="dashboard-section-heading">
-                <div>
-                  <p className="eyebrow">Latest updates</p>
-                  <h2 id="recent-title">Recent listings</h2>
-                </div>
-                <Link href="/dashboard/events">View all</Link>
-              </div>
-              <ListingCollection listings={listings.slice(0, 3)} view="all" />
-            </section>
-          </>
-        ) : null}
+        <section className="dashboard-recent" aria-labelledby="recent-title">
+          <div className="dashboard-section-heading">
+            <div>
+              <p className="eyebrow">Latest updates</p>
+              <h2 id="recent-title">Recent listings</h2>
+            </div>
+            <Link href="/dashboard/events">View all</Link>
+          </div>
+          <ListingCollection listings={listings.slice(0, 3)} view="all" />
+        </section>
       </div>
     </DashboardShell>
   );

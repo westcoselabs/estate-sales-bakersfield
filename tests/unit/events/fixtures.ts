@@ -27,6 +27,7 @@ export function readyEvent(changes: Partial<EventRecord> = {}): EventRecord {
     id: "event-1",
     organizerId: "organizer-1",
     ownerUserId: "user-1",
+    ownerVerifiedEmail: "seller@example.test",
     organizerDisplayName: "Bakersfield Organizer",
     organizerWebsiteUrl: "https://organizer.example.test/",
     publicId: "abc123def456",

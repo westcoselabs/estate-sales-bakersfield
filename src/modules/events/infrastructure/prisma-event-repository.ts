@@ -15,6 +15,12 @@ const eventInclude = {
       userId: true,
       displayName: true,
       websiteUrl: true,
+      user: {
+        select: {
+          normalizedEmail: true,
+          emailVerifiedAt: true,
+        },
+      },
     },
   },
   location: true,
@@ -104,7 +110,10 @@ function mapEvent(event: EventPayload): EventRecord {
     id: event.id,
     organizerId: event.organizerId,
     ownerUserId: event.organizer.userId,
-    organizerDisplayName: event.organizer.displayName ?? "Organizer",
+    ownerVerifiedEmail: event.organizer.user.emailVerifiedAt
+      ? event.organizer.user.normalizedEmail
+      : null,
+    organizerDisplayName: event.organizer.displayName,
     organizerWebsiteUrl: event.organizer.websiteUrl,
     publicId: event.publicId,
     slug: event.slug,
@@ -182,28 +191,20 @@ export class PrismaEventRepository implements EventRepository {
     return event ? mapEvent(event) : null;
   }
 
-  async findEligibleOrganizer(userId: string) {
-    return this.prisma.organizerProfile.findUnique({
-      where: { userId },
-      select: { id: true, userId: true, status: true },
-    });
-  }
-
   async createOwned(input: Parameters<EventRepository["createOwned"]>[0]) {
     return this.prisma.$transaction(async (transaction) => {
-      const organizer = await transaction.organizerProfile.findFirst({
-        where: {
-          id: input.organizerId,
+      const organizer = await transaction.organizerProfile.upsert({
+        where: { userId: input.ownerUserId },
+        create: {
           userId: input.ownerUserId,
-          status: "COMPLETE",
+          status: "INCOMPLETE",
         },
+        update: {},
         select: { id: true },
       });
-      if (!organizer)
-        throw new Error("Eligible organizer ownership is required");
       const event = await transaction.event.create({
         data: {
-          organizerId: input.organizerId,
+          organizerId: organizer.id,
           eventType: input.eventType,
           publicId: input.publicId,
           slug: input.slug,

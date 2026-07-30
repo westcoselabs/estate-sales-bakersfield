@@ -18,19 +18,31 @@ const optionalEmail = z.preprocess(
 );
 
 const optionalWebsite = z.preprocess(
-  (value) => (value === "" || value === undefined ? null : value),
+  (value) => {
+    if (value === "" || value === undefined || value === null) return null;
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    return /^[a-z][a-z0-9+.-]*:/i.test(trimmed)
+      ? trimmed
+      : `https://${trimmed}`;
+  },
   z
     .string()
     .trim()
     .max(2048)
     .url()
     .refine((value) => {
-      const url = new URL(value);
-      return (
-        ["http:", "https:"].includes(url.protocol) &&
-        !url.username &&
-        !url.password
-      );
+      try {
+        const url = new URL(value);
+        return (
+          ["http:", "https:"].includes(url.protocol) &&
+          !url.username &&
+          !url.password
+        );
+      } catch {
+        return false;
+      }
     }, "Website URL must use HTTP or HTTPS without credentials")
     .nullable(),
 );

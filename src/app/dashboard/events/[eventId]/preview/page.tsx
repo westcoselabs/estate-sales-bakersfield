@@ -48,6 +48,7 @@ export default async function EventPreviewPage({ params }: Props) {
     approvedRevision: editor.contentRevision,
     canonicalPath: preview.path,
     publishedAt: new Date(),
+    verifiedEmail: user.emailVerifiedAt ? user.email : null,
     projection: preview,
   };
 
@@ -71,7 +72,10 @@ export default async function EventPreviewPage({ params }: Props) {
         <strong>Previewing revision {editor.contentRevision}</strong>
         <div className="listing-preview-toolbar__actions">
           {editor.publication ? (
-            <Link className="button-link" href={editor.publication.canonicalPath}>
+            <Link
+              className="button-link"
+              href={editor.publication.canonicalPath}
+            >
               View live listing
             </Link>
           ) : editor.approvalStatus === "APPROVED" &&

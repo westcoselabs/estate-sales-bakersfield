@@ -49,6 +49,22 @@ interface ReservationResponse {
   readonly requestId?: string;
 }
 
+interface AccountResponse {
+  readonly account: {
+    readonly emailVerified: boolean;
+  } | null;
+  readonly error?: string;
+  readonly code?: string;
+  readonly requestId?: string;
+}
+
+interface MessageResponse {
+  readonly message?: string;
+  readonly error?: string;
+  readonly code?: string;
+  readonly requestId?: string;
+}
+
 type Feedback = { readonly kind: "success" | "error"; readonly text: string };
 type UploadStatus =
   "selected" | "reserving" | "uploading" | "processing" | "ready" | "failed";
@@ -62,6 +78,7 @@ interface UploadItem {
   readonly previewIsLocal: boolean;
   readonly status: UploadStatus;
   readonly progress: number;
+  readonly retryable: boolean;
   readonly error?: string | undefined;
   readonly photoId?: string | undefined;
 }
@@ -112,13 +129,17 @@ function PhotoActionDropdown({
     const width = Math.min(192, window.innerWidth - 16);
     const estimatedHeight = canMakeCover ? 210 : 164;
     const openAbove =
-      window.innerHeight - rect.bottom < estimatedHeight && rect.top > estimatedHeight;
+      window.innerHeight - rect.bottom < estimatedHeight &&
+      rect.top > estimatedHeight;
 
     setPosition({
       top: openAbove
         ? Math.max(8, rect.top - estimatedHeight - 8)
         : Math.min(window.innerHeight - estimatedHeight - 8, rect.bottom + 8),
-      left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
+      left: Math.max(
+        8,
+        Math.min(rect.right - width, window.innerWidth - width - 8),
+      ),
     });
   };
 
@@ -317,17 +338,6 @@ function formatScheduleTime(value: string): string {
   }).format(new Date(2000, 0, 1, hour, minute));
 }
 
-function addressSuggestionIsVerified(
-  suggestion: ClientAddressSuggestion,
-): boolean {
-  return (
-    (suggestion.confidence ?? 0) >= 0.9 &&
-    ["building", "full_match", "match_by_building"].includes(
-      suggestion.matchType ?? "",
-    )
-  );
-}
-
 const STEP_LABELS: Readonly<Record<EventWizardStep, string>> = {
   details: "Details",
   schedule: "Schedule",
@@ -358,10 +368,10 @@ const LocationConfirmationMap = dynamic(
 );
 
 const UPLOAD_STATUS_LABELS: Readonly<Record<UploadStatus, string>> = {
-  selected: "Queued",
-  reserving: "Preparing photo",
+  selected: "Selected",
+  reserving: "Reserving",
   uploading: "Uploading",
-  processing: "Preparing photo",
+  processing: "Processing photo",
   ready: "Ready",
   failed: "Failed",
 };
@@ -399,11 +409,22 @@ function requestError(
   if (result.code === "STALE_VERSION") {
     return new StaleVersionError(result.requestId);
   }
-  const message =
-    result.error ?? fallback;
-  return new Error(
+  const message = result.error ?? fallback;
+  return new ApiRequestError(
     result.requestId ? `${message} Request: ${result.requestId}.` : message,
+    result.code,
   );
+}
+
+class ApiRequestError extends Error {
+  override readonly name = "ApiRequestError";
+
+  constructor(
+    message: string,
+    readonly code?: string,
+  ) {
+    super(message);
+  }
 }
 
 class StaleVersionError extends Error {
@@ -487,7 +508,7 @@ export function CreateEventForm() {
         </select>
       </label>
       <button type="submit" aria-busy={pending} disabled={pending}>
-        {pending ? "Creating…" : "Create event draft"}
+        {pending ? "Creating…" : "Create event"}
       </button>
       <p aria-live="polite">{message}</p>
     </form>
@@ -497,9 +518,13 @@ export function CreateEventForm() {
 export function EventBuilder({
   initialEvent,
   termsVersion,
+  accountEmail,
+  initialEmailVerified,
 }: {
   readonly initialEvent: EventEditorDto;
   readonly termsVersion: string;
+  readonly accountEmail: string;
+  readonly initialEmailVerified: boolean;
 }) {
   const [draft, setDraft] = useState(initialEvent);
   const draftRef = useRef(initialEvent);
@@ -509,6 +534,11 @@ export function EventBuilder({
   );
   const [pending, setPending] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [emailVerified, setEmailVerified] = useState(initialEmailVerified);
+  const [verificationPending, setVerificationPending] = useState<
+    "" | "send" | "check"
+  >("");
+  const [verificationMessage, setVerificationMessage] = useState("");
   const [feedback, setFeedback] = useState<
     Partial<Record<EventWizardStep, Feedback>>
   >({});
@@ -615,6 +645,38 @@ export function EventBuilder({
     previousStepRef.current = step;
     stepHeadingRef.current?.focus();
   }, [step]);
+
+  useEffect(() => {
+    if (emailVerified) return;
+    const controller = new AbortController();
+    const checkAfterFocus = () => {
+      if (document.visibilityState === "hidden") return;
+      void jsonRequest<AccountResponse>(
+        "/api/account",
+        "GET",
+        undefined,
+        controller.signal,
+      )
+        .then((result) => {
+          if (result.account?.emailVerified) {
+            setEmailVerified(true);
+            setVerificationMessage(
+              "Email verified. You can now approve this event.",
+            );
+          }
+        })
+        .catch(() => {
+          // The manual status action remains available if a focus check fails.
+        });
+    };
+    window.addEventListener("focus", checkAfterFocus);
+    document.addEventListener("visibilitychange", checkAfterFocus);
+    return () => {
+      controller.abort();
+      window.removeEventListener("focus", checkAfterFocus);
+      document.removeEventListener("visibilitychange", checkAfterFocus);
+    };
+  }, [emailVerified]);
 
   function syncForms(event: EventEditorDto) {
     setTitle(event.title ?? "");
@@ -866,28 +928,20 @@ export function EventBuilder({
   function saveLocation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const currentLocation = draftRef.current.location;
-    const hasSavedVerifiedAddress =
-      currentLocation?.validationStatus === "VERIFIED" &&
-      currentLocation.confirmationStatus === "CONFIRMED";
+    const hasSavedConfirmedAddress =
+      currentLocation?.confirmationStatus === "CONFIRMED" &&
+      currentLocation.latitude !== null &&
+      currentLocation.longitude !== null;
 
-    if (!selectedAddress && !hasSavedVerifiedAddress) {
-      const text =
-        "Choose the sale property from the address results. Typing an address alone cannot verify it.";
-      setLocationAddressError(text);
-      setStepFeedback("location", { kind: "error", text });
-      return;
-    }
-
-    if (selectedAddress && !addressSuggestionIsVerified(selectedAddress)) {
-      const text =
-        "Choose a more specific street-address result. This match cannot be verified for payment yet.";
+    if (!selectedAddress && !hasSavedConfirmedAddress) {
+      const text = "Select an address from the results to continue.";
       setLocationAddressError(text);
       setStepFeedback("location", { kind: "error", text });
       return;
     }
 
     if (!locationConfirmed) {
-      const text = "Confirm that the map pin represents the sale property.";
+      const text = "Confirm this is the sale property.";
       setStepFeedback("location", { kind: "error", text });
       return;
     }
@@ -909,8 +963,6 @@ export function EventBuilder({
         privacyMode,
         selectionToken,
         confirmed: locationConfirmed,
-        pinLatitude: selectedCoordinates?.latitude,
-        pinLongitude: selectedCoordinates?.longitude,
       },
       (saved) => saved.steps.locationComplete,
       "photos",
@@ -951,6 +1003,7 @@ export function EventBuilder({
         previewIsLocal: true,
         status: error ? "failed" : "selected",
         progress: 0,
+        retryable: false,
         error,
       };
     });
@@ -1038,6 +1091,7 @@ export function EventBuilder({
       previewIsLocal: false,
       status: "ready",
       progress: 100,
+      retryable: false,
       photoId,
       error: undefined,
     });
@@ -1104,6 +1158,7 @@ export function EventBuilder({
       updateUpload(item.id, {
         status: "failed",
         progress: 0,
+        retryable: false,
         error: "Select this file again before retrying.",
       });
       return undefined;
@@ -1119,7 +1174,8 @@ export function EventBuilder({
       }
       updateUpload(item.id, {
         status: "reserving",
-        progress: 80,
+        progress: 5,
+        retryable: false,
         error: undefined,
       });
       const reserved = await request<ReservationResponse>(
@@ -1137,6 +1193,7 @@ export function EventBuilder({
       updateUpload(item.id, {
         status: "failed",
         progress: 0,
+        retryable: true,
         error: error instanceof Error ? error.message : "Photo upload failed.",
       });
       return undefined;
@@ -1152,7 +1209,8 @@ export function EventBuilder({
     if (!file) return undefined;
     updateUpload(item.id, {
       status: "uploading",
-      progress: 80,
+      progress: 10,
+      retryable: false,
       photoId: reservation.photoId,
       error: undefined,
     });
@@ -1179,7 +1237,7 @@ export function EventBuilder({
           abortSignal: controller.signal,
           onProgress(percentage) {
             updateUpload(item.id, {
-              progress: Math.min(95, 80 + Math.round(percentage * 0.15)),
+              progress: Math.min(90, 10 + Math.round(percentage * 0.8)),
             });
           },
         });
@@ -1204,7 +1262,12 @@ export function EventBuilder({
       if (pathname !== reservation.uploadPathname) {
         throw new Error("The uploaded Blob did not match its reservation.");
       }
-      updateUpload(item.id, { status: "processing", progress: 96 });
+      updateUpload(item.id, { status: "uploading", progress: 90 });
+      updateUpload(item.id, {
+        status: "processing",
+        progress: 95,
+        retryable: false,
+      });
       return { reserved, pathname };
     } catch (error) {
       const message = uploadTimedOut
@@ -1215,6 +1278,7 @@ export function EventBuilder({
       updateUpload(item.id, {
         status: "failed",
         progress: 0,
+        retryable: true,
         photoId: reservation.photoId,
         error: message,
       });
@@ -1269,7 +1333,8 @@ export function EventBuilder({
       if (reconciliation === "pending" || reconciliation === "ready") {
         updateUpload(item.id, {
           status: "processing",
-          progress: 96,
+          progress: 95,
+          retryable: false,
           photoId,
           error:
             "Server processing is still being confirmed. Reload before taking another action; retry is disabled to prevent a duplicate photo.",
@@ -1279,6 +1344,7 @@ export function EventBuilder({
       updateUpload(item.id, {
         status: "failed",
         progress: 0,
+        retryable: true,
         photoId,
         error: error instanceof Error ? error.message : "Photo upload failed.",
       });
@@ -1308,7 +1374,7 @@ export function EventBuilder({
         (item) =>
           (item.status === "selected" || item.status === "failed") &&
           Boolean(item.file) &&
-          (!item.error || item.photoId),
+          (item.status === "selected" || item.retryable),
       );
       const reserved: ReservedPhotoUpload[] = [];
       for (const item of candidates) {
@@ -1490,7 +1556,7 @@ export function EventBuilder({
       if (!event.steps.photosComplete) {
         setStepFeedback("photos", {
           kind: "error",
-          text: "Upload at least one photo that reaches READY and explicitly select a READY cover photo.",
+          text: "Upload at least one photo that finishes processing and choose a cover.",
         });
         return;
       }
@@ -1514,6 +1580,13 @@ export function EventBuilder({
 
   async function approve(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!emailVerified) {
+      setStepFeedback("review", {
+        kind: "error",
+        text: "Verify your email before approving this event.",
+      });
+      return;
+    }
     const data = new FormData(event.currentTarget);
     if (data.get("acceptedTerms") !== "yes") {
       setStepFeedback("review", {
@@ -1541,12 +1614,64 @@ export function EventBuilder({
       });
       window.location.assign(`/dashboard/events/${response.event.id}/payment`);
     } catch (error) {
+      if (
+        error instanceof ApiRequestError &&
+        error.code === "EMAIL_VERIFICATION_REQUIRED"
+      ) {
+        setEmailVerified(false);
+      }
       setStepFeedback("review", {
         kind: "error",
         text: error instanceof Error ? error.message : "Approval failed.",
       });
     } finally {
       finishOperation();
+    }
+  }
+
+  async function sendVerificationEmail() {
+    if (verificationPending) return;
+    setVerificationPending("send");
+    setVerificationMessage("");
+    try {
+      await request<MessageResponse>("/api/auth/resend-verification", "POST", {
+        email: accountEmail,
+      });
+      setVerificationMessage(
+        `Verification email sent to ${accountEmail}. Open the link, then return here.`,
+      );
+    } catch (error) {
+      setVerificationMessage(
+        error instanceof Error
+          ? error.message
+          : "The verification email could not be sent. Try again.",
+      );
+    } finally {
+      setVerificationPending("");
+    }
+  }
+
+  async function checkVerificationStatus() {
+    if (verificationPending) return;
+    setVerificationPending("check");
+    setVerificationMessage("");
+    try {
+      const result = await request<AccountResponse>("/api/account");
+      const verified = Boolean(result.account?.emailVerified);
+      setEmailVerified(verified);
+      setVerificationMessage(
+        verified
+          ? "Email verified. You can now approve this event."
+          : "Your email is not verified yet. Open the link we sent, then check again.",
+      );
+    } catch (error) {
+      setVerificationMessage(
+        error instanceof Error
+          ? error.message
+          : "Verification status could not be checked. Try again.",
+      );
+    } finally {
+      setVerificationPending("");
     }
   }
 
@@ -1576,12 +1701,10 @@ export function EventBuilder({
     ? draft.photos.findIndex((photo) => photo.id === coverPhoto.id)
     : -1;
   const additionalPhotos = draft.photos.filter((photo) => !photo.isCover);
-  const selectedAddressIsVerified = selectedAddress
-    ? addressSuggestionIsVerified(selectedAddress)
-    : false;
-  const savedAddressIsVerified =
-    draft.location?.validationStatus === "VERIFIED" &&
-    draft.location.confirmationStatus === "CONFIRMED";
+  const savedAddressIsConfirmed =
+    draft.location?.confirmationStatus === "CONFIRMED" &&
+    draft.location.latitude !== null &&
+    draft.location.longitude !== null;
   const completionItems = [
     { label: "Add sale details", complete: draft.steps.detailsComplete },
     { label: "Set the schedule", complete: draft.steps.scheduleComplete },
@@ -1620,8 +1743,8 @@ export function EventBuilder({
     const photo = persistedUploadPhoto(item);
     return Boolean(
       item.status === "failed" &&
+      item.retryable &&
       item.file &&
-      (!item.error || item.photoId) &&
       (!photo || photo.status === "FAILED"),
     );
   }
@@ -2039,25 +2162,27 @@ export function EventBuilder({
                 />
                 {selectedAddress ? (
                   <p
-                    className={`address-verification-status${selectedAddressIsVerified ? " is-verified" : " is-invalid"}`}
-                    role={selectedAddressIsVerified ? "status" : "alert"}
+                    className="address-verification-status is-verified"
+                    role="status"
                   >
-                    {selectedAddressIsVerified
-                      ? "Address match found. Confirm the map pin to finish this step."
-                      : "This result is not precise enough to verify. Choose a full street-address result from the list."}
+                    Address selected. Confirm it below to continue.
                   </p>
-                ) : savedAddressIsVerified ? (
-                  <p className="address-verification-status is-verified" role="status">
-                    Address verified. You can update the privacy setting and continue.
+                ) : savedAddressIsConfirmed ? (
+                  <p
+                    className="address-verification-status is-verified"
+                    role="status"
+                  >
+                    Address selected. You can update the privacy setting and
+                    continue.
                   </p>
                 ) : (
                   <p className="address-verification-status">
-                    Step 1: choose the sale property from the address results. Step 2: confirm its map pin.
+                    Select an address from the results to continue.
                   </p>
                 )}
                 {selectedAddress || selectedCoordinates ? (
                   <section
-                    className={`selected-address-review${selectedAddress && !selectedAddressIsVerified ? " selected-address-review--invalid" : ""}`}
+                    className="selected-address-review"
                     aria-labelledby="selected-address-title"
                   >
                     <div>
@@ -2067,10 +2192,7 @@ export function EventBuilder({
                           initialEvent.location?.normalizedAddress ??
                           addressQuery}
                       </h3>
-                      <p>
-                        Check the map pin, then drag it to the correct spot if
-                        the entrance or driveway is more accurate.
-                      </p>
+                      <p>Review the selected address and map.</p>
                     </div>
                     {selectedCoordinates ? (
                       <LocationConfirmationMap
@@ -2079,10 +2201,6 @@ export function EventBuilder({
                         label={
                           selectedAddress?.formattedAddress ?? addressQuery
                         }
-                        onPositionChange={(position) => {
-                          setSelectedCoordinates(position);
-                          setLocationConfirmed(false);
-                        }}
                       />
                     ) : null}
                     <label className="location-confirmation-check">
@@ -2094,12 +2212,12 @@ export function EventBuilder({
                           if (event.target.checked) {
                             setStepFeedback("location", {
                               kind: "success",
-                              text: "Map pin confirmed. Save and continue to validate the address.",
+                              text: "Address confirmed. Save and continue.",
                             });
                           }
                         }}
                       />
-                      I have checked this pin and it represents the sale property.
+                      I confirm this is the sale property.
                     </label>
                     <p className="location-attribution">
                       {selectedAddress?.provider.attribution ??
@@ -2108,11 +2226,7 @@ export function EventBuilder({
                   </section>
                 ) : (
                   <section className="unconfirmed-address-draft">
-                    <p>
-                      Select an address result to continue. A typed address or
-                      these draft fields cannot be validated for approval or
-                      payment.
-                    </p>
+                    <p>Select an address from the results to continue.</p>
                     <div className="form-grid">
                       <label>
                         City
@@ -2636,10 +2750,10 @@ export function EventBuilder({
                 <Icon name="shield" size={20} />
                 <span>
                   {readyPhotoCount === 0
-                    ? "No photos are READY yet. Uploaded files count only after server image processing succeeds."
+                    ? "Add at least one photo to continue."
                     : !hasReadyCover
-                      ? `${String(readyPhotoCount)} ${readyPhotoCount === 1 ? "photo is" : "photos are"} READY. Select a READY photo as the cover to continue.`
-                      : `${String(readyPhotoCount)} ${readyPhotoCount === 1 ? "photo is" : "photos are"} READY and the cover is selected.`}
+                      ? `${String(readyPhotoCount)} ${readyPhotoCount === 1 ? "photo has" : "photos have"} finished processing. Choose a cover to continue.`
+                      : `${String(readyPhotoCount)} ${readyPhotoCount === 1 ? "photo is" : "photos are"} uploaded and the cover is selected.`}
                 </span>
               </p>
               <StepFeedback feedback={currentFeedback} />
@@ -2665,9 +2779,9 @@ export function EventBuilder({
                   {pending === "photos-continue"
                     ? "Checking…"
                     : readyPhotoCount === 0
-                      ? "Waiting for a READY photo"
+                      ? "Add a photo to continue"
                       : !hasReadyCover
-                        ? "Select a cover to continue"
+                        ? "Choose a cover to continue"
                         : "Save and continue"}
                 </button>
               </div>
@@ -2780,6 +2894,57 @@ export function EventBuilder({
                 </div>
               ) : (
                 <form onSubmit={approve}>
+                  {emailVerified ? (
+                    <p className="warning-box">
+                      Your verified email address, {accountEmail}, will be
+                      visible on the live listing.
+                    </p>
+                  ) : (
+                    <section
+                      className="review-verification"
+                      aria-labelledby="review-verification-title"
+                    >
+                      <div>
+                        <h3 id="review-verification-title">
+                          Verify your email to continue
+                        </h3>
+                        <p>
+                          Verify your email to approve this event. We&apos;ll
+                          send the link to {accountEmail}. Your draft and photos
+                          are already saved.
+                        </p>
+                      </div>
+                      <div className="review-verification__actions">
+                        <button
+                          type="button"
+                          onClick={() => void sendVerificationEmail()}
+                          disabled={Boolean(verificationPending)}
+                        >
+                          {verificationPending === "send"
+                            ? "Sending..."
+                            : "Send verification email"}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => void checkVerificationStatus()}
+                          disabled={Boolean(verificationPending)}
+                        >
+                          {verificationPending === "check"
+                            ? "Checking..."
+                            : "Check verification status"}
+                        </button>
+                      </div>
+                      {verificationMessage ? (
+                        <p
+                          className="review-verification__message"
+                          role="status"
+                        >
+                          {verificationMessage}
+                        </p>
+                      ) : null}
+                    </section>
+                  )}
                   <label className="checkbox-label">
                     <input type="checkbox" name="acceptedTerms" value="yes" />I
                     accept publishing terms version {termsVersion} and approve
@@ -2796,7 +2961,11 @@ export function EventBuilder({
                       Back
                     </button>
                     <button
-                      disabled={!draft.steps.reviewReady || Boolean(pending)}
+                      disabled={
+                        !draft.steps.reviewReady ||
+                        !emailVerified ||
+                        Boolean(pending)
+                      }
                       type="submit"
                     >
                       {pending === "approval"

@@ -36,7 +36,7 @@ export default async function LoginPage({
       {query.registered === "1" ? (
         <Alert tone="success">
           Check your email for verification instructions. You can sign in now
-          and verify before uploading photos or publishing.
+          and continue building your event. Verify before approval and payment.
         </Alert>
       ) : null}
       {query.verified === "1" ? (

@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/shells/shells";
 import { Icon } from "@/components/ui/icons";
 import { getCurrentUser } from "@/modules/auth";
-import { createConfiguredOrganizerService } from "@/modules/organizers";
 
 import {
   ListingCollection,
@@ -24,10 +23,6 @@ export default async function EventsPage({
   if (!user || user.status === "DISABLED")
     redirect("/login?next=/dashboard/events");
   if (user.status === "RESTRICTED") redirect("/dashboard");
-  const organizer = await createConfiguredOrganizerService().getForUser(
-    user.id,
-  );
-  if (organizer?.status !== "COMPLETE") redirect("/dashboard/profile");
   const query = await searchParams;
   const requested = query.view;
   const view: ListingView =
@@ -54,7 +49,7 @@ export default async function EventsPage({
             className="ui-button ui-button--primary"
             href="/dashboard/events/new"
           >
-            <Icon name="plus" /> Create listing
+            <Icon name="plus" /> Create event
           </Link>
         </header>
         <ListingTabs current={view} listings={listings} />

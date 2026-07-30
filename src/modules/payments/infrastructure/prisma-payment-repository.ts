@@ -114,7 +114,7 @@ export class PrismaPaymentRepository implements PaymentRepository {
               organizerId: input.event.organizerId,
               organizer: {
                 userId: input.userId,
-                status: "COMPLETE",
+                user: { emailVerifiedAt: { not: null } },
               },
               publication: { is: null },
               approvalStatus: "APPROVED",
@@ -644,7 +644,7 @@ export class PrismaPaymentRepository implements PaymentRepository {
             organizerId: input.attempt.organizerId,
             organizer: {
               userId: input.attempt.userId,
-              status: "COMPLETE",
+              user: { emailVerifiedAt: { not: null } },
             },
             publication: { is: null },
             approvalStatus: "APPROVED",
@@ -655,8 +655,10 @@ export class PrismaPaymentRepository implements PaymentRepository {
             approvalDigest: input.attempt.approvedDigest,
             location: {
               is: {
-                validationStatus: "VERIFIED",
                 confirmationStatus: "CONFIRMED",
+                providerPlaceId: { not: null },
+                latitude: { not: null },
+                longitude: { not: null },
               },
             },
             photos: {
@@ -816,7 +818,29 @@ export class PrismaPaymentRepository implements PaymentRepository {
           removedAt: null,
         },
       },
+      include: {
+        event: {
+          select: {
+            organizer: {
+              select: {
+                user: {
+                  select: {
+                    normalizedEmail: true,
+                    emailVerifiedAt: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
-    return publication ? mapPublication(publication) : null;
+    if (!publication) return null;
+    return {
+      ...mapPublication(publication),
+      verifiedEmail: publication.event.organizer.user.emailVerifiedAt
+        ? publication.event.organizer.user.normalizedEmail
+        : null,
+    };
   }
 }

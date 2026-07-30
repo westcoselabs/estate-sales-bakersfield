@@ -53,8 +53,7 @@ export default function YardSalesHubPage() {
             <h1>Find upcoming Bakersfield yard sales</h1>
             <p>
               Browse local published listings, choose a date that fits your
-              plans, and check each organizer&apos;s schedule and location
-              details.
+              plans, and check each seller&apos;s schedule and location details.
             </p>
             <div className="marketing-actions">
               <Link
@@ -77,7 +76,7 @@ export default function YardSalesHubPage() {
             <h2>A simple way to plan nearby stops</h2>
             <p>
               Use sale type and date filters to narrow the shared directory.
-              Then open each listing to review the organizer&apos;s published
+              Then open each listing to review the seller&apos;s published
               details.
             </p>
           </aside>

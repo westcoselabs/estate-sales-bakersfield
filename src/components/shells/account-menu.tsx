@@ -97,7 +97,7 @@ export function AccountMenu({
           <AccountAvatar account={account} size="large" />
           <span>
             <strong>{account.displayName}</strong>
-            <small>Organizer account</small>
+            <small>Account</small>
           </span>
         </div>
         <Link href="/dashboard">

@@ -5,11 +5,9 @@ import { Suspense } from "react";
 import { PublicShell } from "@/components/shells/shells";
 import { Icon } from "@/components/ui/icons";
 import {
-  MarketingCard,
   EstateHelpCallout,
   SelectedListings,
   SelectedListingsSkeleton,
-  SellerCallout,
 } from "@/features/marketing/components";
 import { HeroMarquee } from "@/features/marketing/hero-marquee";
 import { marketingMetadata } from "@/features/marketing/metadata";
@@ -48,7 +46,7 @@ export default function HomePage() {
   ];
   return (
     <PublicShell variant="home">
-      <div className="marketing-home">
+      <div className="marketing-home glass-page home-page">
         <section className="home-hero" aria-labelledby="home-title">
           <div className="home-hero__media" aria-hidden="true">
             <Image
@@ -100,138 +98,223 @@ export default function HomePage() {
           <HeroMarquee />
         </section>
 
-        <Suspense fallback={<SelectedListingsSkeleton count={4} />}>
-          <SelectedListings criteria={defaultSearch} limit={4} />
+        {/* Live listings. The bento and mobile rail are pure layout overrides on
+            `.market-listing-grid`, so ListingCard and its glass stay untouched. */}
+        <Suspense
+          fallback={
+            <SelectedListingsSkeleton
+              count={3}
+              title="Sales coming up in Bakersfield"
+              description="Published listings, soonest first. Every one is live and ready to visit."
+            />
+          }
+        >
+          <SelectedListings
+            criteria={defaultSearch}
+            limit={3}
+            title="Sales coming up in Bakersfield"
+            description="Published listings, soonest first. Every one is live and ready to visit."
+          />
         </Suspense>
 
+        <section className="home-paths" aria-labelledby="paths-title">
+          <h2 className="sr-only" id="paths-title">
+            Choose a kind of sale
+          </h2>
+          <Link className="home-path home-path--estate" href="/estate-sales">
+            <span className="home-path__media" aria-hidden="true">
+              <Image
+                src="/images/marketplace-hero.webp"
+                alt=""
+                fill
+                sizes="(max-width: 767px) 100vw, 60vw"
+              />
+            </span>
+            <span className="home-path__scrim" aria-hidden="true" />
+            <span className="home-path__panel">
+              <span className="eyebrow">Estate sales</span>
+              <span className="home-path__title">Whole homes, opened up</span>
+              <span className="home-path__copy">
+                Furniture, decor, tools, and the contents of a lifetime. Usually
+                multi-day, usually worth arriving early.
+              </span>
+              <span className="home-path__cta">
+                Explore estate sales
+                <Icon name="arrow" size={18} />
+              </span>
+            </span>
+          </Link>
+          <Link className="home-path home-path--yard" href="/yard-sales">
+            <span className="home-path__media" aria-hidden="true">
+              <Image
+                src="/images/estate-sales-bakersfield (8).webp"
+                alt=""
+                fill
+                sizes="(max-width: 767px) 100vw, 38vw"
+              />
+            </span>
+            <span className="home-path__scrim" aria-hidden="true" />
+            <span className="home-path__panel">
+              <span className="eyebrow">Yard sales</span>
+              <span className="home-path__title">Weekend finds, close by</span>
+              <span className="home-path__copy">
+                Smaller, faster, and often a single morning. Perfect for a short
+                route through the neighborhood.
+              </span>
+              <span className="home-path__cta">
+                Explore yard sales
+                <Icon name="arrow" size={18} />
+              </span>
+            </span>
+          </Link>
+        </section>
+
         <section
-          className="marketing-section home-categories"
-          aria-labelledby="category-title"
+          className="marketing-section home-journey"
+          aria-labelledby="journey-title"
         >
           <div className="marketing-section__heading">
             <div>
-              <p className="eyebrow">Choose a sale type</p>
-              <h2 id="category-title">Start with the kind of sale you want</h2>
+              <p className="eyebrow">How it works</p>
+              <h2 id="journey-title">
+                From a search to a sale worth the drive
+              </h2>
               <p>
-                Both paths lead into the same directory, with consistent cards
-                and date filters.
+                Three steps, no account needed to browse. The same filters carry
+                straight through to the map view.
               </p>
             </div>
-          </div>
-          <div className="marketing-grid marketing-grid--categories">
-            <MarketingCard
-              icon="estate"
-              title="Estate sales"
-              href="/estate-sales"
-              linkLabel="Explore estate sales"
-            >
-              <p>
-                Learn what to expect, view selected upcoming listings, then open
-                the shared estate-sale results.
-              </p>
-            </MarketingCard>
-            <MarketingCard
-              icon="yard"
-              title="Yard sales"
-              href="/yard-sales"
-              linkLabel="Explore yard sales"
-            >
-              <p>
-                Browse a practical local guide and open yard-sale results with
-                the filter already applied.
-              </p>
-            </MarketingCard>
-          </div>
-        </section>
-
-        <section className="home-discovery-pair">
-          <article className="home-map-teaser">
-            <span aria-hidden="true">
-              <Icon name="map" size={34} />
-            </span>
-            <div>
-              <p className="eyebrow">Map view in preparation</p>
-              <h2>Your filters stay with the same shared search</h2>
-              <p>
-                List view is ready now. The map preview keeps you in the same
-                search and explains its current availability.
-              </p>
-              <Link
-                className="ui-button ui-button--secondary"
-                href="/search?view=map"
-              >
-                View map availability
-                <Icon name="arrow" size={18} />
-              </Link>
-            </div>
-          </article>
-          <article className="home-how-card">
-            <p className="eyebrow">How it works</p>
-            <h2>From nearby search to a sale worth visiting</h2>
-            <ol>
-              <li>
-                <strong>Choose a date.</strong>
-                <span>Start with today, this weekend, or the next 7 days.</span>
-              </li>
-              <li>
-                <strong>Scan real listing photos.</strong>
-                <span>Compare the schedule and privacy-safe location.</span>
-              </li>
-              <li>
-                <strong>Open the full listing.</strong>
-                <span>Review the published sale details.</span>
-              </li>
-            </ol>
-            <Link href="/how-it-works">
-              See how the marketplace works
-              <Icon name="arrow" size={17} />
+            <Link className="marketing-section__link" href="/how-it-works">
+              See the full walkthrough
+              <Icon name="arrow" size={18} />
             </Link>
-          </article>
+          </div>
+          <ol className="home-journey__steps">
+            <li data-reveal="">
+              <span className="home-journey__icon" aria-hidden="true">
+                <Icon name="calendar" size={22} />
+              </span>
+              <h3>Pick a date</h3>
+              <p>
+                Today, this weekend, the next seven days, or a range you choose.
+                Weekends resolve on Bakersfield time.
+              </p>
+            </li>
+            <li data-reveal="">
+              <span className="home-journey__icon" aria-hidden="true">
+                <Icon name="photo" size={22} />
+              </span>
+              <h3>Scan the real photos</h3>
+              <p>
+                Every listing shows the organizer&apos;s own photos, the
+                schedule, and a privacy-safe location before you commit.
+              </p>
+            </li>
+            <li data-reveal="">
+              <span className="home-journey__icon" aria-hidden="true">
+                <Icon name="pin" size={22} />
+              </span>
+              <h3>Plan the route</h3>
+              <p>
+                Open the full listing for details, then line up the sales worth
+                your morning.
+              </p>
+            </li>
+          </ol>
         </section>
 
         <section
           className="marketing-section home-trust"
           aria-labelledby="trust-title"
         >
-          <div className="home-trust__intro">
-            <span aria-hidden="true">
-              <Icon name="shield" size={30} />
-            </span>
+          <div className="marketing-section__heading">
             <div>
               <p className="eyebrow">Clear by design</p>
               <h2 id="trust-title">
-                Trust comes from showing only what is ready
+                You only ever see what is genuinely ready
               </h2>
               <p>
-                Listings appear only after publication is confirmed. Address
-                visibility follows the organizer&apos;s exact, approximate, or
-                hidden-until-start choice.
+                Nothing reaches this page early. Every listing has been
+                completed, approved, paid for, and confirmed published.
               </p>
             </div>
           </div>
-          <div className="home-trust__points">
-            <div>
-              <strong>Published listings only</strong>
-              <span>Private drafts never appear in public search.</span>
-            </div>
-            <div>
-              <strong>Privacy-safe location</strong>
-              <span>
-                Cards never expose private coordinates or raw addresses.
+          <div className="home-trust__bento">
+            <article
+              className="marketing-card glass-card home-trust__tile home-trust__tile--wide"
+              data-reveal=""
+            >
+              <span className="marketing-card__icon" aria-hidden="true">
+                <Icon name="shield" />
               </span>
+              <h3>Your address stays yours until you say otherwise</h3>
+              <p>
+                Organizers choose an exact address, an approximate area, or an
+                address that stays hidden until the sale opens. Public cards and
+                maps honor that choice everywhere, with no exceptions.
+              </p>
+            </article>
+            <article
+              className="marketing-card glass-card home-trust__tile"
+              data-reveal=""
+            >
+              <span className="marketing-card__icon" aria-hidden="true">
+                <Icon name="check" />
+              </span>
+              <h3>Published only</h3>
+              <p>
+                Private drafts never surface in public search or on this page.
+              </p>
+            </article>
+            <article
+              className="marketing-card glass-card home-trust__tile"
+              data-reveal=""
+            >
+              <span className="marketing-card__icon" aria-hidden="true">
+                <Icon name="status" />
+              </span>
+              <h3>Confirmed, not assumed</h3>
+              <p>
+                A sale appears once the server confirms publication — never on a
+                payment redirect alone.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="home-sell" aria-labelledby="sell-title">
+          <span className="home-sell__bloom" aria-hidden="true" />
+          <div className="home-sell__inner">
+            <div className="home-sell__copy">
+              <p className="eyebrow">For local sellers</p>
+              <h2 id="sell-title">
+                Give your sale a place people actually look.
+              </h2>
+              <p>
+                Build your listing in five focused steps, decide exactly how
+                much of your address is shared, review the real public version,
+                and pay only when it is ready to go live.
+              </p>
             </div>
-            <div>
-              <strong>Confirmed publication</strong>
-              <span>A sale is shown only after it is ready to be public.</span>
+            <div className="home-sell__actions">
+              <Link
+                className="ui-button ui-button--accent"
+                href="/list-your-sale"
+              >
+                <span>Start a listing</span>
+                <Icon name="arrow" size={18} />
+              </Link>
+              <Link className="home-sell__secondary" href="/how-it-works">
+                See how listing works
+              </Link>
             </div>
           </div>
         </section>
 
-        <SellerCallout />
         <EstateHelpCallout />
 
         <section
-          className="marketing-section home-faq-preview"
+          className="marketing-section home-faq"
           aria-labelledby="home-faq-title"
         >
           <div className="marketing-section__heading">
@@ -244,28 +327,50 @@ export default function HomePage() {
               <Icon name="arrow" size={18} />
             </Link>
           </div>
-          <div className="home-faq-preview__grid">
-            <article>
-              <h3>When is an exact address shown?</h3>
-              <p>
-                It depends on the organizer&apos;s approved privacy setting.
-                Some listings show only an area or wait until the sale starts.
-              </p>
-            </article>
-            <article>
-              <h3>Can I list either sale type?</h3>
-              <p>
-                Yes. The current marketplace supports estate sales and yard
-                sales through the same five-step builder.
-              </p>
-            </article>
-            <article>
-              <h3>When does a listing become public?</h3>
-              <p>
-                Only after the listing is ready, approved, paid, and the server
-                confirms publication.
-              </p>
-            </article>
+          <div className="content-faq">
+            <details className="content-faq__item" data-reveal="">
+              <summary>
+                <span>When is an exact address shown?</span>
+                <Icon name="plus" size={19} />
+              </summary>
+              <div className="content-faq__answer">
+                <div>
+                  <p>
+                    It depends on the organizer&apos;s approved privacy setting.
+                    Some listings show only an area, and some hold the address
+                    back until the sale starts.
+                  </p>
+                </div>
+              </div>
+            </details>
+            <details className="content-faq__item" data-reveal="">
+              <summary>
+                <span>Can I list either kind of sale?</span>
+                <Icon name="plus" size={19} />
+              </summary>
+              <div className="content-faq__answer">
+                <div>
+                  <p>
+                    Yes. Estate sales and yard sales both run through the same
+                    five-step builder and the same review process.
+                  </p>
+                </div>
+              </div>
+            </details>
+            <details className="content-faq__item" data-reveal="">
+              <summary>
+                <span>When does a listing become public?</span>
+                <Icon name="plus" size={19} />
+              </summary>
+              <div className="content-faq__answer">
+                <div>
+                  <p>
+                    Only after it is complete, approved, paid for, and the
+                    server confirms publication.
+                  </p>
+                </div>
+              </div>
+            </details>
           </div>
         </section>
       </div>

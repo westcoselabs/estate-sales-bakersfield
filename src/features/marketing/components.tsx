@@ -239,31 +239,3 @@ export function EstateHelpCallout({
     </aside>
   );
 }
-
-export function MarketingCard({
-  icon,
-  title,
-  children,
-  href,
-  linkLabel,
-}: {
-  readonly icon: "estate" | "yard" | "search" | "shield" | "calendar";
-  readonly title: string;
-  readonly children: ReactNode;
-  readonly href: string;
-  readonly linkLabel: string;
-}) {
-  return (
-    <article className="marketing-card">
-      <span className="marketing-card__icon" aria-hidden="true">
-        <Icon name={icon} size={26} />
-      </span>
-      <h3>{title}</h3>
-      <div>{children}</div>
-      <Link href={href}>
-        {linkLabel}
-        <Icon name="arrow" size={17} />
-      </Link>
-    </article>
-  );
-}

@@ -35,6 +35,8 @@ export default async function EventEditPage({ params }: Props) {
       <EventBuilder
         initialEvent={event}
         termsVersion={PUBLISHING_TERMS_VERSION}
+        accountEmail={user.email}
+        initialEmailVerified={Boolean(user.emailVerifiedAt)}
       />
     </BuilderShell>
   );

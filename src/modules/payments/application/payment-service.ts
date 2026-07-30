@@ -156,13 +156,6 @@ export class PaymentService {
     eventId: string,
   ): Promise<EventRecord> {
     if (!DATABASE_ID.test(eventId)) throw new EventNotFoundError();
-    const organizer = await this.events.findEligibleOrganizer(principal.id);
-    if (!organizer || organizer.status !== "COMPLETE") {
-      throw new PaymentError(
-        "EVENT_NOT_APPROVED",
-        "Complete organizer onboarding before publication payment.",
-      );
-    }
     const event = await this.events.findOwned(eventId, principal.id);
     if (!event) throw new EventNotFoundError();
     return event;
@@ -604,14 +597,8 @@ export class PaymentService {
         audit,
       });
     }
-    const organizer = await this.events.findEligibleOrganizer(attempt.userId);
     const event = await this.events.findOwned(attempt.eventId, attempt.userId);
-    if (
-      !event ||
-      !organizer ||
-      organizer.id !== attempt.organizerId ||
-      organizer.status !== "COMPLETE"
-    ) {
+    if (!event || event.organizerId !== attempt.organizerId) {
       return this.payments.recordPaidBlocked({
         attempt,
         session,
@@ -751,6 +738,7 @@ export class PaymentService {
           approvedRevision: publication.approvedRevision,
           canonicalPath: publication.canonicalPath,
           publishedAt: publication.publishedAt,
+          verifiedEmail: publication.verifiedEmail,
           snapshot: publication.snapshot,
           now,
         })

@@ -50,7 +50,7 @@ const publicProjectionSchema = z.object({
   localEndsAt: z.string().min(1).max(16),
   address: addressSchema,
   organizer: z.object({
-    displayName: z.string().min(1).max(100),
+    displayName: z.string().min(1).max(100).nullable(),
     websiteUrl: z.url().nullable(),
   }),
   coverPhotoUrl: z.string().regex(/^\/media\/[A-Za-z0-9-]+\/cover$/),
@@ -119,6 +119,7 @@ export function publishedListing(input: {
   readonly approvedRevision: number;
   readonly canonicalPath: string;
   readonly publishedAt: Date;
+  readonly verifiedEmail: string | null;
   readonly snapshot: unknown;
   readonly now: Date;
 }): PublishedListing {
@@ -128,6 +129,7 @@ export function publishedListing(input: {
     approvedRevision: input.approvedRevision,
     canonicalPath: input.canonicalPath,
     publishedAt: input.publishedAt,
+    verifiedEmail: input.verifiedEmail,
     projection: projectionAt(snapshot, input.now),
   };
 }

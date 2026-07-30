@@ -13,7 +13,7 @@ import {
 import { readyEvent } from "./fixtures";
 
 describe("event publication policy", () => {
-  it("requires a verified location, ready photo, and event-owned ready cover", () => {
+  it("accepts confirmed provider locations and requires an event-owned ready cover", () => {
     const event = readyEvent({ coverPhotoId: null });
     expect(eventReadiness(event)).toMatchObject({ ready: false });
     expect(draftWorkflowState(event)).toBe("INCOMPLETE_DRAFT");
@@ -23,10 +23,12 @@ describe("event publication policy", () => {
           location: {
             ...readyEvent().location!,
             validationStatus: "LOW_CONFIDENCE",
+            precision: "unfamiliar-provider-type",
+            confidence: 0.2,
           },
         }),
-      ).missing,
-    ).toContain("Validate the event address.");
+      ).ready,
+    ).toBe(true);
     expect(
       eventReadiness(
         readyEvent({
@@ -38,7 +40,7 @@ describe("event publication policy", () => {
           },
         }),
       ).missing,
-    ).toContain("Validate the event address.");
+    ).toContain("Select and confirm the event address.");
   });
 
   it("blocks normalized private-address leaks in protected public text", () => {
@@ -106,6 +108,15 @@ describe("event publication policy", () => {
     expect(JSON.stringify(projection.address)).not.toContain("35.373292");
   });
 
+  it("allows a complete private preview before email verification", () => {
+    const event = readyEvent({ ownerVerifiedEmail: null });
+
+    expect(eventReadiness(event).ready).toBe(true);
+    expect(() =>
+      publicEventProjection(event, new Date("2026-07-20T00:00:00.000Z")),
+    ).not.toThrow();
+  });
+
   it("uses authoritative server time to release a hidden address", () => {
     const event = readyEvent({ privacyMode: "HIDDEN_UNTIL_START" });
     expect(
@@ -133,6 +144,22 @@ describe("event publication policy", () => {
   it("drops an unsafe legacy organizer website from the public projection", () => {
     const event = readyEvent({ organizerWebsiteUrl: "javascript:alert(1)" });
     expect(futurePublicEventProjection(event).organizer.websiteUrl).toBeNull();
+  });
+
+  it("omits blank optional business details without blocking private preview", () => {
+    const projection = futurePublicEventProjection(
+      readyEvent({
+        organizerDisplayName: null,
+        organizerWebsiteUrl: null,
+      }),
+    );
+    expect(projection.organizer).toEqual({
+      displayName: null,
+      websiteUrl: null,
+    });
+    expect(() =>
+      futurePublicEventProjection(readyEvent({ ownerVerifiedEmail: null })),
+    ).not.toThrow();
   });
 
   it("produces a deterministic digest and changes it for material public content", () => {

@@ -54,7 +54,7 @@ export default function EstateSalesHubPage() {
             <h1>Discover upcoming Bakersfield estate sales</h1>
             <p>
               Explore household collections, furnishings, decor, and everyday
-              finds through published listings from local organizers.
+              finds through published listings from local sellers.
             </p>
             <div className="marketing-actions">
               <Link

@@ -6,6 +6,10 @@ export class AuthorizationError extends Error {
   override readonly name: string = "AuthorizationError";
 }
 
+export class EmailVerificationRequiredError extends AuthorizationError {
+  override readonly name: string = "EmailVerificationRequiredError";
+}
+
 export class InvalidPasswordError extends Error {
   override readonly name = "InvalidPasswordError";
 }

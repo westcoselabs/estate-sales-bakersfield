@@ -41,7 +41,7 @@ async function verifyLatestEmail(page: Page, email: string) {
   await page.getByRole("button", { name: "Verify email" }).click();
 }
 
-async function createAccount(page: Page) {
+async function createAccount(page: Page): Promise<string> {
   const suffix = crypto.randomUUID();
   const email = `${runId}-phase4-browser-${suffix}@example.test`;
   const password = "phase-four-browser-password";
@@ -57,14 +57,8 @@ async function createAccount(page: Page) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.getByRole("link", { name: /continue onboarding/i }).click();
-  await page
-    .getByLabel("Organizer or business name")
-    .fill("Phase Four Estate Sales");
-  await page.getByLabel("Contact name").fill("Phase four owner");
-  await page.getByLabel("Contact email").fill(email);
-  await page.getByRole("button", { name: "Save organizer profile" }).click();
-  await expect(page.getByText("Organizer profile saved.")).toBeVisible();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  return email;
 }
 
 async function buildApprovedEvent(
@@ -74,7 +68,7 @@ async function buildApprovedEvent(
 ): Promise<EventResponse["event"]> {
   await page.goto("/dashboard");
   await page.getByLabel("Sale type").selectOption("ESTATE_SALE");
-  await page.getByRole("button", { name: "Create event draft" }).click();
+  await page.getByRole("button", { name: "Create event" }).click();
   await expect(page).toHaveURL(/\/dashboard\/events\/[0-9a-f-]+\/edit$/);
   const eventId = page.url().match(/events\/([^/]+)\/edit/)?.[1];
   if (!eventId) throw new Error("Event editor did not expose an event ID");
@@ -96,9 +90,7 @@ async function buildApprovedEvent(
     .getByLabel("Search the sale property address")
     .fill("123 Baker Street");
   await page.getByRole("option").getByRole("button").click();
-  await page
-    .getByLabel("I confirm that this pin represents the sale property.")
-    .check();
+  await page.getByLabel("I confirm this is the sale property.").check();
   await page.getByLabel("Hide exact address until the event starts").check();
   await page.getByRole("button", { name: "Save and continue" }).click();
 
@@ -139,7 +131,7 @@ test("pays and publishes from a fake signed webhook while stale paid revisions r
   test.setTimeout(180_000);
   const browserErrors: string[] = [];
   page.on("pageerror", (error) => browserErrors.push(error.message));
-  await createAccount(page);
+  const email = await createAccount(page);
 
   const publishable = await buildApprovedEvent(
     page,
@@ -186,6 +178,11 @@ test("pays and publishes from a fake signed webhook while stale paid revisions r
   ).toBeVisible();
   await expect(page.getByText(/exact address will be released/i)).toBeVisible();
   await expect(page.getByText("123 Baker Street")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: email })).toHaveAttribute(
+    "href",
+    `mailto:${encodeURIComponent(email)}`,
+  );
+  await expect(page.getByText("Listed by")).toHaveCount(0);
 
   await page.goto(`/dashboard/events/${publishable.id}/edit`);
   await expect(page.getByText("This listing is published.")).toBeVisible();

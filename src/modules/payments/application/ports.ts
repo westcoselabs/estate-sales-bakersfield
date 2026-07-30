@@ -7,6 +7,7 @@ import type {
   HostedCheckoutSession,
   PaymentAttemptRecord,
   PublicationPrice,
+  PublishedPublicationRecord,
   PublicationRecord,
   PublicationSnapshot,
   VerifiedStripeWebhookEvent,
@@ -132,7 +133,7 @@ export interface PaymentRepository {
   findPublishedByPublicId(input: {
     readonly publicId: string;
     readonly eventType: "ESTATE_SALE" | "YARD_SALE";
-  }): Promise<PublicationRecord | null>;
+  }): Promise<PublishedPublicationRecord | null>;
 }
 
 export interface PublicationCache {

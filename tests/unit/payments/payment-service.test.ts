@@ -57,11 +57,6 @@ function paymentRepository(
 
 function eventRepository(event = approvedEvent()): EventRepository {
   return {
-    findEligibleOrganizer: vi.fn(async () => ({
-      id: event.organizerId,
-      userId: event.ownerUserId,
-      status: "COMPLETE" as const,
-    })),
     findOwned: vi.fn(async () => event),
   } as unknown as EventRepository;
 }

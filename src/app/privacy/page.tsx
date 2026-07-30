@@ -51,37 +51,37 @@ export default function PrivacyPage() {
           <section aria-labelledby="privacy-account-title">
             <h2 id="privacy-account-title">Account information</h2>
             <p>
-              The organizer workflow uses account and profile information to
-              authenticate access, support the listing workflow, and identify
-              the organizer information eligible for a public publication
-              snapshot. Authentication routes use the application&apos;s
-              existing cookies, verification, abuse-control, token-expiry, and
-              session-revocation behavior.
+              The listing workflow uses account information to authenticate
+              access and support event publication. Authentication routes use
+              the application&apos;s existing cookies, verification,
+              abuse-control, token-expiry, and session-revocation behavior.
             </p>
             <p>
               Public sale surfaces must not expose private account credentials,
-              raw session data, payment data, approval digests, or private
-              organizer contact fields.
+              raw session data, payment data, or approval digests. A
+              seller&apos;s verified account email is displayed publicly on each
+              live listing. Optional business name and website details appear
+              only when the seller provides them; phone details remain private.
             </p>
           </section>
 
           <section aria-labelledby="privacy-listing-title">
             <h2 id="privacy-listing-title">Listing and photo information</h2>
             <p>
-              Organizers enter sale details and upload photos for a draft. A
-              photo is considered saved only after server confirmation. The
-              public listing uses the approved publication snapshot and its
-              authorized media paths rather than the editable private draft.
+              Sellers enter sale details and upload photos for a draft. A photo
+              is considered saved only after server confirmation. The public
+              listing uses the approved publication snapshot and its authorized
+              media paths rather than the editable private draft.
             </p>
           </section>
 
           <section aria-labelledby="privacy-location-title">
             <h2 id="privacy-location-title">Location privacy</h2>
             <p>
-              A listing organizer selects one of the supported privacy modes:
-              exact address, approximate location, or hidden until the sale
-              starts. Public listing cards, detail pages, and future map
-              projections must use the same privacy-safe public projection.
+              A seller selects one of the supported privacy modes: exact
+              address, approximate location, or hidden until the sale starts.
+              Public listing cards, detail pages, and future map projections
+              must use the same privacy-safe public projection.
             </p>
             <p>
               Approximate and hidden modes must not reveal private street,

@@ -8,6 +8,7 @@ import {
 import {
   AuthenticationError,
   AuthorizationError,
+  EmailVerificationRequiredError,
 } from "@/modules/auth/domain/errors";
 import type { AuthPrincipal } from "@/modules/auth/domain/types";
 
@@ -48,7 +49,7 @@ describe("authorization guards", () => {
   it("requires verification only for publishing-sensitive commands", () => {
     expect(requireUserPrincipal(user)).toBe(user);
     expect(() => requireVerifiedPublishingPrincipal(user)).toThrow(
-      AuthorizationError,
+      EmailVerificationRequiredError,
     );
     expect(
       requireVerifiedPublishingPrincipal({

@@ -26,7 +26,6 @@
   :is(
     .home-hero,
     .marketing-section,
-    .home-discovery-pair,
     .seller-cta,
     .category-hero,
     .search-controls,
@@ -584,8 +583,7 @@
 }
 
 .marketing-section__link,
-.marketing-card > a,
-.home-how-card > a {
+.marketing-card > a {
   display: inline-flex;
   min-height: 3rem;
   flex: 0 0 auto;
@@ -819,121 +817,6 @@
   padding-top: 1rem;
 }
 
-.home-discovery-pair {
-  display: grid;
-  grid-template-columns: 1.06fr 0.94fr;
-  gap: 1rem;
-}
-
-.home-map-teaser,
-.home-how-card {
-  min-height: 25rem;
-  overflow: hidden;
-  border-radius: var(--radius-shell);
-  padding: clamp(1.5rem, 4vw, 2.5rem);
-}
-
-.home-map-teaser {
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  background:
-    radial-gradient(circle at 72% 25%, rgb(185 121 23 / 22%), transparent 5rem),
-    radial-gradient(circle at 62% 60%, rgb(23 58 45 / 22%), transparent 7rem),
-    repeating-linear-gradient(
-      28deg,
-      transparent 0 1.9rem,
-      rgb(23 58 45 / 8%) 1.95rem 2.05rem
-    ),
-    #edf1ec;
-}
-
-.home-map-teaser::after {
-  position: absolute;
-  inset: 1rem;
-  border: 1px solid rgb(255 255 255 / 68%);
-  border-radius: calc(var(--radius-shell) - 0.25rem);
-  content: "";
-  pointer-events: none;
-}
-
-.home-map-teaser > span {
-  position: absolute;
-  top: 2rem;
-  right: 2rem;
-  display: grid;
-  width: 4rem;
-  height: 4rem;
-  place-items: center;
-  border-radius: var(--radius-full);
-  background: var(--color-primary);
-  color: #fff;
-  box-shadow: var(--shadow-2);
-}
-
-.home-map-teaser > div {
-  position: relative;
-  z-index: 1;
-  max-width: 28rem;
-}
-
-.home-map-teaser h2,
-.home-how-card h2 {
-  margin: 0;
-}
-
-.home-map-teaser p:not(.eyebrow),
-.home-how-card > p:not(.eyebrow) {
-  color: var(--color-text-secondary);
-}
-
-.home-how-card {
-  border: 1px solid rgb(255 255 255 / 78%);
-  background: linear-gradient(
-    145deg,
-    rgb(255 255 255 / 94%),
-    rgb(245 241 234 / 86%)
-  );
-  box-shadow:
-    inset 0 0 0 1px rgb(185 121 23 / 8%),
-    var(--shadow-2);
-}
-
-.home-how-card ol {
-  display: grid;
-  gap: 1rem;
-  margin: 1.5rem 0 0.75rem;
-  padding: 0;
-  counter-reset: market-steps;
-  list-style: none;
-}
-
-.home-how-card li {
-  display: grid;
-  grid-template-columns: 2.2rem 1fr;
-  column-gap: 0.8rem;
-  counter-increment: market-steps;
-}
-
-.home-how-card li::before {
-  display: grid;
-  width: 2.2rem;
-  height: 2.2rem;
-  grid-row: span 2;
-  place-items: center;
-  border-radius: var(--radius-full);
-  background: var(--color-primary);
-  color: #fff;
-  content: counter(market-steps);
-  font-size: 0.8125rem;
-  font-weight: 750;
-}
-
-.home-how-card li span {
-  color: var(--color-text-secondary);
-  font-size: 0.87rem;
-}
-
 .home-trust {
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 70%);
@@ -943,57 +826,8 @@
   box-shadow: var(--shadow-2);
 }
 
-.home-trust__intro {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 1rem;
-  padding: clamp(1.5rem, 4vw, 2.5rem);
-}
-
-.home-trust__intro > span {
-  display: grid;
-  width: 3.4rem;
-  height: 3.4rem;
-  place-items: center;
-  border: 1px solid rgb(255 255 255 / 22%);
-  border-radius: 1rem;
-  background: rgb(255 255 255 / 10%);
-  color: #fff;
-}
-
 .home-trust :is(h2, p, .eyebrow) {
   color: #fff;
-}
-
-.home-trust__intro h2 {
-  margin: 0;
-}
-
-.home-trust__intro p:last-child {
-  max-width: 48rem;
-  margin-bottom: 0;
-  color: rgb(255 255 255 / 78%);
-}
-
-.home-trust__points {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  border-top: 1px solid rgb(255 255 255 / 14%);
-}
-
-.home-trust__points > div {
-  display: grid;
-  gap: 0.25rem;
-  padding: 1.25rem clamp(1rem, 3vw, 2rem);
-}
-
-.home-trust__points > div + div {
-  border-left: 1px solid rgb(255 255 255 / 14%);
-}
-
-.home-trust__points span {
-  color: rgb(255 255 255 / 70%);
-  font-size: 0.82rem;
 }
 
 .seller-cta {
@@ -1027,14 +861,12 @@
   color: var(--color-text-secondary);
 }
 
-.home-faq-preview__grid,
 .category-guide__grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1rem;
 }
 
-.home-faq-preview__grid article,
 .category-guide__grid article {
   border-top: 2px solid var(--color-accent);
   background: var(--color-surface);
@@ -1042,13 +874,11 @@
   box-shadow: var(--shadow-1);
 }
 
-.home-faq-preview__grid h3,
 .category-guide__grid h3 {
   margin: 0 0 0.5rem;
   font-size: 1rem;
 }
 
-.home-faq-preview__grid p,
 .category-guide__grid p {
   margin: 0;
   color: var(--color-text-secondary);
@@ -1856,7 +1686,6 @@
     width: min(100%, 40rem);
   }
 
-  .home-discovery-pair,
   .category-hero {
     grid-template-columns: 1fr;
   }
@@ -2182,7 +2011,6 @@
   .market-listing-grid,
   .marketing-grid,
   .marketing-grid--three,
-  .home-faq-preview__grid,
   .category-guide__grid {
     grid-template-columns: 1fr;
   }
@@ -2225,24 +2053,6 @@
 
   .market-listing-card__privacy {
     font-size: 0.8125rem;
-  }
-
-  .home-map-teaser,
-  .home-how-card {
-    min-height: 22rem;
-  }
-
-  .home-trust__intro {
-    grid-template-columns: 1fr;
-  }
-
-  .home-trust__points {
-    grid-template-columns: 1fr;
-  }
-
-  .home-trust__points > div + div {
-    border-top: 1px solid rgb(255 255 255 / 14%);
-    border-left: 0;
   }
 
   .seller-cta {
@@ -6043,9 +5853,9 @@
 }
 
 .public-shell:has(
-    > main
-      .glass-page:is(.how-page, .about-page, .contact-page, .list-page, .faq-page)
-  ) {
+  > main
+    .glass-page:is(.how-page, .about-page, .contact-page, .list-page, .faq-page)
+) {
   background: #fff;
 }
 
@@ -7019,11 +6829,11 @@
  * The answer wrapper animates `grid-template-rows` from 0fr to 1fr, which is the
  * only way to transition to intrinsic height without JS measurement. There were
  * no responsive rules for this accordion before, so mobile is authored here. */
-.faq-page .content-faq {
+:is(.faq-page, .home-page) .content-faq {
   gap: 0.75rem;
 }
 
-.faq-page .content-faq__item {
+:is(.faq-page, .home-page) .content-faq__item {
   position: relative;
   isolation: isolate;
   border: 1px solid transparent;
@@ -7042,26 +6852,26 @@
     transform var(--motion-base) cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.faq-page .content-faq__item:hover {
+:is(.faq-page, .home-page) .content-faq__item:hover {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 96%),
     0 20px 44px rgb(33 43 37 / 14%);
   transform: translateY(-2px);
 }
 
-.faq-page .content-faq__item[open] {
+:is(.faq-page, .home-page) .content-faq__item[open] {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 96%),
     0 22px 48px rgb(33 43 37 / 15%);
 }
 
-.faq-page .content-faq__item summary {
+:is(.faq-page, .home-page) .content-faq__item summary {
   min-height: 4.25rem;
   padding: 1.1rem 1.35rem;
   color: var(--color-text);
 }
 
-.faq-page .content-faq__item summary svg {
+:is(.faq-page, .home-page) .content-faq__item summary svg {
   display: grid;
   width: 2.25rem;
   height: 2.25rem;
@@ -7080,40 +6890,40 @@
     0 4px 12px rgb(23 58 45 / 12%);
 }
 
-.faq-page .content-faq__item[open] summary svg {
+:is(.faq-page, .home-page) .content-faq__item[open] summary svg {
   border-color: rgb(255 255 255 / 30%);
   background: var(--premium-green);
   color: #fff;
 }
 
-.faq-page .content-faq__answer {
+:is(.faq-page, .home-page) .content-faq__answer {
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows var(--motion-slow)
     cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.faq-page .content-faq__item[open] .content-faq__answer {
+:is(.faq-page, .home-page) .content-faq__item[open] .content-faq__answer {
   grid-template-rows: 1fr;
 }
 
-.faq-page .content-faq__answer > div {
+:is(.faq-page, .home-page) .content-faq__answer > div {
   overflow: hidden;
 }
 
-.faq-page .content-faq__item p {
+:is(.faq-page, .home-page) .content-faq__item p {
   border-top: 1px solid rgb(23 58 45 / 10%);
   padding: 1rem 1.35rem 1.25rem;
 }
 
 @media (max-width: 767px) {
-  .faq-page .content-faq__item summary {
+  :is(.faq-page, .home-page) .content-faq__item summary {
     min-height: 3.5rem;
     padding: 0.9rem 1rem;
     font-size: 0.98rem;
   }
 
-  .faq-page .content-faq__item p {
+  :is(.faq-page, .home-page) .content-faq__item p {
     padding: 0.9rem 1rem 1.1rem;
   }
 }
@@ -7125,7 +6935,7 @@
   .glass-page .marketing-card--wide,
   .glass-page .hero-chips span,
   .list-page .hero-listing-preview,
-  .faq-page .content-faq__item {
+  :is(.faq-page, .home-page) .content-faq__item {
     border-color: var(--color-border);
     background: #fffdf9;
   }
@@ -7136,7 +6946,7 @@
   .glass-page .marketing-card--wide,
   .glass-page .hero-chips span,
   .list-page .hero-listing-preview,
-  .faq-page .content-faq__item {
+  :is(.faq-page, .home-page) .content-faq__item {
     border-color: var(--color-border);
     background: var(--color-surface);
     -webkit-backdrop-filter: none;
@@ -7160,13 +6970,668 @@
     transform: none;
   }
 
-  .faq-page .content-faq__item,
-  .faq-page .content-faq__item:hover {
+  :is(.faq-page, .home-page) .content-faq__item,
+  :is(.faq-page, .home-page) .content-faq__item:hover {
     transform: none;
     transition: none;
   }
 
-  .faq-page .content-faq__answer {
+  :is(.faq-page, .home-page) .content-faq__answer {
+    transition: none;
+  }
+}
+
+/* Homepage, below the hero
+ *
+ * The hero (`.home-hero`, `.hero-marquee`) is deliberately untouched — nothing
+ * in this section selects it.
+ *
+ * One structural note that only applies here: the rule at line ~4908 gives every
+ * `.marketing-home` child except the hero an explicit `width: var(--market-container)`.
+ * The shared tinted-band full-bleed trick only overrides `margin-inline`, so a
+ * band on this page would stay boxed at container width and merely shift. Home's
+ * full-bleed sections therefore reset `width` and `max-width` too, and this block
+ * sits at the end of the file so it post-dates that rule at equal specificity.
+ */
+
+/* --- Live listings: featured-first bento, mobile scroll-snap rail --- */
+.home-page .market-listing-grid {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.home-page .market-listing-grid > :first-child {
+  grid-row: span 2;
+}
+
+/* The featured card earns a larger media well and a slightly deeper lift. */
+.home-page .market-listing-grid > :first-child .market-listing-card__media {
+  aspect-ratio: 16 / 11;
+}
+
+.home-page .market-listing-grid > :first-child .market-listing-card__title {
+  font-size: clamp(1.25rem, 2.2vw, 1.6rem);
+}
+
+@media (max-width: 900px) {
+  .home-page .market-listing-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+  }
+
+  .home-page .market-listing-grid > :first-child {
+    grid-row: auto;
+  }
+}
+
+/* Mobile becomes a browsable rail rather than a stack. `mask-image` is
+ * deliberately avoided: it would create a containing block and break the
+ * backdrop-filter on the glass cards inside. */
+@media (max-width: 767px) {
+  .home-page .market-listing-grid {
+    grid-auto-flow: column;
+    grid-auto-columns: 82%;
+    grid-template-columns: none;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline-start: 0;
+    padding-bottom: 0.75rem;
+    scrollbar-width: none;
+  }
+
+  .home-page .market-listing-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .home-page .market-listing-grid > * {
+    scroll-snap-align: start;
+  }
+
+  .home-page .market-listing-grid > :first-child .market-listing-card__media {
+    aspect-ratio: 4 / 3;
+  }
+}
+
+/* `.home-paths` is a bare <section>, so it is outside the legacy-neutralizer list
+ * near the top of this file and globals.css would cap it at 42rem with 2rem of
+ * padding. The reset has to include `max-width`, which wins over the `width` the
+ * home rule sets. */
+.public-shell--home .marketing-home > .home-paths {
+  max-width: none;
+  padding: 0;
+}
+
+/* --- Sale-type diptych ---
+ *
+ * Asymmetric on purpose: the wide panel uses the 1774px image and the narrow one
+ * uses a ~417px portrait at close to its native width, so neither is upscaled.
+ */
+.home-page .home-paths {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 1rem;
+}
+
+.home-page .home-path {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  overflow: hidden;
+  align-items: end;
+  min-height: clamp(20rem, 34vw, 26rem);
+  border: 1px solid rgb(255 255 255 / 62%);
+  border-radius: var(--radius-shell);
+  background: var(--color-surface);
+  padding: clamp(1rem, 2.4vw, 1.6rem);
+  color: inherit;
+  text-decoration: none;
+  box-shadow: var(--explore-shadow);
+  transition:
+    box-shadow var(--motion-base) ease,
+    transform var(--motion-base) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.home-page .home-path:hover {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 84%),
+    0 28px 60px rgb(33 43 37 / 20%);
+  transform: translateY(-4px);
+}
+
+.home-page .home-path__media {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+}
+
+.home-page .home-path__media img {
+  object-fit: cover;
+  transition: scale var(--motion-slow) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.home-page .home-path:hover .home-path__media img {
+  scale: 1.05;
+}
+
+.home-page .home-path__scrim {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+}
+
+/* Each path gets its own hue so the two panels read as a pair, not a repeat. */
+.home-page .home-path--estate .home-path__media img {
+  object-position: center 46%;
+}
+
+.home-page .home-path--estate .home-path__scrim {
+  background: linear-gradient(
+    16deg,
+    rgb(255 253 248 / 90%) 0%,
+    rgb(255 253 248 / 58%) 40%,
+    rgb(23 58 45 / 22%) 100%
+  );
+}
+
+.home-page .home-path--yard .home-path__media img {
+  object-position: center 40%;
+}
+
+.home-page .home-path--yard .home-path__scrim {
+  background: linear-gradient(
+    16deg,
+    rgb(255 252 244 / 92%) 0%,
+    rgb(255 250 240 / 60%) 42%,
+    rgb(185 121 23 / 26%) 100%
+  );
+}
+
+.home-page .home-path__panel {
+  position: relative;
+  display: grid;
+  justify-items: start;
+  gap: 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 1.15rem;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 82%), rgb(255 252 247 / 62%))
+      padding-box,
+    var(--glass-edge-gradient) border-box;
+  padding: clamp(1rem, 2.2vw, 1.4rem);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 94%),
+    0 18px 40px rgb(13 33 25 / 20%);
+  -webkit-backdrop-filter: blur(30px) saturate(170%);
+  backdrop-filter: blur(30px) saturate(170%);
+}
+
+.home-page .home-path__title {
+  color: var(--color-text);
+  font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.home-page .home-path__copy {
+  max-width: 34ch;
+  color: #2c3a32;
+  font-size: 0.95rem;
+}
+
+.home-page .home-path__cta {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+  color: var(--color-primary);
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.home-page .home-path:hover .home-path__cta svg {
+  translate: 0.25rem 0;
+}
+
+.home-page .home-path__cta svg {
+  transition: translate var(--motion-base) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (max-width: 900px) {
+  .home-page .home-paths {
+    grid-template-columns: 1fr;
+  }
+
+  .home-page .home-path {
+    min-height: 18rem;
+  }
+}
+
+/* --- The three-step journey ---
+ *
+ * The connector is a 1px hairline scaled with `scaleX`; animating width is not
+ * compositor-friendly. It draws itself as the section scrolls into view.
+ */
+.home-page .home-journey__steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: home-journey;
+}
+
+.home-page .home-journey__steps > li {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 0.45rem;
+  padding-top: 4.25rem;
+  counter-increment: home-journey;
+}
+
+.home-page .home-journey__icon {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  width: 3.25rem;
+  height: 3.25rem;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 1.1rem;
+  background: var(--premium-green);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 28%),
+    0 10px 24px rgb(16 41 31 / 26%);
+}
+
+/* The step number rides the corner of the icon as a small glass token. */
+.home-page .home-journey__steps > li::before {
+  position: absolute;
+  z-index: 1;
+  top: -0.4rem;
+  left: 2.5rem;
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 88%);
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    145deg,
+    rgb(255 255 255 / 96%),
+    rgb(230 243 235 / 82%)
+  );
+  color: var(--color-primary);
+  content: counter(home-journey);
+  font-size: 0.7rem;
+  font-weight: 800;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 4px 10px rgb(23 58 45 / 14%);
+}
+
+.home-page .home-journey__steps > li:not(:last-child)::after {
+  position: absolute;
+  top: 1.6rem;
+  left: 4rem;
+  width: calc(100% - 2.75rem);
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgb(23 58 45 / 32%),
+    rgb(185 121 23 / 42%),
+    rgb(23 58 45 / 10%)
+  );
+  content: "";
+  transform-origin: left center;
+}
+
+.home-page .home-journey__steps h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.home-page .home-journey__steps p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.94rem;
+}
+
+@media (max-width: 767px) {
+  .home-page .home-journey__steps {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .home-page .home-journey__steps > li {
+    grid-template-columns: 3.25rem 1fr;
+    column-gap: 1rem;
+    padding-top: 0;
+  }
+
+  .home-page .home-journey__icon {
+    position: static;
+    grid-row: span 2;
+  }
+
+  .home-page .home-journey__steps > li::before {
+    top: -0.35rem;
+    left: 2.4rem;
+  }
+
+  /* Vertical connector on mobile. */
+  .home-page .home-journey__steps > li:not(:last-child)::after {
+    top: 3.6rem;
+    bottom: -1.5rem;
+    left: 1.6rem;
+    width: 1px;
+    height: auto;
+    background: linear-gradient(
+      180deg,
+      rgb(23 58 45 / 32%),
+      rgb(185 121 23 / 42%),
+      rgb(23 58 45 / 8%)
+    );
+    transform-origin: center top;
+  }
+}
+
+/* --- Trust bento: one wide tile over two narrow --- */
+.home-page .home-trust__bento {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.home-page .home-trust__tile--wide {
+  grid-column: span 2;
+}
+
+.home-page .home-trust__tile {
+  min-height: 0;
+  padding: clamp(1.25rem, 3vw, 1.85rem);
+}
+
+.home-page .home-trust__tile h3 {
+  margin: 1rem 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.home-page .home-trust__tile--wide h3 {
+  max-width: 32ch;
+  font-size: clamp(1.25rem, 2.4vw, 1.6rem);
+}
+
+.home-page .home-trust__tile p {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 767px) {
+  .home-page .home-trust__bento {
+    grid-template-columns: 1fr;
+  }
+
+  .home-page .home-trust__tile--wide {
+    grid-column: auto;
+  }
+}
+
+/* --- Seller band: the one deliberate dark moment ---
+ *
+ * White on this forest is 14.7:1 and the gold control clears the 3:1 boundary
+ * requirement against it, so the band is contrast-safe without a scrim. It is
+ * the single break in an otherwise light-first page, not a dark theme.
+ */
+.public-shell--home .marketing-home > .home-sell {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  width: auto;
+  max-width: none;
+  margin-inline: calc(50% - 50vw);
+  border-block: 1px solid rgb(255 255 255 / 12%);
+  background:
+    radial-gradient(circle at 12% 8%, rgb(185 121 23 / 26%), transparent 30rem),
+    radial-gradient(circle at 88% 96%, rgb(32 90 68 / 60%), transparent 32rem),
+    linear-gradient(150deg, #17452f 0%, #0f3324 48%, #0b261c 100%);
+  padding: clamp(2.75rem, 7vw, 5rem) max(1rem, calc((100vw - 80rem) / 2));
+  color: #fff;
+}
+
+/* Same grain plate as the tinted band, at a lower opacity so it reads as
+ * texture rather than noise against the darker field. */
+.home-page .home-sell::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  content: "";
+  opacity: 0.14;
+  pointer-events: none;
+}
+
+.home-page .home-sell__bloom {
+  position: absolute;
+  z-index: -1;
+  top: -30%;
+  right: -10%;
+  width: min(38rem, 70%);
+  aspect-ratio: 1;
+  border-radius: var(--radius-full);
+  background: radial-gradient(circle, rgb(185 121 23 / 22%), transparent 68%);
+  pointer-events: none;
+}
+
+.home-page .home-sell__inner {
+  display: grid;
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 3rem);
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, auto);
+  width: 100%;
+}
+
+.home-page .home-sell .eyebrow {
+  color: rgb(255 255 255 / 78%);
+}
+
+.home-page .home-sell h2 {
+  max-width: 24ch;
+  margin: 0;
+  color: #fff;
+  font-size: clamp(1.9rem, 4vw, 3rem);
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+}
+
+.home-page .home-sell__copy p {
+  max-width: 52ch;
+  margin: 0.9rem 0 0;
+  color: rgb(255 255 255 / 82%);
+  font-size: clamp(1rem, 1.6vw, 1.1rem);
+}
+
+.home-page .home-sell__actions {
+  display: grid;
+  justify-items: start;
+  gap: 0.85rem;
+}
+
+.home-page .home-sell__secondary {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  color: rgb(255 255 255 / 88%);
+  font-size: 0.92rem;
+  font-weight: 650;
+  text-decoration-color: rgb(255 255 255 / 45%);
+  text-underline-offset: 0.25em;
+}
+
+.home-page .home-sell__secondary:hover {
+  color: #fff;
+  text-decoration-color: #fff;
+}
+
+/* The gold focus ring loses contrast on forest, so the band uses a white ring. */
+.home-page .home-sell :is(a, .ui-button):focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+  .home-page .home-sell__inner {
+    grid-template-columns: 1fr;
+  }
+
+  .home-page .home-sell__actions {
+    justify-items: stretch;
+  }
+
+  .home-page .home-sell__actions .ui-button {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
+/* --- FAQ accordion spacing on home --- */
+.home-page .home-faq .content-faq {
+  margin-top: 0.25rem;
+}
+
+/* --- Motion ------------------------------------------------------------- */
+
+@keyframes home-connector-draw {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes home-connector-draw-vertical {
+  from {
+    transform: scaleY(0);
+  }
+
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes home-bloom-drift {
+  from {
+    transform: translate3d(0, -1.5%, 0) scale(1);
+  }
+
+  to {
+    transform: translate3d(-3%, 2.5%, 0) scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-page .home-sell__bloom {
+    animation: home-bloom-drift 16s ease-in-out infinite alternate;
+  }
+}
+
+/* Scroll-driven. As everywhere in this system, ranges end inside `entry` — a
+ * `cover` endpoint is unreachable for anything in the final viewport and would
+ * strand the element part-way through, permanently faded. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .home-page .home-journey__steps > li:not(:last-child)::after {
+      animation: home-connector-draw linear both;
+      animation-timeline: view();
+      animation-range: entry 12% entry 58%;
+    }
+
+    .home-page .home-trust__bento > [data-reveal]:nth-child(2) {
+      animation-range: entry 6% entry 51%;
+    }
+
+    .home-page .home-trust__bento > [data-reveal]:nth-child(3) {
+      animation-range: entry 12% entry 57%;
+    }
+
+    .home-page .home-journey__steps > [data-reveal]:nth-child(2) {
+      animation-range: entry 6% entry 51%;
+    }
+
+    .home-page .home-journey__steps > [data-reveal]:nth-child(3) {
+      animation-range: entry 12% entry 57%;
+    }
+
+    .home-page .content-faq > [data-reveal]:nth-child(2) {
+      animation-range: entry 5% entry 50%;
+    }
+
+    .home-page .content-faq > [data-reveal]:nth-child(3) {
+      animation-range: entry 10% entry 55%;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) and (max-width: 767px) {
+    .home-page .home-journey__steps > li:not(:last-child)::after {
+      animation-name: home-connector-draw-vertical;
+    }
+  }
+}
+
+/* --- Fallbacks --------------------------------------------------------- */
+
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .home-page .home-path__panel {
+    border-color: var(--color-border);
+    background: #fffdf9;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .home-page .home-path__panel {
+    border-color: var(--color-border);
+    background: var(--color-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .home-page .home-path__scrim,
+  .home-page .home-sell__bloom,
+  .home-page .home-sell::after {
+    display: none;
+  }
+
+  .public-shell--home .marketing-home > .home-sell {
+    background: linear-gradient(150deg, #17452f 0%, #0f3324 52%, #0b261c 100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-page .home-sell__bloom,
+  .home-page .home-journey__steps > li:not(:last-child)::after {
+    animation: none;
+    transform: none;
+  }
+
+  .home-page .home-path,
+  .home-page .home-path:hover,
+  .home-page .home-path:hover .home-path__media img,
+  .home-page .home-path:hover .home-path__cta svg {
+    scale: none;
+    transform: none;
+    translate: none;
     transition: none;
   }
 }

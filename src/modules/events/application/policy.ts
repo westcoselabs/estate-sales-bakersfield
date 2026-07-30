@@ -71,6 +71,20 @@ export function privateAddressLeakFields(
   });
 }
 
+function hasConfirmedProviderLocation(event: EventRecord): boolean {
+  const location = event.location;
+  return Boolean(
+    location &&
+    location.confirmationStatus === "CONFIRMED" &&
+    location.providerPlaceId &&
+    location.providerName &&
+    location.latitude !== null &&
+    Number.isFinite(location.latitude) &&
+    location.longitude !== null &&
+    Number.isFinite(location.longitude),
+  );
+}
+
 function safePublicWebsite(value: string | null): string | null {
   if (!value) return null;
   try {
@@ -105,22 +119,18 @@ export function eventReadiness(event: EventRecord): EventReadiness {
   ) {
     missing.push("Add a valid schedule and timezone.");
   }
-  if (
-    !event.location ||
-    event.location.validationStatus !== "VERIFIED" ||
-    event.location.confirmationStatus !== "CONFIRMED"
-  ) {
-    missing.push("Validate the event address.");
+  if (!hasConfirmedProviderLocation(event)) {
+    missing.push("Select and confirm the event address.");
   }
   if (!event.privacyMode) missing.push("Choose an address-privacy policy.");
   const readyPhotos = event.photos.filter((photo) => photo.status === "READY");
   if (readyPhotos.length === 0)
-    missing.push("Upload at least one ready photo.");
+    missing.push("Add at least one photo to continue.");
   if (
     !event.coverPhotoId ||
     !readyPhotos.some((photo) => photo.id === event.coverPhotoId)
   ) {
-    missing.push("Select a ready cover photo.");
+    missing.push("Choose a cover photo.");
   }
   if (event.canceledAt) missing.push("Canceled events cannot be approved.");
   if (event.removedAt) missing.push("Removed events cannot be approved.");
@@ -141,9 +151,7 @@ export function eventStepReadiness(event: EventRecord): EventStepReadiness {
     event.timezone,
   );
   const locationComplete = Boolean(
-    event.location?.validationStatus === "VERIFIED" &&
-    event.location.confirmationStatus === "CONFIRMED" &&
-    event.privacyMode,
+    hasConfirmedProviderLocation(event) && event.privacyMode,
   );
   const readyPhotos = event.photos.filter((photo) => photo.status === "READY");
   const photosComplete = Boolean(

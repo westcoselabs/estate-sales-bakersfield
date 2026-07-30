@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { AuthPrincipal } from "@/modules/auth/domain/types";
+import { EmailVerificationRequiredError } from "@/modules/auth/domain/errors";
 import {
   EventConflictError,
   EventNotFoundError,
@@ -123,6 +124,39 @@ afterAll(async () => {
 });
 
 describe("Phase 3 event builder against isolated Test Neon", () => {
+  it("creates the internal profile automatically for an account with no profile", async () => {
+    const email = testEmail("phase3-no-profile");
+    const user = await prisma.user.create({
+      data: {
+        displayName: "No Profile User",
+        email,
+        normalizedEmail: email,
+        passwordHash: "integration-test-password-hash",
+      },
+    });
+    const principal: AuthPrincipal = {
+      id: user.id,
+      displayName: user.displayName,
+      email: user.email,
+      emailVerifiedAt: null,
+      role: user.role,
+      status: user.status,
+    };
+
+    const created = await service.create(principal, "ESTATE_SALE");
+
+    expect(created.eventType).toBe("ESTATE_SALE");
+    await expect(
+      prisma.organizerProfile.findUnique({
+        where: { userId: user.id },
+        select: { status: true, displayName: true },
+      }),
+    ).resolves.toEqual({ status: "INCOMPLETE", displayName: null });
+    await expect(service.list(principal)).resolves.toEqual([
+      expect.objectContaining({ id: created.id }),
+    ]);
+  });
+
   it("records Phase 3 and PostgreSQL rate limits as forward-only migrations", async () => {
     const migrations = await prisma.$queryRaw<
       Array<{ migration_name: string }>
@@ -245,6 +279,11 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
     });
     const [selectedLocation] = await locationProvider.autocomplete();
     if (!selectedLocation) throw new Error("Missing location fixture");
+    const lowConfidenceLocation = {
+      ...selectedLocation,
+      confidence: 0.32,
+      matchType: "provider-specific-street-result",
+    };
     event = await service.updateLocation(owner, event.id, {
       expectedVersion: event.version,
       addressLine1: "123 Main Street",
@@ -256,7 +295,12 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       timezone: "America/Los_Angeles",
       privacyMode: "APPROXIMATE_LOCATION",
       confirmed: true,
-      selectedLocation,
+      selectedLocation: lowConfidenceLocation,
+    });
+    expect(event.location).toMatchObject({
+      confirmationStatus: "CONFIRMED",
+      validationStatus: "VERIFIED",
+      precision: "provider-specific-street-result",
     });
     const coordinates = await prisma.$queryRaw<
       Array<{ longitude: number; latitude: number }>
@@ -303,17 +347,18 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       timezone: "America/Los_Angeles",
       privacyMode: "APPROXIMATE_LOCATION",
       confirmed: true,
-      selectedLocation,
+      selectedLocation: lowConfidenceLocation,
     });
 
-    const reservation = await service.reservePhoto(owner, event.id, {
+    const unverifiedOwner = { ...owner, emailVerifiedAt: null };
+    const reservation = await service.reservePhoto(unverifiedOwner, event.id, {
       expectedVersion: event.version,
       contentType: "image/jpeg",
     });
     event = reservation.event;
     const objectKey = parseMediaObjectKey(reservation.uploadPathname);
     await expect(
-      service.authorizePhotoUpload(owner, event.id, {
+      service.authorizePhotoUpload(unverifiedOwner, event.id, {
         expectedVersion: event.version,
         reservationId: reservation.reservationId,
         photoId: reservation.photoId,
@@ -321,7 +366,7 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       }),
     ).resolves.toMatchObject({ contentType: "image/jpeg" });
     await expect(
-      service.authorizePhotoUpload(owner, event.id, {
+      service.authorizePhotoUpload(unverifiedOwner, event.id, {
         expectedVersion: event.version,
         reservationId: reservation.reservationId,
         photoId: reservation.photoId,
@@ -341,14 +386,14 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       .toBuffer();
     await media.putPrivate(objectKey, source, "image/jpeg");
     await expect(
-      service.finalizePhoto(owner, event.id, reservation.photoId, {
+      service.finalizePhoto(unverifiedOwner, event.id, reservation.photoId, {
         expectedVersion: event.version,
         reservationId: reservation.reservationId,
         pathname: `${reservation.uploadPathname}-different`,
       }),
     ).rejects.toThrow("invalid or expired");
     event = await service.finalizePhoto(
-      owner,
+      unverifiedOwner,
       event.id,
       reservation.photoId,
       {
@@ -371,7 +416,7 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
     );
     await media.putPrivate(secondObjectKey, source, "image/jpeg");
     event = await service.finalizePhoto(
-      owner,
+      unverifiedOwner,
       event.id,
       secondReservation.photoId,
       {
@@ -415,7 +460,7 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
     ).toBe("FAILED");
 
     event = await service.setCover(
-      owner,
+      unverifiedOwner,
       event.id,
       reservation.photoId,
       event.version,
@@ -423,7 +468,7 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
     expect(event.workflowState).toBe("PREVIEW_READY");
     expect(event.readiness.ready).toBe(true);
 
-    const preview = await service.preview(owner, event.id);
+    const preview = await service.preview(unverifiedOwner, event.id);
     expect(preview.address).toEqual({
       kind: "APPROXIMATE",
       city: "Bakersfield",
@@ -439,6 +484,9 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
       acceptedTerms: true as const,
       termsVersion: PUBLISHING_TERMS_VERSION,
     };
+    await expect(
+      service.approve(unverifiedOwner, event.id, initialApprovalInput),
+    ).rejects.toBeInstanceOf(EmailVerificationRequiredError);
     const [approved, concurrentApproval] = await Promise.all([
       service.approve(owner, event.id, initialApprovalInput),
       service.approve(owner, event.id, initialApprovalInput),

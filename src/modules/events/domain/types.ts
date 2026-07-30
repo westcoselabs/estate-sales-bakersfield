@@ -75,7 +75,8 @@ export interface EventRecord {
   readonly id: string;
   readonly organizerId: string;
   readonly ownerUserId: string;
-  readonly organizerDisplayName: string;
+  readonly ownerVerifiedEmail: string | null;
+  readonly organizerDisplayName: string | null;
   readonly organizerWebsiteUrl: string | null;
   readonly publicId: string;
   readonly slug: string;
@@ -269,7 +270,7 @@ export interface PublicEventProjection {
   readonly localEndsAt: string;
   readonly address: PublicAddressProjection;
   readonly organizer: {
-    readonly displayName: string;
+    readonly displayName: string | null;
     readonly websiteUrl: string | null;
   };
   readonly coverPhotoUrl: string;

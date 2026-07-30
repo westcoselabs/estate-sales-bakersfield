@@ -11,12 +11,6 @@ export interface EventAuditContext {
   readonly requestId?: string;
 }
 
-export interface EligibleOrganizer {
-  readonly id: string;
-  readonly userId: string;
-  readonly status: "INCOMPLETE" | "COMPLETE";
-}
-
 export interface PhotoReservationRecord {
   readonly id: string;
   readonly eventId: string;
@@ -44,9 +38,7 @@ export interface ReadyPhotoWrite {
 }
 
 export interface EventRepository {
-  findEligibleOrganizer(userId: string): Promise<EligibleOrganizer | null>;
   createOwned(input: {
-    readonly organizerId: string;
     readonly ownerUserId: string;
     readonly eventType: EventType;
     readonly publicId: string;

@@ -163,7 +163,7 @@ export function AddressAutocomplete({
         placeholder="Start with the street number and name"
       />
       <p id={`${listId}-help`} className="ui-field-help">
-        Choose a structured suggestion before confirming the map pin.
+        Start typing your street address and select the matching result.
       </p>
       {invalid ? (
         <p

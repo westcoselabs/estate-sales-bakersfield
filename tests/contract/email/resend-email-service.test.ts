@@ -16,7 +16,7 @@ const message: AuthenticationEmailMessage = {
 };
 
 describe("Resend authentication email contract", () => {
-  it("constructs application-owned verification and reset content", () => {
+  it("constructs responsive, branded verification and reset content", () => {
     const verification = renderAuthenticationEmail(message);
     const reset = renderAuthenticationEmail({
       ...message,
@@ -27,9 +27,35 @@ describe("Resend authentication email contract", () => {
 
     expect(verification.subject).toContain("Verify");
     expect(verification.text).toContain(message.actionUrl);
+    expect(verification.text).toContain("24 hours");
+    expect(verification.text).toContain("ESTATE SALES BAKERSFIELD");
+    expect(verification.html).toContain("<!doctype html>");
+    expect(verification.html).toContain('width="600"');
+    expect(verification.html).toContain("display:none;max-height:0");
+    expect(verification.html).toContain("min-height:44px");
+    expect(verification.html).toContain(message.actionUrl);
+    expect(verification.html).toContain("Button not working?");
+    expect(verification.html).toContain("ESTATE SALES");
     expect(verification.html).not.toContain("<script>");
     expect(reset.subject).toContain("Reset");
     expect(reset.text).toContain("1 hour");
+    expect(reset.html).toContain("Reset your password");
+    expect(reset.html).toContain("Your password will not change");
+  });
+
+  it("escapes dynamic names and URLs in every HTML placement", () => {
+    const content = renderAuthenticationEmail({
+      ...message,
+      displayName: `Person "quoted" & <script>`,
+      actionUrl:
+        'https://preview.example.test/verify-email?token="><script>alert(1)</script>',
+    });
+
+    expect(content.html).toContain(
+      "Person &quot;quoted&quot; &amp; &lt;script&gt;",
+    );
+    expect(content.html).not.toContain("<script>alert(1)</script>");
+    expect(content.html).toContain("&quot;&gt;&lt;script&gt;");
   });
 
   it("keeps provider metadata free of raw tokens", async () => {
