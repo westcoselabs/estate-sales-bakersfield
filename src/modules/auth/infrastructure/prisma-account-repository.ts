@@ -579,12 +579,14 @@ export class PrismaAccountRepository implements AccountRepository {
     deliveryId: string,
     providerMessageId: string,
     now: Date,
+    templateRevisionId?: string,
   ): Promise<void> {
     await this.prisma.emailDelivery.update({
       where: { id: deliveryId },
       data: {
         status: "SENT",
         providerMessageId,
+        ...(templateRevisionId ? { templateRevisionId } : {}),
         attempts: { increment: 1 },
         sentAt: now,
         failedAt: null,

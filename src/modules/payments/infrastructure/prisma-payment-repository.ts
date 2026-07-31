@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 
 import { ActiveCheckoutError } from "../domain/errors";
@@ -79,6 +81,53 @@ async function enqueueReconciliationWith(
     ON CONFLICT ("queue", "type", "deduplication_key")
     DO NOTHING
   `);
+}
+
+async function enqueuePurchaseReceiptWith(
+  transaction: Prisma.TransactionClient,
+  attemptId: string,
+  userId: string,
+): Promise<void> {
+  const priorDelivery = await transaction.emailDelivery.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    select: { recipientHash: true },
+  });
+  const template = await transaction.emailTemplate.findUnique({
+    where: { key: "PURCHASE_RECEIPT" },
+    select: { activeRevisionId: true },
+  });
+  const delivery = await transaction.emailDelivery.upsert({
+    where: { paymentAttemptId: attemptId },
+    update: {},
+    create: {
+      userId,
+      kind: "PURCHASE_RECEIPT",
+      paymentAttemptId: attemptId,
+      templateRevisionId: template?.activeRevisionId ?? null,
+      recipientHash:
+        priorDelivery?.recipientHash ??
+        createHash("sha256").update(`receipt:${attemptId}`).digest("hex"),
+    },
+    select: { id: true },
+  });
+  await transaction.durableJob.upsert({
+    where: {
+      queue_type_deduplicationKey: {
+        queue: "email",
+        type: "EMAIL_RECEIPT_SEND",
+        deduplicationKey: attemptId,
+      },
+    },
+    update: {},
+    create: {
+      queue: "email",
+      type: "EMAIL_RECEIPT_SEND",
+      payload: { deliveryId: delivery.id },
+      deduplicationKey: attemptId,
+      maxAttempts: 10,
+    },
+  });
 }
 
 export class PrismaPaymentRepository implements PaymentRepository {
@@ -557,6 +606,7 @@ export class PrismaPaymentRepository implements PaymentRepository {
           version: { increment: 1 },
         },
       });
+      await enqueuePurchaseReceiptWith(transaction, current.id, current.userId);
       if (current.fulfillmentState !== "BLOCKED") {
         await transaction.auditEntry.create({
           data: auditData({
@@ -610,6 +660,11 @@ export class PrismaPaymentRepository implements PaymentRepository {
                 version: { increment: 1 },
               },
             });
+            await enqueuePurchaseReceiptWith(
+              transaction,
+              input.attempt.id,
+              input.attempt.userId,
+            );
             if (input.attempt.fulfillmentState !== "BLOCKED") {
               await transaction.auditEntry.create({
                 data: auditData({
@@ -703,6 +758,11 @@ export class PrismaPaymentRepository implements PaymentRepository {
           },
         });
         if (paid.count !== 1) throw new Error("PAYMENT_ATTEMPT_CHANGED");
+        await enqueuePurchaseReceiptWith(
+          transaction,
+          attempt.id,
+          attempt.userId,
+        );
         const publication = await transaction.eventPublication.create({
           data: {
             eventId: input.event.id,

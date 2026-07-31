@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
 import { AdminApplicationError } from "@/modules/admin";
+import { EmailApplicationError } from "@/modules/email";
 import {
   AuthenticationError,
   AuthenticationServiceUnavailableError,
@@ -95,6 +96,10 @@ export function adminApiError(
     code = "SERVICE_UNAVAILABLE";
     message = "The service is temporarily unavailable.";
   } else if (error instanceof AdminApplicationError) {
+    status = error.status;
+    code = error.code;
+    message = error.message;
+  } else if (error instanceof EmailApplicationError) {
     status = error.status;
     code = error.code;
     message = error.message;

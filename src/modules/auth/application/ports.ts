@@ -98,7 +98,10 @@ export interface AuthenticationEmailMessage {
 export interface EmailService {
   send(
     message: AuthenticationEmailMessage,
-  ): Promise<{ readonly providerMessageId: string }>;
+  ): Promise<{
+    readonly providerMessageId: string;
+    readonly templateRevisionId?: string;
+  }>;
 }
 
 export interface AccountRepository {
@@ -188,6 +191,7 @@ export interface AccountRepository {
     deliveryId: string,
     providerMessageId: string,
     now: Date,
+    templateRevisionId?: string,
   ): Promise<void>;
   markDeliveryFailed(
     deliveryId: string,

@@ -37,8 +37,7 @@ export async function POST(request: Request) {
     return new Response(result.bytes, {
       headers: {
         "Cache-Control": "private, no-store",
-        "Content-Disposition":
-          'attachment; filename="marketing-eligible-contacts.csv"',
+        "Content-Disposition": 'attachment; filename="registered-contacts.csv"',
         "Content-Type": "text/csv; charset=utf-8",
         "Cross-Origin-Resource-Policy": "same-origin",
         "Referrer-Policy": "no-referrer",

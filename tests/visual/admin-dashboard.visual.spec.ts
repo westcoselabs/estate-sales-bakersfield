@@ -196,6 +196,10 @@ test("admin visual system holds at desktop width", async ({
   await expect(page.locator(".admin-sidebar")).toBeVisible();
   await expect(page.locator(".admin-bottom-nav")).toBeHidden();
   await expect(page.locator(".admin-metric-card")).toHaveCount(4);
+  await expect(page.locator(".admin-table tr").first()).toHaveCSS(
+    "display",
+    "table-row",
+  );
 
   const columns = await page
     .locator(".admin-metric-card")

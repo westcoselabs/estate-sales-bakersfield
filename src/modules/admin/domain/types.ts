@@ -39,7 +39,7 @@ export interface AdminOverview {
 }
 
 export type AdminUserFilter =
-  "all" | "verified" | "unverified" | "published" | "marketing" | "restricted";
+  "all" | "verified" | "unverified" | "published" | "restricted";
 
 export type AdminListingFilter =
   | "active"

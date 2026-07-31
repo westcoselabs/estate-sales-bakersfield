@@ -50,8 +50,6 @@ export default async function AdminUsersPage({
   if (criteria.search) query.set("q", criteria.search);
   query.set("filter", criteria.filter);
   if (directory.nextCursor) query.set("cursor", directory.nextCursor);
-  const marketingQuery = new URLSearchParams({ filter: "marketing" });
-  if (criteria.search) marketingQuery.set("q", criteria.search);
 
   return (
     <div className="admin-page">
@@ -64,19 +62,10 @@ export default async function AdminUsersPage({
             </span>
           </div>
           <h1>Users</h1>
-          <p>Inspect signup, listing, purchase, and consent history.</p>
+          <p>Inspect signup, listing, purchase, and account history.</p>
         </div>
         <div className="admin-page-header__actions">
-          {criteria.filter === "marketing" ? (
-            <MarketingExport search={criteria.search} />
-          ) : (
-            <Link
-              className="ui-button ui-button--secondary"
-              href={`/admin/users?${marketingQuery}`}
-            >
-              Export contacts
-            </Link>
-          )}
+          <MarketingExport search={criteria.search} />
         </div>
       </header>
       <section
@@ -110,7 +99,6 @@ export default async function AdminUsersPage({
               <option value="verified">Verified</option>
               <option value="unverified">Unverified</option>
               <option value="published">Published organizers</option>
-              <option value="marketing">Marketing eligible</option>
               <option value="restricted">Restricted</option>
             </select>
           </label>
@@ -119,8 +107,8 @@ export default async function AdminUsersPage({
           </button>
         </form>
         <p className="admin-filter-panel__helper">
-          Contact export includes active, verified users who explicitly opted
-          into marketing. Choose the marketing-eligible filter to download it.
+          Export includes every registered account matching the current search.
+          Password confirmation is required before download.
         </p>
       </section>
       <section className="admin-panel admin-panel--table">
@@ -135,7 +123,7 @@ export default async function AdminUsersPage({
         </div>
         {directory.rows.length ? (
           <div className="admin-table-wrap">
-            <table className="admin-table">
+            <table className="admin-table admin-table--users">
               <caption>{directory.rows.length} users on this page</caption>
               <thead>
                 <tr>
@@ -146,7 +134,6 @@ export default async function AdminUsersPage({
                   <th scope="col">Listings</th>
                   <th scope="col">Purchases</th>
                   <th scope="col">Total spent</th>
-                  <th scope="col">Marketing</th>
                   <th scope="col">Status</th>
                 </tr>
               </thead>
@@ -171,20 +158,26 @@ export default async function AdminUsersPage({
                       </span>
                     </td>
                     <td data-label="Signup">{formatDate(user.createdAt)}</td>
-                    <td data-label="Last activity">
+                    <td
+                      className="admin-table__secondary"
+                      data-label="Last activity"
+                    >
                       {formatDate(user.lastActivityAt)}
                     </td>
                     <td data-label="Listings">
                       {user.listings} created · {user.publications} published
                     </td>
-                    <td data-label="Purchases">{user.purchases}</td>
-                    <td data-label="Total spent">{formatSpent(user.spent)}</td>
-                    <td data-label="Marketing">
-                      <span
-                        className={`admin-status ${user.marketingEligible ? "admin-status--success" : ""}`}
-                      >
-                        {user.marketingEligible ? "Eligible" : "Not eligible"}
-                      </span>
+                    <td
+                      className="admin-table__secondary"
+                      data-label="Purchases"
+                    >
+                      {user.purchases}
+                    </td>
+                    <td
+                      className="admin-table__secondary"
+                      data-label="Total spent"
+                    >
+                      {formatSpent(user.spent)}
                     </td>
                     <td data-label="Status">
                       <span

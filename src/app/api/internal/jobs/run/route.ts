@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { runConfiguredJobBatch } from "@/modules/jobs";
+import { runConfiguredJobBatch } from "@/platform/jobs/configured-runner";
 import { getServerEnvironment } from "@/platform/config/env";
 import { logger } from "@/platform/observability/logger";
 import { hasValidBearerSecret } from "@/platform/security/bearer-secret";

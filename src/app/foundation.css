@@ -7398,7 +7398,7 @@ button {
     bottom: 0;
     left: 0;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     border-top: 1px solid var(--color-border);
     background: var(--color-surface-glass);
     padding: var(--space-1) var(--safe-right)
@@ -8710,7 +8710,9 @@ button {
   .admin-grid--two {
     grid-template-columns: minmax(0, 1fr);
   }
+}
 
+@media (max-width: 1180px) {
   .admin-panel--table {
     overflow: visible;
     background: transparent;
@@ -8851,4 +8853,192 @@ button {
   .admin-range-form .ui-button {
     width: 100%;
   }
+}
+
+@media (max-width: 540px) {
+  .admin-table--users .admin-table__secondary {
+    display: none;
+  }
+}
+
+/* Admin email center */
+.email-center-page,
+.admin-page--wide {
+  max-width: 112rem;
+}
+
+.email-hero {
+  padding-block: clamp(1.5rem, 4vw, 4rem);
+}
+
+.email-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(1rem, 2vw, 1.5rem);
+}
+
+.email-overview-card {
+  position: relative;
+  min-height: 18rem;
+  overflow: hidden;
+  padding: clamp(1.5rem, 2.5vw, 2.25rem);
+  background: linear-gradient(145deg, #fff 0%, #f5f7f4 100%);
+}
+
+.email-overview-card--gold {
+  background: linear-gradient(145deg, #fffdf7 0%, #f6edd8 100%);
+  border-color: #e8d5a6;
+}
+
+.email-overview-card__icon {
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 2.5rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.email-overview-card h2,
+.campaign-form h2,
+.email-publish-card h2,
+.email-revision-card h2,
+.campaign-summary h2,
+.campaign-send-panel h2 {
+  margin: 0.4rem 0 0.75rem;
+  color: var(--color-primary);
+  font-size: clamp(1.35rem, 2vw, 2rem);
+  line-height: 1.12;
+}
+
+.email-overview-card > a,
+.email-template-row {
+  color: var(--color-primary);
+  font-weight: 800;
+}
+
+.email-section { margin-top: clamp(1rem, 2vw, 1.5rem); }
+.email-template-list { display: grid; }
+.email-template-row {
+  display: flex;
+  min-height: 5.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.15rem clamp(1rem, 2vw, 1.5rem);
+  border-top: 1px solid var(--color-border);
+  text-decoration: none;
+}
+.email-template-row:first-child { border-top: 0; }
+.email-template-row:hover { background: #f6f8f5; }
+.email-template-row > span:first-child { display: grid; min-width: 0; }
+.email-template-row small { overflow: hidden; color: var(--color-text-secondary); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+
+.email-editor-shell { display: grid; gap: 1rem; }
+.email-editor-toolbar { display: grid; grid-template-columns: minmax(18rem, 1fr) auto; align-items: end; gap: 1rem; padding: 1rem 1.25rem; }
+.email-editor-toolbar__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.65rem; }
+.email-upload { position: relative; overflow: hidden; }
+.email-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.email-save-state { grid-column: 1 / -1; margin: 0; color: var(--color-text-secondary); font-size: 0.8rem; }
+.email-editor-tabs { display: none; }
+.email-editor-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(24rem, 0.95fr); gap: 1rem; min-height: 44rem; }
+.email-code-pane,
+.email-preview-pane { min-width: 0; overflow: hidden; padding: 0; }
+.email-pane-heading { display: flex; min-height: 4.5rem; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--color-border); }
+.email-pane-heading > div:first-child { display: grid; }
+.email-pane-heading small { color: var(--color-text-secondary); }
+.email-code-pane .cm-editor { font-size: 0.83rem; }
+.email-code-pane .cm-scroller { font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace; }
+.email-preview-toggle,
+.email-audience-toggle { display: flex; padding: 0.2rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface-muted); }
+.email-preview-toggle button,
+.email-audience-toggle button { min-height: 2.25rem; padding: 0.35rem 0.75rem; border: 0; border-radius: 999px; background: transparent; color: var(--color-text-secondary); font-weight: 700; }
+.email-preview-toggle button[aria-pressed="true"],
+.email-audience-toggle button[aria-pressed="true"] { background: #fff; color: var(--color-primary); box-shadow: var(--shadow-1); }
+.email-iframe-wrap { height: 620px; padding: 1.25rem; overflow: auto; background: #e8ece8; }
+.email-image-toggle { width: 100%; min-height: 2.5rem; border: 0; border-bottom: 1px solid var(--color-border); background: #fffaf0; color: var(--color-primary); font-weight: 750; }
+.email-text-preview { padding: 1rem 1.25rem; border-top: 1px solid var(--color-border); background: #fff; }
+.email-text-preview summary { color: var(--color-primary); font-weight: 800; cursor: pointer; }
+.email-text-preview p { color: var(--color-text-secondary); font-size: 0.875rem; }
+.email-iframe-wrap iframe { display: block; width: 100%; height: 100%; margin: auto; border: 0; background: #fff; box-shadow: 0 10px 35px rgb(19 50 38 / 12%); }
+.email-iframe-wrap--mobile iframe { width: 375px; max-width: 100%; }
+.email-publish-grid,
+.campaign-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.email-publish-card,
+.email-revision-card,
+.campaign-summary,
+.campaign-send-panel { padding: clamp(1.25rem, 2vw, 2rem); }
+.email-publish-card { display: grid; align-content: start; gap: 1rem; background: linear-gradient(145deg, #fffdf7, #f8f0df); }
+.email-revision-card ul,
+.campaign-summary ul { margin: 1rem 0 0; padding: 0; list-style: none; }
+.email-revision-card li,
+.campaign-summary li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.85rem 0; border-top: 1px solid var(--color-border); }
+.email-revision-card li > span,
+.campaign-summary li { display: grid; }
+.email-revision-card small,
+.campaign-summary li span { color: var(--color-text-secondary); }
+.email-new-template { overflow: hidden; padding: 1.25rem; }
+.email-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.email-form-actions { display: flex; justify-content: flex-end; padding-top: 1rem; }
+.campaign-composer-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+.campaign-form { display: grid; gap: 1rem; padding: clamp(1.25rem, 2vw, 2rem); }
+.campaign-choice-list { display: grid; max-height: 28rem; overflow: auto; border: 1px solid var(--color-border); border-radius: var(--radius-control); }
+.campaign-choice-list label { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.75rem; align-items: start; padding: 0.9rem; border-top: 1px solid var(--color-border); cursor: pointer; }
+.campaign-choice-list label:first-child { border-top: 0; }
+.campaign-choice-list label > span { display: grid; min-width: 0; }
+.campaign-choice-list small { overflow: hidden; color: var(--color-text-secondary); text-overflow: ellipsis; }
+.campaign-audience-summary { display: grid; padding: 1.5rem; border-radius: var(--radius-control); background: var(--color-success-surface); }
+.campaign-audience-summary strong { color: var(--color-primary); font-size: 2.5rem; line-height: 1; }
+.campaign-live-preview { grid-column: 1 / -1; overflow: hidden; padding: 0; }
+.campaign-preview-email { width: min(100%, 42rem); margin: 2rem auto; padding: clamp(1.5rem, 4vw, 3rem); border: 1px solid #ded7c7; border-radius: 1rem; background: #fffdf8; box-shadow: 0 20px 50px rgb(19 50 38 / 10%); }
+.campaign-preview-email__brand { margin: -3rem -3rem 2rem; padding: 1.25rem 3rem; border-bottom: 4px solid #c8a44d; border-radius: 1rem 1rem 0 0; background: #173a2d; color: #fff; font-size: 0.8rem; font-weight: 900; letter-spacing: 0.15em; }
+.campaign-preview-email__brand span { color: #e8d596; }
+.campaign-preview-email > h2 { margin: 0 0 0.75rem; color: #173a2d; font-family: Georgia, serif; font-size: clamp(2rem, 4vw, 2.8rem); line-height: 1.08; }
+.campaign-preview-listings { display: grid; gap: 0.75rem; margin: 1.5rem 0; }
+.campaign-preview-listings article { display: grid; padding: 1rem; border: 1px solid #ded7c7; border-radius: 0.75rem; }
+.campaign-preview-listings small { color: #987425; font-weight: 800; text-transform: uppercase; }
+.campaign-preview-listings span { color: var(--color-text-secondary); }
+.campaign-summary dl { display: grid; grid-template-columns: repeat(2, 1fr); margin: 1.5rem 0 0; }
+.campaign-summary dl div { padding: 1rem 0; border-top: 1px solid var(--color-border); }
+.campaign-summary dt { color: var(--color-text-secondary); font-size: 0.75rem; font-weight: 800; text-transform: uppercase; }
+.campaign-summary dd { margin: 0.25rem 0 0; font-weight: 700; }
+.campaign-send-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(22rem, 0.6fr); gap: 2rem; align-items: end; margin-top: 1rem; }
+.campaign-send-panel__controls { display: grid; gap: 0.75rem; }
+.campaign-draft-fields { display: grid; gap: 0.75rem; margin-top: 1.25rem; }
+
+@media (max-width: 1100px) {
+  .email-overview-grid,
+  .campaign-composer-grid { grid-template-columns: minmax(0, 1fr); }
+  .email-overview-card { min-height: 13rem; }
+  .email-overview-card__icon { margin-bottom: 1.25rem; }
+  .email-editor-grid { grid-template-columns: minmax(0, 1fr); }
+  .email-code-pane,
+  .email-preview-pane { min-height: 42rem; }
+}
+
+@media (max-width: 767px) {
+  .email-template-row { align-items: flex-start; flex-direction: column; }
+  .email-editor-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .email-editor-toolbar__actions { justify-content: stretch; }
+  .email-editor-toolbar__actions .ui-button { flex: 1 1 9rem; }
+  .email-editor-tabs { display: grid; grid-template-columns: 1fr 1fr; padding: 0.25rem; border-radius: 999px; background: var(--color-surface-muted); }
+  .email-editor-tabs button { min-height: 3rem; border: 0; border-radius: 999px; background: transparent; font-weight: 800; }
+  .email-editor-tabs button[aria-selected="true"] { background: #fff; color: var(--color-primary); box-shadow: var(--shadow-1); }
+  .email-pane--mobile-hidden { display: none; }
+  .email-editor-grid { min-height: 0; }
+  .email-code-pane,
+  .email-preview-pane { min-height: 34rem; }
+  .email-iframe-wrap { height: 500px; padding: 0.75rem; }
+  .email-publish-grid,
+  .campaign-detail-grid,
+  .email-form-grid,
+  .campaign-send-panel { grid-template-columns: minmax(0, 1fr); }
+  .campaign-summary dl { grid-template-columns: 1fr; }
+  .campaign-preview-email { margin: 1rem auto; padding: 1.25rem; }
+  .campaign-preview-email__brand { margin: -1.25rem -1.25rem 1.5rem; padding: 1rem 1.25rem; }
 }

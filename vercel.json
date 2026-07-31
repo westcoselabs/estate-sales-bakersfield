@@ -5,5 +5,9 @@
       "*": false,
       "main": true
     }
-  }
+  },
+  "crons": [
+    { "path": "/api/internal/jobs/run", "schedule": "* * * * *" },
+    { "path": "/api/internal/email-jobs/run", "schedule": "* * * * *" }
+  ]
 }

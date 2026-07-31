@@ -47,6 +47,7 @@ const destinations: ReadonlyArray<{
     segment: "listings",
     icon: "list",
   },
+  { href: "/admin/email", label: "Email", segment: "email", icon: "mail" },
 ];
 
 export function AdminShell({

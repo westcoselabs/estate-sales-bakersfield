@@ -24,6 +24,9 @@ describe("admin directory criteria", () => {
       limit: 50,
       filter: "all",
     });
+    expect(userDirectoryCriteria({ filter: "marketing" })).toMatchObject({
+      filter: "all",
+    });
     expect(
       listingDirectoryCriteria({ limit: "-2", filter: "removed" }),
     ).toMatchObject({ limit: 1, filter: "removed" });

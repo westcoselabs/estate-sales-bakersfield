@@ -57,7 +57,7 @@ export function MarketingExport({ search }: { search: string }) {
       const blob = await response.blob();
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
-      link.download = "marketing-eligible-contacts.csv";
+      link.download = "registered-contacts.csv";
       link.click();
       URL.revokeObjectURL(link.href);
       const finalCount = response.headers.get("X-Exported-Record-Count");
@@ -77,7 +77,7 @@ export function MarketingExport({ search }: { search: string }) {
         onClick={() => void preview()}
         type="button"
       >
-        {pending ? "Checking…" : "Export eligible contacts"}
+        {pending ? "Checking…" : "Export contacts"}
       </button>
       {message ? <p role="alert">{message}</p> : null}
       <dialog className="admin-dialog" ref={dialog}>
@@ -87,9 +87,12 @@ export function MarketingExport({ search }: { search: string }) {
             void download(new FormData(event.currentTarget));
           }}
         >
-          <p className="eyebrow">Marketing eligible</p>
+          <p className="eyebrow">Contact export</p>
           <h2>Export {count ?? 0} current contacts?</h2>
-          <p>The population will be checked again when the CSV is created.</p>
+          <p>
+            Every registered account matching the current search will be checked
+            again when the CSV is created.
+          </p>
           <label className="ui-field">
             <span className="ui-field__label">Your password</span>
             <input

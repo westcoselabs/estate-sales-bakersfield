@@ -162,10 +162,14 @@ export class AuthenticationWorkflowService {
         ? SUPER_ADMIN_SESSION_TTL_MS
         : SESSION_TTL_MS,
     );
-    await this.accounts.recordLogin(account.id, account.role === "SUPER_ADMIN", {
-      ...audit,
-      actorUserId: account.id,
-    });
+    await this.accounts.recordLogin(
+      account.id,
+      account.role === "SUPER_ADMIN",
+      {
+        ...audit,
+        actorUserId: account.id,
+      },
+    );
     return { grant, account: summarize(account) };
   }
 
@@ -343,9 +347,11 @@ export class AuthenticationWorkflowService {
     now: Date,
   ): Promise<boolean> {
     let providerMessageId: string;
+    let templateRevisionId: string | undefined;
     try {
       const result = await this.email.send(message);
       providerMessageId = result.providerMessageId;
+      templateRevisionId = result.templateRevisionId;
     } catch (error) {
       const errorCode =
         error instanceof Error ? error.name.slice(0, 100) : "UNKNOWN";
@@ -365,7 +371,12 @@ export class AuthenticationWorkflowService {
     }
 
     try {
-      await this.accounts.markDeliverySent(deliveryId, providerMessageId, now);
+      await this.accounts.markDeliverySent(
+        deliveryId,
+        providerMessageId,
+        now,
+        templateRevisionId,
+      );
     } catch (error) {
       this.reportDeliveryTrackingFailure({
         deliveryId,

@@ -21,6 +21,19 @@ import { PrismaMarketingPreferenceRepository } from "./prisma-marketing-preferen
 import { ResendEmailService } from "./resend-email-service";
 import { MarketingPreferenceService } from "../application/marketing-preference-service";
 
+function escapeManagedEmailValue(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Readonly<Record<string, string>> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[character] ?? character;
+  });
+}
+
 function configuredFingerprint(): HmacPrivacyFingerprint {
   const secret = getServerEnvironment().AUTH_FINGERPRINT_SECRET;
   if (!secret) {
@@ -64,6 +77,38 @@ export function createConfiguredAuthenticationWorkflow(): AuthenticationWorkflow
         ? new ResendEmailService(
             environment.RESEND_FROM,
             environment.RESEND_API_KEY,
+            undefined,
+            async (message) => {
+              const template = await getPrismaClient().emailTemplate.findUnique(
+                {
+                  where: { key: message.kind },
+                  select: {
+                    activeRevision: {
+                      select: { id: true, subject: true, html: true },
+                    },
+                  },
+                },
+              );
+              const revision = template?.activeRevision;
+              if (!revision) return null;
+              const expiry =
+                message.kind === "EMAIL_VERIFICATION" ? "24 hours" : "1 hour";
+              return {
+                subject: revision.subject,
+                html: revision.html
+                  .replaceAll(
+                    "{{DISPLAY_NAME}}",
+                    escapeManagedEmailValue(message.displayName),
+                  )
+                  .replaceAll(
+                    "{{ACTION_URL}}",
+                    escapeManagedEmailValue(message.actionUrl),
+                  )
+                  .replaceAll("{{EXPIRY}}", expiry),
+                text: `${message.kind === "EMAIL_VERIFICATION" ? "Verify your email" : "Reset your password"}: ${message.actionUrl} (expires in ${expiry}).`,
+                templateRevisionId: revision.id,
+              };
+            },
           )
         : null;
   if (!email) {

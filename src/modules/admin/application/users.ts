@@ -66,13 +66,6 @@ export class AdminUserDirectory {
           publications: events.filter((event) => event.publication).length,
           purchases: user.paymentAttempts.length,
           spent: totals(user.paymentAttempts),
-          marketingEligible:
-            user.role === "USER" &&
-            user.status === "ACTIVE" &&
-            user.emailVerifiedAt !== null &&
-            user.marketingPreference?.consentAt !== null &&
-            user.marketingPreference?.consentAt !== undefined &&
-            user.marketingPreference?.unsubscribedAt === null,
           status: user.status,
           role: user.role,
         };
@@ -216,7 +209,7 @@ export class AdminMarketingExport {
 
   async preview(principal: AuthPrincipal | null, search: string) {
     authorizeAdminService(principal);
-    const rows = await this.repository.eligibleExport(search, 10_001);
+    const rows = await this.repository.contactExport(search, 10_001);
     return { count: rows.length, exceedsLimit: rows.length > 10_000 };
   }
 
@@ -226,7 +219,7 @@ export class AdminMarketingExport {
     requestId: string,
   ) {
     const admin = authorizeRecentAdminService(session).principal;
-    const rows = await this.repository.eligibleExport(search, 10_001);
+    const rows = await this.repository.contactExport(search, 10_001);
     if (rows.length > 10_000) throw new AdminExportLimitError();
     const data = rows.map((user) => {
       const publications =
@@ -237,7 +230,7 @@ export class AdminMarketingExport {
         user.email,
         iso(user.createdAt),
         user.emailVerifiedAt ? "Yes" : "No",
-        iso(user.marketingPreference?.consentAt),
+        user.status,
         iso(user.auditEntries[0]?.occurredAt),
         String(publications),
         String(user.paymentAttempts.length),
@@ -258,7 +251,7 @@ export class AdminMarketingExport {
           "Email",
           "Signup date",
           "Email verified",
-          "Marketing consent date",
+          "Account status",
           "Last activity",
           "Published listings",
           "Successful purchases",

@@ -20,9 +20,7 @@ function projection(
   return { ...value, eligible };
 }
 
-export class PrismaMarketingPreferenceRepository
-  implements MarketingPreferenceRepository
-{
+export class PrismaMarketingPreferenceRepository implements MarketingPreferenceRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   async find(userId: string) {
@@ -88,6 +86,15 @@ export class PrismaMarketingPreferenceRepository
                 consentSource: "ACCOUNT_SETTINGS",
               }
             : {},
+        },
+      });
+      await transaction.durableJob.create({
+        data: {
+          queue: "email",
+          type: "RESEND_CONTACT_SUBSCRIPTION",
+          payload: { userId, subscribed },
+          deduplicationKey: `${userId}:${now.toISOString()}`,
+          maxAttempts: 10,
         },
       });
       return projection(value, subscribed);

@@ -169,14 +169,24 @@ export class ResendEmailService implements EmailService {
     private readonly from: string,
     apiKey: string,
     client?: ResendClient,
+    private readonly templateRenderer?: (
+      message: AuthenticationEmailMessage,
+    ) => Promise<{
+      subject: string;
+      html: string;
+      text: string;
+      templateRevisionId: string;
+    } | null>,
   ) {
     this.client = client ?? new Resend(apiKey);
   }
 
-  async send(
-    message: AuthenticationEmailMessage,
-  ): Promise<{ readonly providerMessageId: string }> {
-    const content = renderAuthenticationEmail(message);
+  async send(message: AuthenticationEmailMessage): Promise<{
+    readonly providerMessageId: string;
+    readonly templateRevisionId?: string;
+  }> {
+    const managed = await this.templateRenderer?.(message);
+    const content = managed ?? renderAuthenticationEmail(message);
     const result = await this.client.emails.send(
       {
         from: this.from,
@@ -193,6 +203,9 @@ export class ResendEmailService implements EmailService {
       );
       throw new EmailDeliveryError(code);
     }
-    return { providerMessageId: result.data.id };
+    return {
+      providerMessageId: result.data.id,
+      ...(managed ? { templateRevisionId: managed.templateRevisionId } : {}),
+    };
   }
 }

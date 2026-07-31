@@ -45,7 +45,6 @@ export function userDirectoryCriteria(input: {
     "verified",
     "unverified",
     "published",
-    "marketing",
     "restricted",
   ];
   const limit = Math.min(Math.max(Number(input.limit) || 25, 1), 50);

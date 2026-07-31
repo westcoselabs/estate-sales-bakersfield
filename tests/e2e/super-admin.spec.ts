@@ -5,6 +5,11 @@ import { PrismaNeon } from "@prisma/adapter-neon";
 import { expect, test, type Page } from "@playwright/test";
 
 import { PrismaClient } from "@/generated/prisma/client";
+import { SYSTEM_EMAIL_DEFAULTS } from "@/modules/email/application/defaults";
+import {
+  emailContentDigest,
+  sanitizeEmailHtml,
+} from "@/modules/email/application/rendering";
 import {
   loadDedicatedTestEnvironment,
   requireSafeTestDatabase,
@@ -30,7 +35,6 @@ async function registerAndVerify(
     email: string;
     name: string;
     password: string;
-    marketing?: boolean;
   },
 ) {
   await page.goto("/signup");
@@ -38,9 +42,6 @@ async function registerAndVerify(
   await page.getByLabel("Email").fill(input.email);
   await page.getByLabel("Password", { exact: true }).fill(input.password);
   await page.getByLabel("Confirm password").fill(input.password);
-  if (input.marketing) {
-    await page.getByLabel(/Email me occasional updates/).check();
-  }
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByText(/verification instructions/i)).toBeVisible();
   let captured: CapturedEmail | undefined;
@@ -89,7 +90,6 @@ test("guards and operates the focused owner portal on desktop and mobile", async
     email: userEmail,
     name: "Marketing organizer",
     password: userPassword,
-    marketing: true,
   });
   await login(ordinaryPage, userEmail, userPassword);
   await ordinaryPage.goto("/admin");
@@ -126,6 +126,35 @@ test("guards and operates the focused owner portal on desktop and mobile", async
         metadata: { source: "GUARDED_E2E_FIXTURE" },
       },
     });
+    const definition = SYSTEM_EMAIL_DEFAULTS.RECENT_LISTINGS;
+    const html = sanitizeEmailHtml(definition.html);
+    const template = await transaction.emailTemplate.create({
+      data: {
+        key: "RECENT_LISTINGS",
+        name: definition.name,
+        category: definition.category,
+        draftSubject: definition.subject,
+        draftHtml: html,
+        draftDigest: emailContentDigest(definition.subject, html),
+        createdByUserId: owner.id,
+      },
+    });
+    const revision = await transaction.emailTemplateRevision.create({
+      data: {
+        templateId: template.id,
+        revisionNumber: 1,
+        subject: definition.subject,
+        html,
+        contentDigest: emailContentDigest(definition.subject, html),
+        requiredVariables: [...definition.requiredVariables],
+        publishedByUserId: owner.id,
+        publishedAt: new Date(),
+      },
+    });
+    await transaction.emailTemplate.update({
+      where: { id: template.id },
+      data: { activeRevisionId: revision.id },
+    });
   });
   const organizer = await prisma.organizerProfile.upsert({
     where: { userId: ordinary.id },
@@ -156,18 +185,19 @@ test("guards and operates the focused owner portal on desktop and mobile", async
   await expect(desktopNavigation).toContainText("Overview");
   await expect(desktopNavigation).toContainText("Users");
   await expect(desktopNavigation).toContainText("Listings");
+  await expect(desktopNavigation).toContainText("Email");
   await page.getByLabel("Date range").selectOption("7d");
   await page.getByRole("button", { name: "Apply range" }).click();
   await expect(page).toHaveURL(/range=7d/);
 
   await page.getByRole("link", { name: "Users" }).first().click();
   await page.getByLabel("Search users").fill(userEmail);
-  await page.getByLabel("Filter").selectOption("marketing");
+  await page.getByLabel("Filter").selectOption("all");
   await page.getByRole("button", { name: "Apply" }).click();
   await expect(
     page.getByRole("link", { name: "Marketing organizer" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Export eligible contacts" }).click();
+  await page.getByRole("button", { name: "Export contacts" }).click();
   await expect(
     page.getByRole("heading", { name: /Export 1 current contacts/ }),
   ).toBeVisible();
@@ -195,12 +225,41 @@ test("guards and operates the focused owner portal on desktop and mobile", async
   await page.getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByText(/removed/i).first()).toBeVisible();
 
+  await page.getByRole("link", { name: "Email" }).first().click();
+  await expect(
+    page.getByRole("heading", { name: "Email center" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: /Manage templates/ }).click();
+  await page.getByRole("link", { name: /Recent listings/ }).click();
+  await expect(page.getByText("Sanitized email-safe source")).toBeVisible();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "recent-listings.html",
+    mimeType: "text/html",
+    buffer: Buffer.from(
+      '<!doctype html><html><body><h1>Recent sales</h1>{{{RECENT_LISTINGS_HTML}}}<p><a href="{{{RESEND_UNSUBSCRIBE_URL}}}">Unsubscribe</a></p></body></html>',
+    ),
+  });
+  await expect(page.getByText("Draft autosaved")).toBeVisible();
+  await page.getByRole("button", { name: "Send test" }).click();
+  await expect(page.getByText("Test sent to your admin email")).toBeVisible();
+  await page.getByLabel("Admin password").fill(ownerPassword);
+  await page.getByLabel("Type PUBLISH").fill("PUBLISH");
+  await page.getByRole("button", { name: "Publish revision" }).click();
+  await expect(page.getByText("Template published")).toBeVisible();
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/admin");
   const mobile = page.getByRole("navigation", {
     name: "Mobile admin navigation",
   });
   await expect(mobile).toBeVisible();
-  await expect(mobile.getByRole("link")).toHaveCount(3);
+  await expect(mobile.getByRole("link")).toHaveCount(4);
+  await mobile.getByRole("link", { name: "Email" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Email center" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+  ).toBe(true);
   await ordinaryContext.close();
 });

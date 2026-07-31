@@ -50,6 +50,7 @@ enum OrganizerStatus {
 enum EmailDeliveryKind {
   EMAIL_VERIFICATION
   PASSWORD_RESET
+  PURCHASE_RECEIPT
 
   @@map("email_delivery_kind")
 }
@@ -57,7 +58,11 @@ enum EmailDeliveryKind {
 enum EmailDeliveryStatus {
   PENDING
   SENT
+  DELIVERED
   FAILED
+  BOUNCED
+  COMPLAINED
+  SUPPRESSED
 
   @@map("email_delivery_status")
 }
@@ -106,6 +111,50 @@ enum LocationValidationStatus {
   LOW_CONFIDENCE
 
   @@map("location_validation_status")
+}
+
+enum EmailTemplateCategory {
+  TRANSACTIONAL
+  MARKETING
+
+  @@map("email_template_category")
+}
+
+enum EmailTemplateKey {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  PURCHASE_RECEIPT
+  RECENT_LISTINGS
+
+  @@map("email_template_key")
+}
+
+enum EmailCampaignStatus {
+  DRAFT
+  PREPARING
+  READY
+  DISPATCHING
+  SENT
+  FAILED
+  NEEDS_REVIEW
+
+  @@map("email_campaign_status")
+}
+
+enum EmailCampaignSelectionMode {
+  ALL_ELIGIBLE
+  SELECTED_USERS
+
+  @@map("email_campaign_selection_mode")
+}
+
+enum ResendWebhookProcessingState {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+
+  @@map("resend_webhook_processing_state")
 }
 
 enum LocationConfirmationStatus {
@@ -194,6 +243,10 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
   emailDeliveries         EmailDelivery[]
+  emailTemplatesCreated   EmailTemplate[]          @relation("EmailTemplateCreator")
+  emailRevisionsPublished EmailTemplateRevision[]  @relation("EmailTemplateRevisionPublisher")
+  emailCampaignsCreated   EmailCampaign[]          @relation("EmailCampaignCreator")
+  emailCampaignRecipients EmailCampaignRecipient[]
   organizerProfile        OrganizerProfile?
   termsAcceptedEvents     Event[]                  @relation("EventTermsAcceptedBy")
   eventApprovals          EventApproval[]          @relation("EventApprovalUser")
@@ -224,13 +277,13 @@ model Session {
 }
 
 model MarketingPreference {
-  userId          String                  @id @map("user_id") @db.Uuid
-  consentAt       DateTime?               @map("consent_at") @db.Timestamptz(3)
-  consentVersion  String?                 @map("consent_version") @db.VarChar(50)
-  consentSource   MarketingConsentSource? @map("consent_source")
-  unsubscribedAt  DateTime?               @map("unsubscribed_at") @db.Timestamptz(3)
-  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  userId         String                  @id @map("user_id") @db.Uuid
+  consentAt      DateTime?               @map("consent_at") @db.Timestamptz(3)
+  consentVersion String?                 @map("consent_version") @db.VarChar(50)
+  consentSource  MarketingConsentSource? @map("consent_source")
+  unsubscribedAt DateTime?               @map("unsubscribed_at") @db.Timestamptz(3)
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -282,9 +335,9 @@ model OrganizerProfile {
   createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  events         Event[]
-  eventApprovals EventApproval[]
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events          Event[]
+  eventApprovals  EventApproval[]
   paymentAttempts PaymentAttempt[]
 
   @@index([status])
@@ -347,33 +400,33 @@ model Event {
 }
 
 model EventLocation {
-  id                String                                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  eventId           String                                 @unique @map("event_id") @db.Uuid
-  addressLine1      String                                 @map("address_line_1") @db.VarChar(200)
-  addressLine2      String?                                @map("address_line_2") @db.VarChar(100)
-  city              String                                 @db.VarChar(100)
-  region            String                                 @db.VarChar(100)
-  postalCode        String                                 @map("postal_code") @db.VarChar(20)
-  countryCode       String                                 @map("country_code") @db.Char(2)
-  normalizedAddress String                                 @map("normalized_address") @db.VarChar(500)
-  latitude          Decimal?                               @db.Decimal(9, 6)
-  longitude         Decimal?                               @db.Decimal(9, 6)
-  coordinates       Unsupported("geography(Point, 4326)")?
-  timezone          String                                 @db.VarChar(64)
-  providerPlaceId   String?                                @map("provider_place_id") @db.VarChar(255)
-  providerName      String?                                @map("provider_name") @db.VarChar(50)
-  providerVersion   String?                                @map("provider_version") @db.VarChar(50)
-  providerAttribution String?                              @map("provider_attribution") @db.VarChar(255)
-  resolutionSource  LocationResolutionSource               @default(UNCONFIRMED_DRAFT) @map("resolution_source")
-  confirmationStatus LocationConfirmationStatus             @default(UNCONFIRMED) @map("confirmation_status")
-  confirmedByUserId String?                                @map("confirmed_by_user_id") @db.Uuid
-  confirmedAt       DateTime?                              @map("confirmed_at") @db.Timestamptz(3)
-  publicZone        String                                 @default("bakersfield") @map("public_zone") @db.VarChar(50)
-  precision         String?                                @db.VarChar(50)
-  confidence        Decimal?                               @db.Decimal(5, 4)
-  validationStatus  LocationValidationStatus               @map("validation_status")
-  createdAt         DateTime                               @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime                               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                  String                                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId             String                                 @unique @map("event_id") @db.Uuid
+  addressLine1        String                                 @map("address_line_1") @db.VarChar(200)
+  addressLine2        String?                                @map("address_line_2") @db.VarChar(100)
+  city                String                                 @db.VarChar(100)
+  region              String                                 @db.VarChar(100)
+  postalCode          String                                 @map("postal_code") @db.VarChar(20)
+  countryCode         String                                 @map("country_code") @db.Char(2)
+  normalizedAddress   String                                 @map("normalized_address") @db.VarChar(500)
+  latitude            Decimal?                               @db.Decimal(9, 6)
+  longitude           Decimal?                               @db.Decimal(9, 6)
+  coordinates         Unsupported("geography(Point, 4326)")?
+  timezone            String                                 @db.VarChar(64)
+  providerPlaceId     String?                                @map("provider_place_id") @db.VarChar(255)
+  providerName        String?                                @map("provider_name") @db.VarChar(50)
+  providerVersion     String?                                @map("provider_version") @db.VarChar(50)
+  providerAttribution String?                                @map("provider_attribution") @db.VarChar(255)
+  resolutionSource    LocationResolutionSource               @default(UNCONFIRMED_DRAFT) @map("resolution_source")
+  confirmationStatus  LocationConfirmationStatus             @default(UNCONFIRMED) @map("confirmation_status")
+  confirmedByUserId   String?                                @map("confirmed_by_user_id") @db.Uuid
+  confirmedAt         DateTime?                              @map("confirmed_at") @db.Timestamptz(3)
+  publicZone          String                                 @default("bakersfield") @map("public_zone") @db.VarChar(50)
+  precision           String?                                @db.VarChar(50)
+  confidence          Decimal?                               @db.Decimal(5, 4)
+  validationStatus    LocationValidationStatus               @map("validation_status")
+  createdAt           DateTime                               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime                               @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
@@ -482,11 +535,12 @@ model PaymentAttempt {
   createdAt               DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt               DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  event       Event            @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  organizer   OrganizerProfile @relation(fields: [organizerId], references: [id], onDelete: Restrict)
-  user        User             @relation(fields: [userId], references: [id], onDelete: Restrict)
-  approval    EventApproval    @relation(fields: [approvalId], references: [id], onDelete: Restrict)
-  publication EventPublication?
+  event           Event             @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  organizer       OrganizerProfile  @relation(fields: [organizerId], references: [id], onDelete: Restrict)
+  user            User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  approval        EventApproval     @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+  publication     EventPublication?
+  receiptDelivery EmailDelivery?
 
   @@unique([eventId, attemptGeneration])
   @@index([eventId, createdAt])
@@ -514,16 +568,16 @@ model StripeWebhookEvent {
 }
 
 model EventPublication {
-  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  eventId           String   @unique @map("event_id") @db.Uuid
-  paymentAttemptId  String   @unique @map("payment_attempt_id") @db.Uuid
-  approvedRevision  Int      @map("approved_revision")
-  approvalDigest    String   @map("approval_digest") @db.Char(64)
-  publicId          String   @unique @map("public_id") @db.VarChar(12)
-  canonicalPath     String   @unique @map("canonical_path") @db.VarChar(255)
-  snapshot          Json
-  publishedAt       DateTime @map("published_at") @db.Timestamptz(3)
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId          String   @unique @map("event_id") @db.Uuid
+  paymentAttemptId String   @unique @map("payment_attempt_id") @db.Uuid
+  approvedRevision Int      @map("approved_revision")
+  approvalDigest   String   @map("approval_digest") @db.Char(64)
+  publicId         String   @unique @map("public_id") @db.VarChar(12)
+  canonicalPath    String   @unique @map("canonical_path") @db.VarChar(255)
+  snapshot         Json
+  publishedAt      DateTime @map("published_at") @db.Timestamptz(3)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   event          Event          @relation(fields: [eventId], references: [id], onDelete: Restrict)
   paymentAttempt PaymentAttempt @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
@@ -533,26 +587,149 @@ model EventPublication {
 }
 
 model EmailDelivery {
-  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId            String              @map("user_id") @db.Uuid
-  kind              EmailDeliveryKind
-  status            EmailDeliveryStatus @default(PENDING)
-  provider          String              @default("resend") @db.VarChar(50)
-  providerMessageId String?             @map("provider_message_id") @db.VarChar(255)
-  recipientHash     String              @map("recipient_hash") @db.Char(64)
-  attempts          Int                 @default(0)
-  lastErrorCode     String?             @map("last_error_code") @db.VarChar(100)
-  sentAt            DateTime?           @map("sent_at") @db.Timestamptz(3)
-  failedAt          DateTime?           @map("failed_at") @db.Timestamptz(3)
-  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String              @map("user_id") @db.Uuid
+  kind               EmailDeliveryKind
+  status             EmailDeliveryStatus @default(PENDING)
+  templateRevisionId String?             @map("template_revision_id") @db.Uuid
+  paymentAttemptId   String?             @unique @map("payment_attempt_id") @db.Uuid
+  provider           String              @default("resend") @db.VarChar(50)
+  providerMessageId  String?             @map("provider_message_id") @db.VarChar(255)
+  recipientHash      String              @map("recipient_hash") @db.Char(64)
+  attempts           Int                 @default(0)
+  lastErrorCode      String?             @map("last_error_code") @db.VarChar(100)
+  sentAt             DateTime?           @map("sent_at") @db.Timestamptz(3)
+  deliveredAt        DateTime?           @map("delivered_at") @db.Timestamptz(3)
+  failedAt           DateTime?           @map("failed_at") @db.Timestamptz(3)
+  bouncedAt          DateTime?           @map("bounced_at") @db.Timestamptz(3)
+  complainedAt       DateTime?           @map("complained_at") @db.Timestamptz(3)
+  suppressedAt       DateTime?           @map("suppressed_at") @db.Timestamptz(3)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  templateRevision EmailTemplateRevision? @relation(fields: [templateRevisionId], references: [id], onDelete: Restrict)
+  paymentAttempt   PaymentAttempt?        @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
 
   @@unique([provider, providerMessageId])
   @@index([userId, kind, createdAt])
   @@index([status, createdAt])
+  @@index([templateRevisionId, createdAt])
   @@map("email_deliveries")
+}
+
+model EmailTemplate {
+  id               String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key              EmailTemplateKey?     @unique
+  name             String                @db.VarChar(100)
+  category         EmailTemplateCategory
+  draftSubject     String                @map("draft_subject") @db.VarChar(200)
+  draftHtml        String                @map("draft_html") @db.Text
+  draftDigest      String                @map("draft_digest") @db.Char(64)
+  draftVersion     Int                   @default(1) @map("draft_version")
+  lastTestedDigest String?               @map("last_tested_digest") @db.Char(64)
+  lastTestedAt     DateTime?             @map("last_tested_at") @db.Timestamptz(3)
+  activeRevisionId String?               @unique @map("active_revision_id") @db.Uuid
+  createdByUserId  String                @map("created_by_user_id") @db.Uuid
+  archivedAt       DateTime?             @map("archived_at") @db.Timestamptz(3)
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  createdBy      User                    @relation("EmailTemplateCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  revisions      EmailTemplateRevision[] @relation("EmailTemplateRevisions")
+  activeRevision EmailTemplateRevision?  @relation("ActiveEmailTemplateRevision", fields: [activeRevisionId], references: [id], onDelete: Restrict)
+
+  @@index([category, archivedAt, updatedAt])
+  @@map("email_templates")
+}
+
+model EmailTemplateRevision {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  templateId        String   @map("template_id") @db.Uuid
+  revisionNumber    Int      @map("revision_number")
+  subject           String   @db.VarChar(200)
+  html              String   @db.Text
+  contentDigest     String   @map("content_digest") @db.Char(64)
+  requiredVariables Json     @map("required_variables")
+  publishedByUserId String   @map("published_by_user_id") @db.Uuid
+  publishedAt       DateTime @map("published_at") @db.Timestamptz(3)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  template          EmailTemplate   @relation("EmailTemplateRevisions", fields: [templateId], references: [id], onDelete: Restrict)
+  activeForTemplate EmailTemplate?  @relation("ActiveEmailTemplateRevision")
+  publishedBy       User            @relation("EmailTemplateRevisionPublisher", fields: [publishedByUserId], references: [id], onDelete: Restrict)
+  deliveries        EmailDelivery[]
+  campaigns         EmailCampaign[]
+
+  @@unique([templateId, revisionNumber])
+  @@index([templateId, publishedAt])
+  @@map("email_template_revisions")
+}
+
+model EmailCampaign {
+  id                      String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                    String                     @db.VarChar(100)
+  subject                 String                     @db.VarChar(200)
+  previewText             String?                    @map("preview_text") @db.VarChar(200)
+  status                  EmailCampaignStatus        @default(DRAFT)
+  selectionMode           EmailCampaignSelectionMode @map("selection_mode")
+  templateRevisionId      String                     @map("template_revision_id") @db.Uuid
+  listingSnapshot         Json                       @map("listing_snapshot")
+  createdByUserId         String                     @map("created_by_user_id") @db.Uuid
+  providerSegmentId       String?                    @unique @map("provider_segment_id") @db.VarChar(255)
+  providerContactImportId String?                    @unique @map("provider_contact_import_id") @db.VarChar(255)
+  providerBroadcastId     String?                    @unique @map("provider_broadcast_id") @db.VarChar(255)
+  recipientCount          Int                        @default(0) @map("recipient_count")
+  deliveredCount          Int                        @default(0) @map("delivered_count")
+  bouncedCount            Int                        @default(0) @map("bounced_count")
+  complainedCount         Int                        @default(0) @map("complained_count")
+  suppressedCount         Int                        @default(0) @map("suppressed_count")
+  lastErrorCode           String?                    @map("last_error_code") @db.VarChar(100)
+  version                 Int                        @default(1)
+  testedAt                DateTime?                  @map("tested_at") @db.Timestamptz(3)
+  sentAt                  DateTime?                  @map("sent_at") @db.Timestamptz(3)
+  createdAt               DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  templateRevision EmailTemplateRevision    @relation(fields: [templateRevisionId], references: [id], onDelete: Restrict)
+  createdBy        User                     @relation("EmailCampaignCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  recipients       EmailCampaignRecipient[]
+
+  @@index([status, createdAt])
+  @@index([createdByUserId, createdAt])
+  @@map("email_campaigns")
+}
+
+model EmailCampaignRecipient {
+  campaignId String   @map("campaign_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  campaign EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([campaignId, userId])
+  @@index([userId, createdAt])
+  @@map("email_campaign_recipients")
+}
+
+model ResendWebhookEvent {
+  id                  String                       @id @db.VarChar(255)
+  eventType           String                       @map("event_type") @db.VarChar(100)
+  providerMessageId   String?                      @map("provider_message_id") @db.VarChar(255)
+  providerBroadcastId String?                      @map("provider_broadcast_id") @db.VarChar(255)
+  providerContactId   String?                      @map("provider_contact_id") @db.VarChar(255)
+  occurredAt          DateTime                     @map("occurred_at") @db.Timestamptz(3)
+  processingState     ResendWebhookProcessingState @default(RECEIVED) @map("processing_state")
+  processedAt         DateTime?                    @map("processed_at") @db.Timestamptz(3)
+  failureReason       String?                      @map("failure_reason") @db.VarChar(500)
+  createdAt           DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([processingState, createdAt])
+  @@index([providerMessageId])
+  @@index([providerBroadcastId])
+  @@map("resend_webhook_events")
 }
 
 model AuditEntry {

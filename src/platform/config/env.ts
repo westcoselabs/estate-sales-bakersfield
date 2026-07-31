@@ -125,6 +125,11 @@ export const serverEnvironmentSchema = z
       (value) => (value === "" ? undefined : value),
       providerEnvironmentSchema.optional(),
     ),
+    RESEND_WEBHOOK_SECRET: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(16).optional(),
+    ),
+    EMAIL_CAMPAIGNS_ENABLED: optionalBooleanFlag,
     AUTH_EMAIL_CAPTURE_PATH: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z.string().min(1).optional(),
@@ -216,6 +221,32 @@ export const serverEnvironmentSchema = z
           });
         }
       }
+    }
+
+    if (
+      environment.APP_ENV === "production" &&
+      environment.RESEND_API_KEY &&
+      !environment.RESEND_WEBHOOK_SECRET
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "RESEND_WEBHOOK_SECRET is required when Resend is configured in production",
+        path: ["RESEND_WEBHOOK_SECRET"],
+      });
+    }
+
+    if (
+      environment.EMAIL_CAMPAIGNS_ENABLED &&
+      (environment.APP_ENV !== "production" ||
+        environment.RESEND_RESOURCE_ENV !== "production")
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "EMAIL_CAMPAIGNS_ENABLED requires production application and Resend resources",
+        path: ["EMAIL_CAMPAIGNS_ENABLED"],
+      });
     }
 
     if (environment.APP_ENV === "production") {

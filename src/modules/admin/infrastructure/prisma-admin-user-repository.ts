@@ -48,18 +48,6 @@ function filterWhere(filter: AdminUserFilter): Prisma.UserWhereInput {
           events: { some: { publication: { isNot: null } } },
         },
       };
-    case "marketing":
-      return {
-        role: "USER",
-        status: "ACTIVE",
-        emailVerifiedAt: { not: null },
-        marketingPreference: {
-          is: {
-            consentAt: { not: null },
-            unsubscribedAt: null,
-          },
-        },
-      };
     case "restricted":
       return { status: "RESTRICTED" };
     default:
@@ -68,7 +56,6 @@ function filterWhere(filter: AdminUserFilter): Prisma.UserWhereInput {
 }
 
 const listInclude = {
-  marketingPreference: true,
   organizerProfile: {
     select: {
       events: {
@@ -184,11 +171,9 @@ export class PrismaAdminUserRepository {
     });
   }
 
-  async eligibleExport(search: string, take: number) {
+  async contactExport(search: string, take: number) {
     return this.prisma.user.findMany({
-      where: {
-        AND: [searchWhere(search), filterWhere("marketing")],
-      },
+      where: searchWhere(search),
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take,
       include: listInclude,
@@ -360,10 +345,10 @@ export class PrismaAdminUserRepository {
         actorUserId: input.actorId,
         action: "MARKETING_CONTACTS_EXPORTED",
         targetType: "MARKETING_SEGMENT",
-        targetId: "MARKETING_ELIGIBLE",
+        targetId: "ALL_REGISTERED_USERS",
         requestId: input.requestId,
         metadata: {
-          segment: "MARKETING_ELIGIBLE",
+          segment: "ALL_REGISTERED_USERS",
           searchApplied: input.searched,
           rowCount: input.rowCount,
         },
