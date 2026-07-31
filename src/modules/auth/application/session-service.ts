@@ -6,6 +6,7 @@ import type {
 import type {
   AuditContext,
   OpaqueTokenProvider,
+  ReauthenticateStoredSessionInput,
   SessionRepository,
 } from "./ports";
 import { SESSION_TTL_MS } from "./session-cookie";
@@ -36,18 +37,37 @@ export class SessionService {
     userId: string,
     metadata: SessionMetadata = {},
     audit: AuditContext = {},
+    absoluteTtlMs: number = SESSION_TTL_MS,
   ): Promise<SessionGrant> {
     const now = this.clock();
     const token = this.tokens.generate();
     const session = await this.repository.create({
       userId,
       tokenHash: this.tokens.hash(token),
-      expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
+      expiresAt: new Date(now.getTime() + absoluteTtlMs),
+      passwordAuthenticatedAt: now,
       metadata: boundSessionMetadata(metadata),
       audit,
     });
 
     return { token, session };
+  }
+
+  async reauthenticate(
+    currentToken: string,
+    metadata: SessionMetadata = {},
+    audit: AuditContext = {},
+  ): Promise<SessionGrant | null> {
+    const replacementToken = this.tokens.generate();
+    const input: ReauthenticateStoredSessionInput = {
+      currentTokenHash: this.tokens.hash(currentToken),
+      replacementTokenHash: this.tokens.hash(replacementToken),
+      metadata: boundSessionMetadata(metadata),
+      now: this.clock(),
+      audit,
+    };
+    const session = await this.repository.reauthenticate(input);
+    return session ? { token: replacementToken, session } : null;
   }
 
   async read(token: string | undefined): Promise<CurrentSession | null> {

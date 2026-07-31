@@ -10,9 +10,16 @@ datasource db {
 
 enum UserRole {
   USER
-  ADMIN
+  SUPER_ADMIN
 
   @@map("user_role")
+}
+
+enum MarketingConsentSource {
+  SIGNUP
+  ACCOUNT_SETTINGS
+
+  @@map("marketing_consent_source")
 }
 
 enum AccountStatus {
@@ -183,6 +190,7 @@ model User {
   updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   sessions                Session[]
+  marketingPreference     MarketingPreference?
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
   emailDeliveries         EmailDelivery[]
@@ -194,23 +202,39 @@ model User {
 
   @@index([role])
   @@index([status])
+  @@index([createdAt, id])
   @@map("users")
 }
 
 model Session {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
-  tokenHash   String   @unique @map("token_hash") @db.Char(64)
-  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
-  userAgent   String?  @map("user_agent") @db.VarChar(512)
-  deviceLabel String?  @map("device_label") @db.VarChar(100)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                  String   @map("user_id") @db.Uuid
+  tokenHash               String   @unique @map("token_hash") @db.Char(64)
+  expiresAt               DateTime @map("expires_at") @db.Timestamptz(3)
+  passwordAuthenticatedAt DateTime @map("password_authenticated_at") @db.Timestamptz(3)
+  userAgent               String?  @map("user_agent") @db.VarChar(512)
+  deviceLabel             String?  @map("device_label") @db.VarChar(100)
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
   @@map("sessions")
+}
+
+model MarketingPreference {
+  userId          String                  @id @map("user_id") @db.Uuid
+  consentAt       DateTime?               @map("consent_at") @db.Timestamptz(3)
+  consentVersion  String?                 @map("consent_version") @db.VarChar(50)
+  consentSource   MarketingConsentSource? @map("consent_source")
+  unsubscribedAt  DateTime?               @map("unsubscribed_at") @db.Timestamptz(3)
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("marketing_preferences")
 }
 
 model EmailVerificationToken {
@@ -298,6 +322,7 @@ model Event {
   cancellationReason    String?             @map("cancellation_reason") @db.VarChar(500)
   removedAt             DateTime?           @map("removed_at") @db.Timestamptz(3)
   removalReason         String?             @map("removal_reason") @db.VarChar(500)
+  deletedAt             DateTime?           @map("deleted_at") @db.Timestamptz(3)
   createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -313,8 +338,11 @@ model Event {
   publication        EventPublication?
 
   @@index([organizerId, updatedAt])
+  @@index([organizerId, deletedAt, canceledAt, updatedAt])
   @@index([workflowState, updatedAt])
   @@index([eventType, startsAt])
+  @@index([updatedAt, id])
+  @@index([canceledAt])
   @@map("events")
 }
 
@@ -462,6 +490,7 @@ model PaymentAttempt {
 
   @@unique([eventId, attemptGeneration])
   @@index([eventId, createdAt])
+  @@index([userId, createdAt])
   @@index([checkoutState, paymentState, fulfillmentState, updatedAt])
   @@index([lastReconciledAt])
   @@map("payment_attempts")

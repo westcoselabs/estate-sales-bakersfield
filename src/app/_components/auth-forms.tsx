@@ -54,7 +54,7 @@ function newPasswordValidationMessage(
 
 async function submitJson(
   endpoint: string,
-  body: Readonly<Record<string, string | null>>,
+  body: Readonly<Record<string, string | boolean | null>>,
   method = "POST",
 ): Promise<ApiResponse> {
   const response = await fetch(endpoint, {
@@ -172,6 +172,7 @@ export function SignupForm() {
         email,
         password,
         passwordConfirmation,
+        marketingOptIn: data.get("marketingOptIn") === "on",
       });
       submission.setMessage(
         result.message ??
@@ -275,6 +276,13 @@ export function SignupForm() {
           required
         />
       </Field>
+      <label className="auth-marketing-option">
+        <input name="marketingOptIn" type="checkbox" />
+        <span>
+          Email me occasional updates about estate sales and listing tips. This
+          is optional and I can unsubscribe in account settings.
+        </span>
+      </label>
       <Button loading={submission.pending} type="submit">
         {submission.pending ? "Creating account…" : "Create account"}
       </Button>

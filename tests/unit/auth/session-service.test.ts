@@ -15,6 +15,7 @@ function sessionFixture(id = "session-1"): CurrentSession {
     userId: "user-1",
     expiresAt: new Date("2026-08-15T12:00:00.000Z"),
     createdAt: now,
+    passwordAuthenticatedAt: now,
     metadata: {},
     principal: {
       id: "user-1",
@@ -32,6 +33,7 @@ function dependencies() {
     create: vi.fn(async () => sessionFixture()),
     findActiveByTokenHash: vi.fn(async () => sessionFixture()),
     rotate: vi.fn(async () => sessionFixture("session-2")),
+    reauthenticate: vi.fn(async () => sessionFixture("session-2")),
     deleteCurrent: vi.fn(async () => true),
     deleteOwnedById: vi.fn(async () => true),
     deleteAllForUser: vi.fn(async () => 2),

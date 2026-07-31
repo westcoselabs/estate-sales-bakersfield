@@ -111,6 +111,7 @@ describe("opaque database session primitives", () => {
         userId: user.id,
         tokenHash: tokenProvider.hash(token),
         expiresAt: new Date(Date.now() - 1_000),
+        passwordAuthenticatedAt: new Date(Date.now() - 2_000),
       },
     });
     await expect(sessionService.read(token)).resolves.toBeNull();

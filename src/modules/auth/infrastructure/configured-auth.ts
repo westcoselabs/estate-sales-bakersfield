@@ -17,7 +17,9 @@ import { HmacPrivacyFingerprint } from "./hmac-privacy-fingerprint";
 import { PrismaAccountRepository } from "./prisma-account-repository";
 import { PrismaAuthenticationRateLimiter } from "./prisma-authentication-rate-limiter";
 import { PrismaSessionRepository } from "./prisma-session-repository";
+import { PrismaMarketingPreferenceRepository } from "./prisma-marketing-preference-repository";
 import { ResendEmailService } from "./resend-email-service";
+import { MarketingPreferenceService } from "../application/marketing-preference-service";
 
 function configuredFingerprint(): HmacPrivacyFingerprint {
   const secret = getServerEnvironment().AUTH_FINGERPRINT_SECRET;
@@ -100,6 +102,12 @@ export function createConfiguredAbuseControl(): AuthenticationAbuseControl {
       ...(environment.TEST_RUN_ID ? { scope: environment.TEST_RUN_ID } : {}),
     }),
     configuredFingerprint(),
+  );
+}
+
+export function createConfiguredMarketingPreferenceService(): MarketingPreferenceService {
+  return new MarketingPreferenceService(
+    new PrismaMarketingPreferenceRepository(getPrismaClient()),
   );
 }
 

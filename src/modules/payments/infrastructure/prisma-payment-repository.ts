@@ -647,6 +647,9 @@ export class PrismaPaymentRepository implements PaymentRepository {
               user: { emailVerifiedAt: { not: null } },
             },
             publication: { is: null },
+            canceledAt: null,
+            deletedAt: null,
+            removedAt: null,
             approvalStatus: "APPROVED",
             workflowState: "APPROVED_FOR_PAYMENT",
             currentApprovalId: input.attempt.approvalId,
@@ -815,6 +818,7 @@ export class PrismaPaymentRepository implements PaymentRepository {
         event: {
           eventType: input.eventType,
           canceledAt: null,
+          deletedAt: null,
           removedAt: null,
         },
       },

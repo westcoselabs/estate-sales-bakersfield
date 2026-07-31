@@ -30,26 +30,44 @@ export default async function EventPaymentPage({ params }: Props) {
   return (
     <BuilderShell
       className="payment-page-shell"
-      account={{ displayName: user.displayName }}
+      account={{
+        displayName: user.displayName,
+        isSuperAdmin: user.role === "SUPER_ADMIN",
+      }}
       eyebrow={
-        payment.displayState === "PUBLISHED"
-          ? "Published listing"
-          : paymentCanBeResumed
-            ? "Approved listing publication"
-            : "Payment and publication status"
+        payment.displayState === "CANCELED"
+          ? "Canceled event record"
+          : payment.displayState === "PUBLISHED"
+            ? "Published listing"
+            : paymentCanBeResumed
+              ? "Approved listing publication"
+              : "Payment and publication status"
       }
       title={event.title ?? "Event payment"}
       meta={
         <div className="payment-page-meta">
           <nav aria-label="Listing publication links">
-            <Link href={`/dashboard/events/${eventId}/edit`}>
-              Return to approved draft
-            </Link>
-            <Link href={`/dashboard/events/${eventId}/preview`}>
-              Review listing preview
-            </Link>
+            {payment.displayState === "CANCELED" ? (
+              <Link href="/dashboard/events?view=history">
+                Return to event history
+              </Link>
+            ) : (
+              <>
+                <Link href={`/dashboard/events/${eventId}/edit`}>
+                  Return to approved draft
+                </Link>
+                <Link href={`/dashboard/events/${eventId}/preview`}>
+                  Review listing preview
+                </Link>
+              </>
+            )}
           </nav>
-          {payment.displayState === "PUBLISHED" ? (
+          {payment.displayState === "CANCELED" ? (
+            <p>
+              This paid publication was canceled by the organizer. Its financial
+              record remains and no refund was initiated.
+            </p>
+          ) : payment.displayState === "PUBLISHED" ? (
             <p>This listing is published and no further payment is required.</p>
           ) : paymentCanBeResumed ? (
             <p>

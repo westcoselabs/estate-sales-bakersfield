@@ -139,6 +139,7 @@ function mapEvent(event: EventPayload): EventRecord {
     currentApprovalId: event.currentApprovalId,
     coverPhotoId: event.coverPhotoId,
     canceledAt: event.canceledAt,
+    deletedAt: event.deletedAt,
     removedAt: event.removedAt,
     createdAt: event.createdAt,
     updatedAt: event.updatedAt,
@@ -176,6 +177,25 @@ function auditData(input: {
   };
 }
 
+async function enqueueMediaPurge(
+  transaction: Prisma.TransactionClient,
+  eventId: string,
+  runAt: Date,
+): Promise<void> {
+  const payload = JSON.stringify({ eventId });
+  const deduplicationKey = `event-media-purge:${eventId}`;
+  await transaction.$executeRaw(Prisma.sql`
+    INSERT INTO "durable_jobs" (
+      "queue", "type", "payload", "deduplication_key", "run_at", "max_attempts"
+    ) VALUES (
+      'default', 'EVENT_MEDIA_PURGE', ${payload}::jsonb,
+      ${deduplicationKey}, ${runAt}, 10
+    )
+    ON CONFLICT ("queue", "type", "deduplication_key")
+    DO NOTHING
+  `);
+}
+
 export class PrismaEventRepository implements EventRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -185,7 +205,12 @@ export class PrismaEventRepository implements EventRepository {
     userId: string,
   ): Promise<EventRecord | null> {
     const event = await client.event.findFirst({
-      where: { id: eventId, organizer: { userId } },
+      where: {
+        id: eventId,
+        organizer: { userId },
+        deletedAt: null,
+        removedAt: null,
+      },
       include: eventInclude,
     });
     return event ? mapEvent(event) : null;
@@ -226,7 +251,11 @@ export class PrismaEventRepository implements EventRepository {
 
   async listOwned(userId: string) {
     const events = await this.prisma.event.findMany({
-      where: { organizer: { userId } },
+      where: {
+        organizer: { userId },
+        deletedAt: null,
+        removedAt: null,
+      },
       orderBy: { updatedAt: "desc" },
       include: eventInclude,
     });
@@ -235,6 +264,239 @@ export class PrismaEventRepository implements EventRepository {
 
   async findOwned(eventId: string, userId: string) {
     return this.findOwnedWith(this.prisma, eventId, userId);
+  }
+
+  async findOwnedForLifecycle(eventId: string, userId: string) {
+    const event = await this.prisma.event.findFirst({
+      where: {
+        id: eventId,
+        organizer: { userId },
+        removedAt: null,
+      },
+      include: eventInclude,
+    });
+    return event ? mapEvent(event) : null;
+  }
+
+  async deleteOwnedDraft(
+    input: Parameters<EventRepository["deleteOwnedDraft"]>[0],
+  ) {
+    return this.prisma.$transaction(
+      async (transaction) => {
+        await transaction.$queryRaw(Prisma.sql`
+          SELECT "id" FROM "events"
+          WHERE "id" = ${input.eventId}::uuid
+          FOR UPDATE
+        `);
+        const event = await transaction.event.findFirst({
+          where: {
+            id: input.eventId,
+            organizer: { userId: input.userId },
+            removedAt: null,
+          },
+          select: {
+            id: true,
+            version: true,
+            deletedAt: true,
+            canceledAt: true,
+            publication: { select: { id: true } },
+          },
+        });
+        if (!event) return { disposition: "NOT_FOUND" as const };
+        if (event.deletedAt) return { disposition: "ALREADY_DELETED" as const };
+        if (event.canceledAt || event.publication)
+          return { disposition: "NOT_A_DRAFT" as const };
+        if (event.version !== input.expectedVersion)
+          return { disposition: "STALE_VERSION" as const };
+
+        const unsafePayment = await transaction.paymentAttempt.findFirst({
+          where: {
+            eventId: event.id,
+            OR: [
+              { checkoutState: { in: ["CREATING", "OPEN", "COMPLETE"] } },
+              { paymentState: { in: ["PENDING", "PAID"] } },
+              {
+                fulfillmentState: {
+                  in: [
+                    "PROCESSING",
+                    "RETRYING",
+                    "FULFILLED",
+                    "BLOCKED",
+                    "MANUAL_REVIEW",
+                  ],
+                },
+              },
+            ],
+          },
+          select: { id: true },
+        });
+        if (unsafePayment) return { disposition: "PAYMENT_BLOCKED" as const };
+
+        await transaction.event.update({
+          where: { id: event.id },
+          data: {
+            deletedAt: input.now,
+            version: { increment: 1 },
+          },
+        });
+        await transaction.auditEntry.create({
+          data: auditData({
+            userId: input.userId,
+            action: "EVENT_DRAFT_DELETED",
+            eventId: event.id,
+            requestId: input.audit.requestId,
+          }),
+        });
+        await enqueueMediaPurge(transaction, event.id, input.mediaPurgeAt);
+        return { disposition: "DELETED" as const };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  async cancelOwnedPublished(
+    input: Parameters<EventRepository["cancelOwnedPublished"]>[0],
+  ) {
+    return this.prisma.$transaction(
+      async (transaction) => {
+        await transaction.$queryRaw(Prisma.sql`
+          SELECT "id" FROM "events"
+          WHERE "id" = ${input.eventId}::uuid
+          FOR UPDATE
+        `);
+        const event = await transaction.event.findFirst({
+          where: {
+            id: input.eventId,
+            organizer: { userId: input.userId },
+            deletedAt: null,
+            removedAt: null,
+          },
+          select: {
+            id: true,
+            version: true,
+            canceledAt: true,
+            publication: {
+              select: {
+                id: true,
+                paymentAttempt: {
+                  select: {
+                    id: true,
+                    paymentState: true,
+                    fulfillmentState: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+        if (!event) return { disposition: "NOT_FOUND" as const };
+        if (event.canceledAt)
+          return { disposition: "ALREADY_CANCELED" as const };
+        if (!event.publication)
+          return { disposition: "NOT_PUBLISHED" as const };
+        if (event.version !== input.expectedVersion)
+          return { disposition: "STALE_VERSION" as const };
+        if (
+          event.publication.paymentAttempt.paymentState !== "PAID" ||
+          event.publication.paymentAttempt.fulfillmentState !== "FULFILLED"
+        ) {
+          return { disposition: "PAYMENT_BLOCKED" as const };
+        }
+
+        await transaction.event.update({
+          where: { id: event.id },
+          data: {
+            canceledAt: input.now,
+            cancellationReason: "Canceled by organizer",
+            version: { increment: 1 },
+          },
+        });
+        await transaction.auditEntry.create({
+          data: auditData({
+            userId: input.userId,
+            action: "EVENT_CANCELED",
+            eventId: event.id,
+            requestId: input.audit.requestId,
+            metadata: {
+              publicationId: event.publication.id,
+              paymentAttemptId: event.publication.paymentAttempt.id,
+            },
+          }),
+        });
+        await enqueueMediaPurge(transaction, event.id, input.mediaPurgeAt);
+        return { disposition: "CANCELED" as const };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  async findLifecycleMediaKeys(eventId: string) {
+    const event = await this.prisma.event.findFirst({
+      where: {
+        id: eventId,
+        OR: [{ deletedAt: { not: null } }, { canceledAt: { not: null } }],
+      },
+      select: {
+        photos: {
+          select: {
+            stagingObjectKey: true,
+            dashboardThumbnailKey: true,
+            listingCardKey: true,
+            galleryKey: true,
+            coverDisplayKey: true,
+            uploadReservation: {
+              select: { stagingObjectKey: true },
+            },
+          },
+        },
+      },
+    });
+    if (!event) return [];
+    return event.photos
+      .flatMap((photo) => [
+        photo.stagingObjectKey,
+        photo.dashboardThumbnailKey,
+        photo.listingCardKey,
+        photo.galleryKey,
+        photo.coverDisplayKey,
+        photo.uploadReservation?.stagingObjectKey,
+      ])
+      .filter((key): key is string => Boolean(key));
+  }
+
+  async clearLifecycleMediaKeys(eventId: string) {
+    await this.prisma.$transaction(async (transaction) => {
+      const event = await transaction.event.findFirst({
+        where: {
+          id: eventId,
+          OR: [{ deletedAt: { not: null } }, { canceledAt: { not: null } }],
+        },
+        select: { id: true },
+      });
+      if (!event) return;
+      await transaction.event.update({
+        where: { id: event.id },
+        data: { coverPhotoId: null },
+      });
+      await transaction.uploadReservation.deleteMany({ where: { eventId } });
+      await transaction.eventPhoto.updateMany({
+        where: { eventId },
+        data: {
+          status: "FAILED",
+          stagingObjectKey: null,
+          dashboardThumbnailKey: null,
+          listingCardKey: null,
+          galleryKey: null,
+          coverDisplayKey: null,
+          dashboardThumbnailHash: null,
+          listingCardHash: null,
+          galleryHash: null,
+          coverDisplayHash: null,
+          readyAt: null,
+          errorCode: "MEDIA_PURGED",
+        },
+      });
+    });
   }
 
   private async updateMaterial(input: {
@@ -825,11 +1087,21 @@ export class PrismaEventRepository implements EventRepository {
                   event: {
                     publication: { isNot: null },
                     canceledAt: null,
+                    deletedAt: null,
                     removedAt: null,
                   },
                 },
                 ...(input.userId
-                  ? [{ event: { organizer: { userId: input.userId } } }]
+                  ? [
+                      {
+                        event: {
+                          organizer: { userId: input.userId },
+                          canceledAt: null,
+                          deletedAt: null,
+                          removedAt: null,
+                        },
+                      },
+                    ]
                   : []),
               ],
             }
@@ -844,6 +1116,7 @@ export class PrismaEventRepository implements EventRepository {
           select: {
             publication: { select: { id: true } },
             canceledAt: true,
+            deletedAt: true,
             removedAt: true,
           },
         },
@@ -863,6 +1136,7 @@ export class PrismaEventRepository implements EventRepository {
           public: Boolean(
             photo.event.publication &&
             !photo.event.canceledAt &&
+            !photo.event.deletedAt &&
             !photo.event.removedAt,
           ),
         }

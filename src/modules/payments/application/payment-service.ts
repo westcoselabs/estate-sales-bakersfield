@@ -5,6 +5,7 @@ import {
 } from "@/modules/auth";
 import {
   EventConflictError,
+  EventLifecycleBlockedError,
   EventNotFoundError,
   eventReadiness,
   type EventRecord,
@@ -121,6 +122,8 @@ function statusMessage(state: PaymentStatusDto["displayState"]): string {
     PAYMENT_RECEIVED_PUBLISHING:
       "Payment was received and publication is processing.",
     PUBLISHED: "The approved listing revision is published.",
+    CANCELED:
+      "This paid listing was canceled by the organizer. Payment and publication records are retained; no refund was initiated.",
     PAYMENT_CANCELED: "Checkout was canceled before payment confirmation.",
     CHECKOUT_EXPIRED: "The Checkout Session expired without payment.",
     PAID_PUBLICATION_BLOCKED:
@@ -364,6 +367,75 @@ export class PaymentService {
     );
   }
 
+  async prepareDraftDeletion(
+    principal: AuthPrincipal | null,
+    eventId: string,
+    audit: PaymentAuditContext = {},
+  ): Promise<void> {
+    const user = requireUserPrincipal(principal);
+    if (!DATABASE_ID.test(eventId)) throw new EventNotFoundError();
+    const event = await this.events.findOwnedForLifecycle(eventId, user.id);
+    if (!event) throw new EventNotFoundError();
+    if (event.deletedAt) return;
+    if (event.publication || event.canceledAt) {
+      throw new EventLifecycleBlockedError(
+        "Published events must be canceled instead of deleted.",
+      );
+    }
+    const attempt = await this.payments.findLatestOwnedAttempt(
+      event.id,
+      user.id,
+    );
+    if (!attempt) return;
+    if (
+      ["CANCELED", "EXPIRED", "FAILED"].includes(attempt.checkoutState) &&
+      attempt.paymentState !== "PAID" &&
+      attempt.fulfillmentState === "NOT_STARTED"
+    ) {
+      return;
+    }
+    if (
+      attempt.checkoutState === "CREATING" ||
+      attempt.paymentState === "PENDING" ||
+      attempt.paymentState === "PAID" ||
+      attempt.fulfillmentState !== "NOT_STARTED"
+    ) {
+      throw new EventLifecycleBlockedError(
+        "This draft cannot be deleted while payment is being processed.",
+      );
+    }
+    if (!attempt.stripeCheckoutSessionId) {
+      throw new EventLifecycleBlockedError(
+        "Checkout is still being prepared. Wait a moment and try again.",
+      );
+    }
+    const { stripe } = this.configured();
+    const session = await stripe.retrieveCheckout(
+      attempt.stripeCheckoutSessionId,
+    );
+    if (session.paymentStatus === "PAID" || session.status === "COMPLETE") {
+      await this.fulfillSession(session, audit);
+      throw new EventLifecycleBlockedError(
+        "Payment completed while deletion was requested. Review the publication status before continuing.",
+      );
+    }
+    if (session.status === "OPEN") {
+      await stripe.expireCheckout(session.id);
+      await this.payments.markAttemptCanceled({
+        attemptId: attempt.id,
+        userId: user.id,
+        audit,
+      });
+      return;
+    }
+    await this.payments.markAttemptExpired({
+      attemptId: attempt.id,
+      expectedVersion: attempt.version,
+      reconciledAt: this.now(),
+      audit,
+    });
+  }
+
   async status(
     principal: AuthPrincipal | null,
     eventId: string,
@@ -375,7 +447,8 @@ export class PaymentService {
       this.payments.findPublicationForEvent(event.id),
     ]);
     let displayState: PaymentStatusDto["displayState"];
-    if (publication) displayState = "PUBLISHED";
+    if (event.canceledAt) displayState = "CANCELED";
+    else if (publication) displayState = "PUBLISHED";
     else if (!attempt) {
       displayState =
         event.approvalStatus === "APPROVED"
@@ -718,6 +791,37 @@ export class PaymentService {
     await this.payments.markAttemptCanceled({
       attemptId,
       userId: user.id,
+      audit,
+    });
+  }
+
+  async expireOpenCheckoutForAdminRemoval(
+    eventId: string,
+    audit: PaymentAuditContext = {},
+  ): Promise<void> {
+    if (!DATABASE_ID.test(eventId)) return;
+    const attempt = await this.payments.findActiveAttempt(eventId);
+    if (
+      !attempt?.stripeCheckoutSessionId ||
+      attempt.paymentState === "PAID"
+    ) {
+      return;
+    }
+    const { stripe } = this.configured();
+    const session = await stripe.retrieveCheckout(
+      attempt.stripeCheckoutSessionId,
+    );
+    if (session.paymentStatus === "PAID" || session.status === "COMPLETE") {
+      await this.fulfillSession(session, audit);
+      return;
+    }
+    if (session.status === "OPEN") {
+      await stripe.expireCheckout(session.id);
+    }
+    await this.payments.markAttemptExpired({
+      attemptId: attempt.id,
+      expectedVersion: attempt.version,
+      reconciledAt: this.now(),
       audit,
     });
   }

@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 
 import {
-  requireAdminPrincipal,
+  requireSuperAdminPrincipal,
   requireUserPrincipal,
   requireVerifiedPublishingPrincipal,
   type AuthPrincipal,
@@ -17,6 +17,7 @@ import {
 
 import {
   EventConflictError,
+  EventLifecycleBlockedError,
   EventNotFoundError,
   EventStateError,
   EventValidationError,
@@ -88,6 +89,7 @@ function listItem(event: EventRecord): EventListItemDto {
     readyPhotoCount: readyPhotos.length,
     hasReadyCover: readyPhotos.some((photo) => photo.id === event.coverPhotoId),
     approvalReady: readiness.ready,
+    canceledAt: event.canceledAt?.toISOString() ?? null,
     version: event.version,
     updatedAt: event.updatedAt.toISOString(),
   };
@@ -162,6 +164,28 @@ export class EventService {
     return result;
   }
 
+  private confirmationPhrase(event: EventRecord): string {
+    return event.title ?? "DELETE";
+  }
+
+  private assertLifecycleConfirmation(
+    event: EventRecord,
+    confirmation: string,
+  ): void {
+    const expected = this.confirmationPhrase(event);
+    const valid =
+      event.title !== null
+        ? confirmation === expected
+        : confirmation.trim().toUpperCase() === expected;
+    if (!valid) {
+      throw new EventValidationError(
+        event.title !== null
+          ? "Type the exact event title to confirm this action."
+          : "Type DELETE to confirm this action.",
+      );
+    }
+  }
+
   private assertEditable(event: EventRecord): void {
     if (event.publication) {
       throw new EventStateError(
@@ -199,6 +223,99 @@ export class EventService {
   ): Promise<EventEditorDto> {
     const user = requireUserPrincipal(principal);
     return toEventEditorDto(await this.loadOwned(eventId, user.id));
+  }
+
+  async deleteDraft(
+    principal: AuthPrincipal | null,
+    eventId: string,
+    input: {
+      readonly expectedVersion: number;
+      readonly confirmation: string;
+    },
+    audit: EventAuditContext = {},
+  ): Promise<{ readonly deleted: true }> {
+    const user = requireUserPrincipal(principal);
+    if (!DATABASE_ID.test(eventId)) throw new EventNotFoundError();
+    const target = await this.events.findOwnedForLifecycle(eventId, user.id);
+    if (!target) throw new EventNotFoundError();
+    this.assertLifecycleConfirmation(target, input.confirmation);
+    const now = new Date();
+    const result = await this.events.deleteOwnedDraft({
+      eventId,
+      userId: user.id,
+      expectedVersion: input.expectedVersion,
+      now,
+      mediaPurgeAt: new Date(now.getTime() + 11 * 60_000),
+      audit,
+    });
+    if (
+      result.disposition === "DELETED" ||
+      result.disposition === "ALREADY_DELETED"
+    ) {
+      return { deleted: true };
+    }
+    if (result.disposition === "NOT_FOUND") throw new EventNotFoundError();
+    if (result.disposition === "STALE_VERSION") throw new EventConflictError();
+    if (result.disposition === "NOT_A_DRAFT") {
+      throw new EventLifecycleBlockedError(
+        "Published events must be canceled instead of deleted.",
+      );
+    }
+    throw new EventLifecycleBlockedError(
+      "This draft cannot be deleted while payment is being processed.",
+    );
+  }
+
+  async cancelPublished(
+    principal: AuthPrincipal | null,
+    eventId: string,
+    input: {
+      readonly expectedVersion: number;
+      readonly confirmation: string;
+    },
+    audit: EventAuditContext = {},
+  ): Promise<{ readonly canceled: true }> {
+    const user = requireUserPrincipal(principal);
+    if (!DATABASE_ID.test(eventId)) throw new EventNotFoundError();
+    const target = await this.events.findOwnedForLifecycle(eventId, user.id);
+    if (!target) throw new EventNotFoundError();
+    this.assertLifecycleConfirmation(target, input.confirmation);
+    const now = new Date();
+    const result = await this.events.cancelOwnedPublished({
+      eventId,
+      userId: user.id,
+      expectedVersion: input.expectedVersion,
+      now,
+      mediaPurgeAt: new Date(now.getTime() + 11 * 60_000),
+      audit,
+    });
+    if (
+      result.disposition === "CANCELED" ||
+      result.disposition === "ALREADY_CANCELED"
+    ) {
+      return { canceled: true };
+    }
+    if (result.disposition === "NOT_FOUND") throw new EventNotFoundError();
+    if (result.disposition === "STALE_VERSION") throw new EventConflictError();
+    if (result.disposition === "NOT_PUBLISHED") {
+      throw new EventLifecycleBlockedError(
+        "Only paid published events can be canceled.",
+      );
+    }
+    throw new EventLifecycleBlockedError(
+      "This event cannot be canceled while payment or publication is still being processed.",
+    );
+  }
+
+  async purgeLifecycleMedia(eventId: string): Promise<void> {
+    if (!DATABASE_ID.test(eventId)) {
+      throw new Error("INVALID_EVENT_MEDIA_PURGE_PAYLOAD");
+    }
+    const keys = [
+      ...new Set(await this.events.findLifecycleMediaKeys(eventId)),
+    ].map(parseMediaObjectKey);
+    if (keys.length > 0) await this.media.deleteMany(keys);
+    await this.events.clearLifecycleMediaKeys(eventId);
   }
 
   async updateDetails(
@@ -880,7 +997,9 @@ export class EventService {
     }
     const user = principal?.status === "ACTIVE" ? principal : null;
     const administrator =
-      user?.role === "ADMIN" ? Boolean(requireAdminPrincipal(user)) : false;
+      user?.role === "SUPER_ADMIN"
+        ? Boolean(requireSuperAdminPrincipal(user))
+        : false;
     const media = await this.events.findPhotoVariantForPrincipal({
       photoId,
       variant,

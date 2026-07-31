@@ -20,11 +20,15 @@ export default async function EventPreviewPage({ params }: Props) {
   const { eventId } = await params;
   const service = createConfiguredEventService();
   const editor = await service.get(user, eventId);
+  const account = {
+    displayName: user.displayName,
+    isSuperAdmin: user.role === "SUPER_ADMIN",
+  };
 
   if (!editor.readiness.ready) {
     return (
       <BuilderShell
-        account={{ displayName: user.displayName }}
+        account={account}
         eyebrow="Listing preview"
         title="Preview is not ready"
         backHref={`/dashboard/events/${eventId}/edit`}
@@ -54,7 +58,7 @@ export default async function EventPreviewPage({ params }: Props) {
 
   return (
     <BuilderShell
-      account={{ displayName: user.displayName }}
+      account={account}
       eyebrow="Exact future listing preview"
       title={preview.title}
       backHref={`/dashboard/events/${eventId}/edit`}

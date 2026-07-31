@@ -15,6 +15,7 @@ export interface CreateStoredSessionInput {
   readonly userId: string;
   readonly tokenHash: string;
   readonly expiresAt: Date;
+  readonly passwordAuthenticatedAt: Date;
   readonly metadata: SessionMetadata;
   readonly audit: AuditContext;
 }
@@ -28,6 +29,14 @@ export interface RotateStoredSessionInput {
   readonly audit: AuditContext;
 }
 
+export interface ReauthenticateStoredSessionInput {
+  readonly currentTokenHash: string;
+  readonly replacementTokenHash: string;
+  readonly metadata: SessionMetadata;
+  readonly now: Date;
+  readonly audit: AuditContext;
+}
+
 export interface SessionRepository {
   create(input: CreateStoredSessionInput): Promise<CurrentSession>;
   findActiveByTokenHash(
@@ -35,6 +44,9 @@ export interface SessionRepository {
     now: Date,
   ): Promise<CurrentSession | null>;
   rotate(input: RotateStoredSessionInput): Promise<CurrentSession | null>;
+  reauthenticate(
+    input: ReauthenticateStoredSessionInput,
+  ): Promise<CurrentSession | null>;
   deleteCurrent(tokenHash: string, audit: AuditContext): Promise<boolean>;
   deleteOwnedById(
     userId: string,
@@ -98,6 +110,8 @@ export interface AccountRepository {
     readonly verificationTokenHash: string;
     readonly verificationExpiresAt: Date;
     readonly recipientHash: string;
+    readonly marketingOptIn: boolean;
+    readonly consentAt: Date;
     readonly audit: AuditContext;
   }): Promise<
     | {
@@ -111,7 +125,11 @@ export interface AccountRepository {
     normalizedEmail: string,
   ): Promise<AuthenticationAccount | null>;
   updatePasswordHash(userId: string, passwordHash: string): Promise<void>;
-  recordLogin(userId: string, audit: AuditContext): Promise<void>;
+  recordLogin(
+    userId: string,
+    superAdmin: boolean,
+    audit: AuditContext,
+  ): Promise<void>;
   issueVerification(input: {
     readonly normalizedEmail: string;
     readonly tokenHash: string;

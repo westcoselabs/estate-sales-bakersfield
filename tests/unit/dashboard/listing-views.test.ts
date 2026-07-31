@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  listingLifecycleAction,
   listingMatches,
   listingPrimaryAction,
 } from "@/app/dashboard/_components/listing-views";
@@ -21,6 +22,8 @@ function listing(displayState: PaymentDisplayState): DashboardListing {
       readyPhotoCount: 0,
       hasReadyCover: false,
       approvalReady: false,
+      canceledAt:
+        displayState === "CANCELED" ? "2026-07-24T12:00:00.000Z" : null,
       version: 1,
       updatedAt: "2026-07-23T12:00:00.000Z",
     },
@@ -56,6 +59,8 @@ describe("dashboard listing views", () => {
       true,
     );
     expect(listingMatches(listing("PUBLISHED"), "published")).toBe(true);
+    expect(listingMatches(listing("CANCELED"), "history")).toBe(true);
+    expect(listingMatches(listing("CANCELED"), "all")).toBe(false);
   });
 
   it("uses recovery, review, edit, and live-listing destinations", () => {
@@ -72,5 +77,23 @@ describe("dashboard listing views", () => {
       href: "/estate-sales/test-sale",
       label: "View live listing",
     });
+    expect(listingPrimaryAction(listing("CANCELED"))).toEqual({
+      href: "/dashboard/events/11111111-1111-4111-8111-111111111111/payment",
+      label: "View record",
+    });
+  });
+
+  it("offers only lifecycle actions that are safe for the current state", () => {
+    expect(listingLifecycleAction(listing("DRAFT_INCOMPLETE"))).toEqual({
+      kind: "delete",
+    });
+    expect(listingLifecycleAction(listing("PUBLISHED"))).toEqual({
+      kind: "cancel",
+    });
+    expect(listingLifecycleAction(listing("PAYMENT_PENDING"))).toMatchObject({
+      kind: "delete",
+      disabledReason: expect.stringContaining("payment"),
+    });
+    expect(listingLifecycleAction(listing("CANCELED"))).toBeNull();
   });
 });

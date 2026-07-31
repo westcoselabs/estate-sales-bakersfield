@@ -27,7 +27,7 @@ type StoredSession = Awaited<
     displayName: string;
     normalizedEmail: string;
     emailVerifiedAt: Date | null;
-    role: "USER" | "ADMIN";
+    role: "USER" | "SUPER_ADMIN";
     status: "ACTIVE" | "RESTRICTED" | "DISABLED";
   };
 };
@@ -38,6 +38,7 @@ function mapSession(session: StoredSession): CurrentSession {
     userId: session.userId,
     expiresAt: session.expiresAt,
     createdAt: session.createdAt,
+    passwordAuthenticatedAt: session.passwordAuthenticatedAt,
     metadata: {
       ...(session.userAgent ? { userAgent: session.userAgent } : {}),
       ...(session.deviceLabel ? { deviceLabel: session.deviceLabel } : {}),
@@ -67,6 +68,7 @@ export class PrismaSessionRepository implements SessionRepository {
           userId: input.userId,
           tokenHash: input.tokenHash,
           expiresAt: input.expiresAt,
+          passwordAuthenticatedAt: input.passwordAuthenticatedAt,
           ...(input.metadata.userAgent
             ? { userAgent: input.metadata.userAgent }
             : {}),
@@ -125,6 +127,7 @@ export class PrismaSessionRepository implements SessionRepository {
           userId: current.userId,
           tokenHash: input.replacementTokenHash,
           expiresAt: input.replacementExpiresAt,
+          passwordAuthenticatedAt: current.passwordAuthenticatedAt,
           ...(input.metadata.userAgent
             ? { userAgent: input.metadata.userAgent }
             : {}),
@@ -139,6 +142,56 @@ export class PrismaSessionRepository implements SessionRepository {
         data: {
           actorUserId: auditActor(input.audit, current.userId),
           action: "SESSION_ROTATED",
+          targetType: "SESSION",
+          targetId: replacement.id,
+          ...(input.audit.requestId
+            ? { requestId: input.audit.requestId }
+            : {}),
+          metadata: { previousSessionId: current.id },
+        },
+      });
+      return mapSession(replacement);
+    });
+  }
+
+  async reauthenticate(
+    input: Parameters<SessionRepository["reauthenticate"]>[0],
+  ): Promise<CurrentSession | null> {
+    return this.prisma.$transaction(async (transaction) => {
+      const current = await transaction.session.findFirst({
+        where: {
+          tokenHash: input.currentTokenHash,
+          expiresAt: { gt: input.now },
+          user: {
+            role: "SUPER_ADMIN",
+            status: "ACTIVE",
+            emailVerifiedAt: { not: null },
+          },
+        },
+        include: { user: { select: principalSelection } },
+      });
+      if (!current) return null;
+
+      const replacement = await transaction.session.create({
+        data: {
+          userId: current.userId,
+          tokenHash: input.replacementTokenHash,
+          expiresAt: current.expiresAt,
+          passwordAuthenticatedAt: input.now,
+          ...(input.metadata.userAgent
+            ? { userAgent: input.metadata.userAgent }
+            : {}),
+          ...(input.metadata.deviceLabel
+            ? { deviceLabel: input.metadata.deviceLabel }
+            : {}),
+        },
+        include: { user: { select: principalSelection } },
+      });
+      await transaction.session.delete({ where: { id: current.id } });
+      await transaction.auditEntry.create({
+        data: {
+          actorUserId: current.userId,
+          action: "SUPER_ADMIN_REAUTHENTICATED",
           targetType: "SESSION",
           targetId: replacement.id,
           ...(input.audit.requestId

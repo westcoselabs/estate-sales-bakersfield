@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { cleanupConfiguredAuthenticationRateLimits } from "@/modules/auth";
+import { createConfiguredEventService } from "@/modules/events";
 import { createConfiguredPaymentService } from "@/modules/payments";
 import { getPrismaClient } from "@/platform/database/client";
 
@@ -13,6 +14,7 @@ export async function runConfiguredJobBatch(limit = 10) {
   const rateLimitBucketsDeleted =
     await cleanupConfiguredAuthenticationRateLimits();
   const paymentService = createConfiguredPaymentService();
+  const eventService = createConfiguredEventService();
   const reconciliationCandidatesEnqueued =
     await paymentService.enqueueReconciliationCandidates(50);
   const jobs = await runJobBatch(
@@ -28,6 +30,17 @@ export async function runConfiguredJobBatch(limit = 10) {
           throw new Error("INVALID_PAYMENT_RECONCILIATION_PAYLOAD");
         }
         await paymentService.reconcileAttempt(payload.attemptId);
+      },
+      EVENT_MEDIA_PURGE: async (payload) => {
+        if (
+          !payload ||
+          typeof payload !== "object" ||
+          !("eventId" in payload) ||
+          typeof payload.eventId !== "string"
+        ) {
+          throw new Error("INVALID_EVENT_MEDIA_PURGE_PAYLOAD");
+        }
+        await eventService.purgeLifecycleMedia(payload.eventId);
       },
     },
     {

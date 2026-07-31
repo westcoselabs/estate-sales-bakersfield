@@ -8,6 +8,7 @@ export {
   createEventSchema,
   eventApprovalSchema,
   eventDetailsSchema,
+  eventLifecycleMutationSchema,
   eventLocationSchema,
   eventScheduleSchema,
   eventTypeSchema,
@@ -26,6 +27,7 @@ export {
 export { approvalDigest } from "./application/approval";
 export {
   EventConflictError,
+  EventLifecycleBlockedError,
   EventNotFoundError,
   EventStateError,
   EventValidationError,

@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/icons";
 export interface ShellAccount {
   readonly displayName: string;
   readonly photoUrl?: string | null;
+  readonly isSuperAdmin?: boolean;
 }
 
 function initials(name: string): string {
@@ -103,6 +104,11 @@ export function AccountMenu({
         <Link href="/dashboard">
           <Icon name="home" /> Dashboard
         </Link>
+        {account.isSuperAdmin ? (
+          <Link href="/admin">
+            <Icon name="shield" /> Admin
+          </Link>
+        ) : null}
         <Link href="/dashboard/profile">
           <Icon name="user" /> Profile
         </Link>

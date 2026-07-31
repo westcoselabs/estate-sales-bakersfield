@@ -1,4 +1,6 @@
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const SUPER_ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+export const RECENT_PASSWORD_TTL_MS = 15 * 60 * 1000;
 
 export interface SessionCookieOptions {
   readonly expires: Date;

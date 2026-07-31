@@ -47,6 +47,40 @@ export interface EventRepository {
   }): Promise<EventRecord>;
   listOwned(userId: string): Promise<readonly EventRecord[]>;
   findOwned(eventId: string, userId: string): Promise<EventRecord | null>;
+  findOwnedForLifecycle(
+    eventId: string,
+    userId: string,
+  ): Promise<EventRecord | null>;
+  deleteOwnedDraft(input: {
+    readonly eventId: string;
+    readonly userId: string;
+    readonly expectedVersion: number;
+    readonly now: Date;
+    readonly mediaPurgeAt: Date;
+    readonly audit: EventAuditContext;
+  }): Promise<
+    | { readonly disposition: "DELETED" | "ALREADY_DELETED" }
+    | {
+        readonly disposition:
+          "NOT_FOUND" | "STALE_VERSION" | "NOT_A_DRAFT" | "PAYMENT_BLOCKED";
+      }
+  >;
+  cancelOwnedPublished(input: {
+    readonly eventId: string;
+    readonly userId: string;
+    readonly expectedVersion: number;
+    readonly now: Date;
+    readonly mediaPurgeAt: Date;
+    readonly audit: EventAuditContext;
+  }): Promise<
+    | { readonly disposition: "CANCELED" | "ALREADY_CANCELED" }
+    | {
+        readonly disposition:
+          "NOT_FOUND" | "STALE_VERSION" | "NOT_PUBLISHED" | "PAYMENT_BLOCKED";
+      }
+  >;
+  findLifecycleMediaKeys(eventId: string): Promise<readonly string[]>;
+  clearLifecycleMediaKeys(eventId: string): Promise<void>;
   updateDetails(input: {
     readonly eventId: string;
     readonly userId: string;

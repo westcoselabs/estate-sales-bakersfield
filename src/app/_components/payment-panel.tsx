@@ -31,6 +31,7 @@ function stateTitle(state: PaymentStatusDto["displayState"]): string {
     PAYMENT_PENDING: "Payment pending",
     PAYMENT_RECEIVED_PUBLISHING: "Publishing",
     PUBLISHED: "Published",
+    CANCELED: "Canceled",
     PAYMENT_CANCELED: "Payment canceled",
     CHECKOUT_EXPIRED: "Checkout expired",
     PAID_PUBLICATION_BLOCKED: "Publication needs attention",
@@ -43,6 +44,7 @@ function stateTone(
   state: PaymentStatusDto["displayState"],
 ): "neutral" | "info" | "success" | "warning" | "error" {
   if (state === "PUBLISHED") return "success";
+  if (state === "CANCELED") return "warning";
   if (
     state === "PAID_PUBLICATION_BLOCKED" ||
     state === "MANUAL_REVIEW_REQUIRED"
@@ -153,11 +155,13 @@ export function PaymentPanel({
   const fixturePrice = Boolean(status.price?.fixture);
   const tone = stateTone(status.displayState);
   const panelTitle =
-    status.displayState === "PUBLISHED"
-      ? "Your listing is live"
-      : canPay
-        ? "Finish publishing your listing"
-        : "Publication status";
+    status.displayState === "CANCELED"
+      ? "Canceled event record"
+      : status.displayState === "PUBLISHED"
+        ? "Your listing is live"
+        : canPay
+          ? "Finish publishing your listing"
+          : "Publication status";
 
   return (
     <section className="payment-panel" aria-labelledby="payment-panel-title">
@@ -268,7 +272,7 @@ export function PaymentPanel({
             {busy ? "Opening checkout" : checkoutAction}
           </Button>
         ) : null}
-        {status.canonicalPath ? (
+        {status.canonicalPath && status.displayState !== "CANCELED" ? (
           <Link className="button-link" href={status.canonicalPath}>
             View live listing
           </Link>

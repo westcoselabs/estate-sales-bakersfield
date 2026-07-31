@@ -6,6 +6,7 @@ import { EmailVerificationRequiredError } from "@/modules/auth/domain/errors";
 import {
   EventConflictError,
   EventNotFoundError,
+  EventValidationError,
 } from "@/modules/events/domain/errors";
 import { EventService } from "@/modules/events/application/event-service";
 import { PUBLISHING_TERMS_VERSION } from "@/modules/events/application/policy";
@@ -664,6 +665,90 @@ describe("Phase 3 event builder against isolated Test Neon", () => {
     await expect(service.get(other, created.id)).rejects.toBeInstanceOf(
       EventNotFoundError,
     );
+  });
+
+  it("soft-deletes only a confirmed abandoned draft and queues media purge", async () => {
+    const created = await service.create(owner, "ESTATE_SALE");
+    const titled = await service.updateDetails(owner, created.id, {
+      expectedVersion: created.version,
+      title: "Confirmed deletion fixture",
+      description:
+        "A sufficiently detailed draft description used to verify safe deletion.",
+    });
+
+    await expect(
+      service.deleteDraft(owner, titled.id, {
+        expectedVersion: titled.version,
+        confirmation: "confirmed deletion fixture",
+      }),
+    ).rejects.toBeInstanceOf(EventValidationError);
+    await expect(
+      service.deleteDraft(other, titled.id, {
+        expectedVersion: titled.version,
+        confirmation: titled.title!,
+      }),
+    ).rejects.toBeInstanceOf(EventNotFoundError);
+    await expect(
+      service.deleteDraft(
+        owner,
+        titled.id,
+        {
+          expectedVersion: titled.version,
+          confirmation: titled.title!,
+        },
+        { requestId: "phase3-safe-draft-delete" },
+      ),
+    ).resolves.toEqual({ deleted: true });
+
+    await expect(service.get(owner, titled.id)).rejects.toBeInstanceOf(
+      EventNotFoundError,
+    );
+    expect(await service.list(owner)).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: titled.id })]),
+    );
+    await expect(
+      prisma.event.findUnique({
+        where: { id: titled.id },
+        select: { deletedAt: true, canceledAt: true, removedAt: true },
+      }),
+    ).resolves.toMatchObject({
+      deletedAt: expect.any(Date),
+      canceledAt: null,
+      removedAt: null,
+    });
+    await expect(
+      prisma.auditEntry.findFirst({
+        where: {
+          targetId: titled.id,
+          action: "EVENT_DRAFT_DELETED",
+        },
+        select: { requestId: true },
+      }),
+    ).resolves.toEqual({ requestId: "phase3-safe-draft-delete" });
+    await expect(
+      prisma.durableJob.findUnique({
+        where: {
+          queue_type_deduplicationKey: {
+            queue: "default",
+            type: "EVENT_MEDIA_PURGE",
+            deduplicationKey: `event-media-purge:${titled.id}`,
+          },
+        },
+        select: { status: true, payload: true, runAt: true },
+      }),
+    ).resolves.toMatchObject({
+      status: "PENDING",
+      payload: { eventId: titled.id },
+      runAt: expect.any(Date),
+    });
+
+    const untitled = await service.create(owner, "YARD_SALE");
+    await expect(
+      service.deleteDraft(owner, untitled.id, {
+        expectedVersion: untitled.version,
+        confirmation: "Delete",
+      }),
+    ).resolves.toEqual({ deleted: true });
   });
 
   it("database constraints reject duplicate public IDs and cross-event covers", async () => {

@@ -8,6 +8,7 @@ export {
   cleanupConfiguredAuthenticationRateLimits,
   createConfiguredAbuseControl,
   createConfiguredAuthenticationWorkflow,
+  createConfiguredMarketingPreferenceService,
   createConfiguredSessionService,
 } from "./infrastructure/configured-auth";
 export {
@@ -15,7 +16,7 @@ export {
   getCurrentSession,
   getCurrentSessionToken,
   getCurrentUser,
-  requireAdmin,
+  requireSuperAdmin,
   requireUser,
   requireVerifiedPublishingUser,
   setSessionCookie,
@@ -48,7 +49,8 @@ export {
 } from "./domain/errors";
 export { normalizeEmail } from "./domain/email";
 export {
-  requireAdminPrincipal,
+  requireRecentSuperAdminSession,
+  requireSuperAdminPrincipal,
   requireUserPrincipal,
   requireVerifiedPublishingPrincipal,
 } from "./application/guards";
@@ -57,6 +59,7 @@ export {
   loginSchema,
   passwordResetSchema,
   registrationSchema,
+  superAdminReauthenticationSchema,
   tokenSchema,
 } from "./application/schemas";
 export { safeApplicationPath } from "./application/redirects";
@@ -65,6 +68,13 @@ export {
   AuthenticationAbuseControl,
 } from "./application/abuse-control";
 export { SessionService } from "./application/session-service";
+export {
+  MarketingPreferenceService,
+} from "./application/marketing-preference-service";
+export type {
+  MarketingPreferenceProjection,
+  MarketingPreferenceRepository,
+} from "./application/marketing-preference-service";
 export { SingleUseTokenService } from "./application/single-use-token-service";
 export {
   AuthenticationWorkflowService,
@@ -74,7 +84,9 @@ export {
   getExpiredSessionCookieOptions,
   getSessionCookieName,
   getSessionCookieOptions,
+  RECENT_PASSWORD_TTL_MS,
   SESSION_TTL_MS,
+  SUPER_ADMIN_SESSION_TTL_MS,
 } from "./application/session-cookie";
 export type {
   AuditContext,

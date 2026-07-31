@@ -34,6 +34,7 @@ export const registrationSchema = z
     email: emailSchema,
     password: passwordSchema,
     passwordConfirmation: passwordSchema,
+    marketingOptIn: z.boolean().optional().default(false),
   })
   .refine((value) => value.password === value.passwordConfirmation, {
     message: "Passwords do not match",
@@ -44,6 +45,12 @@ export const loginSchema = z.object({
   email: emailSchema,
   password: z.string().max(128),
 });
+
+export const superAdminReauthenticationSchema = z
+  .object({
+    password: z.string().min(1).max(128),
+  })
+  .strict();
 
 export const emailRequestSchema = z.object({
   email: emailSchema,
@@ -66,5 +73,8 @@ export const passwordResetSchema = z
 
 export type RegistrationInput = z.infer<typeof registrationSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type SuperAdminReauthenticationInput = z.infer<
+  typeof superAdminReauthenticationSchema
+>;
 export type EmailRequestInput = z.infer<typeof emailRequestSchema>;
 export type PasswordResetInput = z.infer<typeof passwordResetSchema>;

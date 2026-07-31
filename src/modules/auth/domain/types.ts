@@ -1,4 +1,4 @@
-export type UserRole = "USER" | "ADMIN";
+export type UserRole = "USER" | "SUPER_ADMIN";
 export type AccountStatus = "ACTIVE" | "RESTRICTED" | "DISABLED";
 
 export interface AuthPrincipal {
@@ -20,6 +20,7 @@ export interface CurrentSession {
   readonly userId: string;
   readonly expiresAt: Date;
   readonly createdAt: Date;
+  readonly passwordAuthenticatedAt: Date;
   readonly principal: AuthPrincipal;
   readonly metadata: SessionMetadata;
 }

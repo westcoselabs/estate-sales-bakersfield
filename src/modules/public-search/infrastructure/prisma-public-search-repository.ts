@@ -57,6 +57,7 @@ export class PrismaPublicSearchRepository implements PublicSearchRepository {
       INNER JOIN "events" AS source_event ON source_event."id" = publication."event_id"
       INNER JOIN "event_locations" AS location ON location."event_id" = source_event."id"
       WHERE source_event."canceled_at" IS NULL
+        AND source_event."deleted_at" IS NULL
         AND source_event."removed_at" IS NULL
         AND ${endsAt} > ${input.activeAfter}
         AND (${input.eventType}::text IS NULL OR ${eventType} = ${input.eventType}::text)

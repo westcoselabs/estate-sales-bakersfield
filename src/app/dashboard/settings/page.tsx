@@ -8,7 +8,13 @@ import {
 } from "@/app/_components/auth-forms";
 import { DashboardShell } from "@/components/shells/shells";
 import { Icon } from "@/components/ui/icons";
-import { createConfiguredSessionService, getCurrentUser } from "@/modules/auth";
+import {
+  createConfiguredMarketingPreferenceService,
+  createConfiguredSessionService,
+  getCurrentUser,
+} from "@/modules/auth";
+
+import { MarketingPreference } from "./marketing-preference";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +24,12 @@ export default async function SettingsPage() {
     redirect("/login?next=/dashboard/settings");
   if (user.status === "RESTRICTED") redirect("/dashboard");
   const sessions = await createConfiguredSessionService().list(user.id);
-  const account = { displayName: user.displayName };
+  const marketing =
+    await createConfiguredMarketingPreferenceService().get(user);
+  const account = {
+    displayName: user.displayName,
+    isSuperAdmin: user.role === "SUPER_ADMIN",
+  };
   return (
     <DashboardShell active="settings" account={account}>
       <div className="dashboard-content">
@@ -74,6 +85,9 @@ export default async function SettingsPage() {
               }))}
             />
           </div>
+          <MarketingPreference
+            initialSubscribed={marketing?.eligible ?? false}
+          />
           <section className="settings-danger" aria-labelledby="signout-title">
             <div>
               <p className="eyebrow">Password and access</p>

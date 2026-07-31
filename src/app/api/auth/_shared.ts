@@ -101,8 +101,9 @@ export function authenticationApiError(
   error: unknown,
   request: Request,
   operation: string,
+  suppliedRequestId?: string,
 ): NextResponse {
-  const requestId = requestIdFrom(request);
+  const requestId = suppliedRequestId ?? requestIdFrom(request);
   if (
     error instanceof ZodError ||
     error instanceof SyntaxError ||

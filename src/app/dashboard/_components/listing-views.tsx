@@ -3,9 +3,10 @@ import Link from "next/link";
 import { Icon } from "@/components/ui/icons";
 
 import type { DashboardListing } from "../_lib/listings";
+import { EventLifecycleAction } from "./event-lifecycle-action";
 
 export type ListingView =
-  "all" | "drafts" | "ready" | "published" | "attention";
+  "all" | "drafts" | "ready" | "published" | "attention" | "history";
 
 const views: ReadonlyArray<{ key: ListingView; label: string }> = [
   { key: "all", label: "All" },
@@ -13,6 +14,7 @@ const views: ReadonlyArray<{ key: ListingView; label: string }> = [
   { key: "ready", label: "Ready" },
   { key: "published", label: "Published" },
   { key: "attention", label: "Needs Attention" },
+  { key: "history", label: "History" },
 ];
 
 const attentionStates = new Set([
@@ -42,6 +44,8 @@ export function listingMatches(
   listing: DashboardListing,
   view: ListingView,
 ): boolean {
+  if (listing.event.canceledAt) return view === "history";
+  if (view === "history") return false;
   if (view === "all") return true;
   if (view === "published") return listing.payment.displayState === "PUBLISHED";
   if (view === "attention")
@@ -51,6 +55,7 @@ export function listingMatches(
 }
 
 function tone(listing: DashboardListing): string {
+  if (listing.event.canceledAt) return "warning";
   if (listing.payment.displayState === "PUBLISHED") return "success";
   if (attentionStates.has(listing.payment.displayState)) return "error";
   if (readyStates.has(listing.payment.displayState)) return "info";
@@ -68,6 +73,7 @@ function statusLabel(listing: DashboardListing): string {
     PAYMENT_PENDING: "Payment pending",
     PAYMENT_RECEIVED_PUBLISHING: "Publishing",
     PUBLISHED: "Published",
+    CANCELED: "Canceled",
     PAYMENT_CANCELED: "Payment canceled",
     CHECKOUT_EXPIRED: "Checkout expired",
     PAID_PUBLICATION_BLOCKED: "Publication blocked",
@@ -82,6 +88,12 @@ export function listingPrimaryAction(listing: DashboardListing): {
   label: string;
 } {
   const { event, payment } = listing;
+  if (event.canceledAt) {
+    return {
+      href: `/dashboard/events/${event.id}/payment`,
+      label: "View record",
+    };
+  }
   if (payment.displayState === "PUBLISHED" && payment.canonicalPath) {
     return { href: payment.canonicalPath, label: "View live listing" };
   }
@@ -122,6 +134,32 @@ export function listingPrimaryAction(listing: DashboardListing): {
     href: `/dashboard/events/${event.id}/edit`,
     label: "Continue editing",
   };
+}
+
+export function listingLifecycleAction(listing: DashboardListing): {
+  readonly kind: "delete" | "cancel";
+  readonly disabledReason?: string;
+} | null {
+  if (listing.event.canceledAt) return null;
+  if (listing.payment.displayState === "PUBLISHED") {
+    return { kind: "cancel" };
+  }
+  if (
+    [
+      "PAYMENT_PENDING",
+      "PAYMENT_RECEIVED_PUBLISHING",
+      "PAID_PUBLICATION_BLOCKED",
+      "FULFILLMENT_RETRYING",
+      "MANUAL_REVIEW_REQUIRED",
+    ].includes(listing.payment.displayState)
+  ) {
+    return {
+      kind: "delete",
+      disabledReason:
+        "Deletion is unavailable while payment or publication is being processed.",
+    };
+  }
+  return { kind: "delete" };
 }
 
 export function ListingTabs({
@@ -182,7 +220,9 @@ export function ListingCollection({
             ? "Published sales will appear here after payment and publication are confirmed."
             : view === "attention"
               ? "Nothing currently needs your attention."
-              : "Create a sale draft, then return here to track its real status."}
+              : view === "history"
+                ? "Canceled paid events will appear here with their retained records."
+                : "Create a sale draft, then return here to track its real status."}
         </p>
         {view !== "attention" ? (
           <Link
@@ -199,6 +239,7 @@ export function ListingCollection({
     <div className="dashboard-listing-grid">
       {visible.map((listing) => {
         const action = listingPrimaryAction(listing);
+        const lifecycleAction = listingLifecycleAction(listing);
         const isEstateSale = listing.event.eventType === "ESTATE_SALE";
         return (
           <article className="dashboard-listing-card" key={listing.event.id}>
@@ -258,7 +299,8 @@ export function ListingCollection({
                 {action.label} <Icon name="arrow" size={18} />
               </Link>
               <div className="dashboard-listing-card__secondary-actions">
-                {listing.payment.displayState !== "PUBLISHED" ? (
+                {listing.payment.displayState !== "PUBLISHED" &&
+                !listing.event.canceledAt ? (
                   <Link
                     className="ui-text-link"
                     href={`/dashboard/events/${listing.event.id}/edit`}
@@ -272,6 +314,15 @@ export function ListingCollection({
                 >
                   <Icon name="status" size={18} /> Status
                 </Link>
+                {lifecycleAction ? (
+                  <EventLifecycleAction
+                    eventId={listing.event.id}
+                    title={listing.event.title}
+                    expectedVersion={listing.event.version}
+                    kind={lifecycleAction.kind}
+                    disabledReason={lifecycleAction.disabledReason}
+                  />
+                ) : null}
               </div>
             </div>
           </article>

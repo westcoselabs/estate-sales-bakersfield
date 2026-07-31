@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { EventRepository } from "@/modules/events/application/ports";
+import { EventLifecycleBlockedError } from "@/modules/events/domain/errors";
 import { PaymentService } from "@/modules/payments/application/payment-service";
 import type {
   PaymentRepository,
@@ -58,6 +59,7 @@ function paymentRepository(
 function eventRepository(event = approvedEvent()): EventRepository {
   return {
     findOwned: vi.fn(async () => event),
+    findOwnedForLifecycle: vi.fn(async () => event),
   } as unknown as EventRepository;
 }
 
@@ -141,6 +143,108 @@ function publication(attempt: PaymentAttemptRecord): PublicationRecord {
 }
 
 describe("Phase 4 payment service", () => {
+  it("expires an open unpaid Checkout before allowing draft deletion", async () => {
+    const event = approvedEvent();
+    const attempt = paymentAttempt(event, {
+      stripeCheckoutSessionId: "cs_test_delete_open",
+      checkoutState: "OPEN",
+      expiresAt: new Date(now.getTime() + 30 * 60_000),
+      version: 2,
+    });
+    const markAttemptCanceled = vi.fn(async () => undefined);
+    const expireCheckout = vi.fn(async () =>
+      paidSession(attempt, {
+        id: "cs_test_delete_open",
+        status: "EXPIRED",
+        paymentStatus: "UNPAID",
+        paymentIntentId: null,
+      }),
+    );
+    const payments = paymentRepository({
+      findLatestOwnedAttempt: vi.fn(async () => attempt),
+      markAttemptCanceled,
+    });
+    const provider = stripeProvider({
+      retrieveCheckout: vi.fn(async () =>
+        paidSession(attempt, {
+          id: "cs_test_delete_open",
+          status: "OPEN",
+          paymentStatus: "UNPAID",
+          paymentIntentId: null,
+        }),
+      ),
+      expireCheckout,
+    });
+
+    await expect(
+      service(payments, eventRepository(event), provider).prepareDraftDeletion(
+        principal,
+        event.id,
+        { requestId: "delete-open-checkout" },
+      ),
+    ).resolves.toBeUndefined();
+    expect(expireCheckout).toHaveBeenCalledWith("cs_test_delete_open");
+    expect(markAttemptCanceled).toHaveBeenCalledWith({
+      attemptId: attempt.id,
+      userId: principal.id,
+      audit: { requestId: "delete-open-checkout" },
+    });
+  });
+
+  it("blocks draft deletion as soon as payment may have been received", async () => {
+    const event = approvedEvent();
+    const provider = stripeProvider();
+    const payments = paymentRepository({
+      findLatestOwnedAttempt: vi.fn(async () =>
+        paymentAttempt(event, {
+          stripeCheckoutSessionId: "cs_test_delete_paid",
+          checkoutState: "COMPLETE",
+          paymentState: "PAID",
+          fulfillmentState: "PROCESSING",
+        }),
+      ),
+    });
+
+    await expect(
+      service(payments, eventRepository(event), provider).prepareDraftDeletion(
+        principal,
+        event.id,
+      ),
+    ).rejects.toBeInstanceOf(EventLifecycleBlockedError);
+    expect(provider.retrieveCheckout).not.toHaveBeenCalled();
+    expect(provider.expireCheckout).not.toHaveBeenCalled();
+  });
+
+  it("reports an owner-canceled publication as history without changing payment", async () => {
+    const approved = approvedEvent();
+    const approvedAttempt = paymentAttempt(approved);
+    const event = {
+      ...approved,
+      canceledAt: now,
+      publication: publication(approvedAttempt),
+    };
+    const attempt = paymentAttempt(event, {
+      checkoutState: "COMPLETE",
+      paymentState: "PAID",
+      fulfillmentState: "FULFILLED",
+    });
+    const payments = paymentRepository({
+      findLatestOwnedAttempt: vi.fn(async () => attempt),
+      findPublicationForEvent: vi.fn(async () => publication(attempt)),
+    });
+
+    await expect(
+      service(payments, eventRepository(event), stripeProvider()).status(
+        principal,
+        event.id,
+      ),
+    ).resolves.toMatchObject({
+      displayState: "CANCELED",
+      paymentState: "PAID",
+      fulfillmentState: "FULFILLED",
+    });
+  });
+
   it("creates hosted Checkout from server price, safe correlation metadata, and server URLs", async () => {
     const event = approvedEvent();
     const attempt = paymentAttempt(event);

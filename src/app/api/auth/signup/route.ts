@@ -34,6 +34,7 @@ export async function POST(request: Request) {
           displayName: input.displayName,
           email: input.email,
           password: input.password,
+          marketingOptIn: input.marketingOptIn,
         },
         { requestId },
       );
@@ -50,6 +51,6 @@ export async function POST(request: Request) {
       { status: 202, requestId },
     );
   } catch (error) {
-    return authenticationApiError(error, request, "auth.signup");
+    return authenticationApiError(error, request, "auth.signup", requestId);
   }
 }

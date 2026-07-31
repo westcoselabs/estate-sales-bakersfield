@@ -133,6 +133,7 @@ export function eventReadiness(event: EventRecord): EventReadiness {
     missing.push("Choose a cover photo.");
   }
   if (event.canceledAt) missing.push("Canceled events cannot be approved.");
+  if (event.deletedAt) missing.push("Deleted drafts cannot be approved.");
   if (event.removedAt) missing.push("Removed events cannot be approved.");
   return { ready: missing.length === 0, missing };
 }
@@ -170,6 +171,7 @@ export function eventStepReadiness(event: EventRecord): EventStepReadiness {
       locationComplete &&
       photosComplete &&
       !event.canceledAt &&
+      !event.deletedAt &&
       !event.removedAt,
   };
 }

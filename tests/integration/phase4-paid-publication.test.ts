@@ -409,7 +409,112 @@ describe("Phase 4 paid publication against isolated Test Neon", () => {
         userId: fixture.principal.id,
         administrator: false,
       }),
-    ).resolves.toMatchObject({ public: false });
+    ).resolves.toBeNull();
+  });
+
+  it("cancels a paid publication without deleting its financial or audit history", async () => {
+    const fixture = await checkout("Owner Cancellation");
+    const webhook = completeFakeCheckout(fixture.sessionId);
+    await fixture.service.handleWebhook(webhook.body, webhook.signature);
+    const published = await events.findOwned(
+      fixture.event.id,
+      fixture.principal.id,
+    );
+    if (!published) throw new Error("Published event not found");
+
+    await expect(
+      events.cancelOwnedPublished({
+        eventId: published.id,
+        userId: fixture.principal.id,
+        expectedVersion: published.version,
+        now: new Date(),
+        mediaPurgeAt: new Date(Date.now() + 11 * 60_000),
+        audit: { requestId: "phase4-owner-cancellation" },
+      }),
+    ).resolves.toEqual({ disposition: "CANCELED" });
+
+    await expect(
+      fixture.service.published("ESTATE_SALE", fixture.event.publicId),
+    ).resolves.toBeNull();
+    await expect(
+      fixture.service.status(fixture.principal, fixture.event.id),
+    ).resolves.toMatchObject({
+      displayState: "CANCELED",
+      paymentState: "PAID",
+      fulfillmentState: "FULFILLED",
+    });
+    expect(
+      (await events.listOwned(fixture.principal.id)).map((event) => event.id),
+    ).toContain(fixture.event.id);
+    await expect(
+      prisma.eventPublication.count({
+        where: { eventId: fixture.event.id },
+      }),
+    ).resolves.toBe(1);
+    await expect(
+      prisma.paymentAttempt.count({
+        where: {
+          eventId: fixture.event.id,
+          paymentState: "PAID",
+          fulfillmentState: "FULFILLED",
+        },
+      }),
+    ).resolves.toBe(1);
+    await expect(
+      prisma.auditEntry.count({
+        where: {
+          targetId: fixture.event.id,
+          action: {
+            in: ["PAYMENT_RECEIVED", "EVENT_PUBLISHED", "EVENT_CANCELED"],
+          },
+        },
+      }),
+    ).resolves.toBe(3);
+    await expect(
+      prisma.durableJob.findUnique({
+        where: {
+          queue_type_deduplicationKey: {
+            queue: "default",
+            type: "EVENT_MEDIA_PURGE",
+            deduplicationKey: `event-media-purge:${fixture.event.id}`,
+          },
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: "PENDING",
+      payload: { eventId: fixture.event.id },
+    });
+
+    expect(await events.findLifecycleMediaKeys(fixture.event.id)).not.toEqual(
+      [],
+    );
+    await events.clearLifecycleMediaKeys(fixture.event.id);
+    await expect(
+      prisma.event.findUnique({
+        where: { id: fixture.event.id },
+        select: {
+          coverPhotoId: true,
+          photos: {
+            select: {
+              status: true,
+              errorCode: true,
+              dashboardThumbnailKey: true,
+              coverDisplayKey: true,
+            },
+          },
+        },
+      }),
+    ).resolves.toEqual({
+      coverPhotoId: null,
+      photos: [
+        {
+          status: "FAILED",
+          errorCode: "MEDIA_PURGED",
+          dashboardThumbnailKey: null,
+          coverDisplayKey: null,
+        },
+      ],
+    });
   });
 
   it.each([

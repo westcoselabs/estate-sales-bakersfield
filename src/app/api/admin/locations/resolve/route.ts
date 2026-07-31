@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   AuthenticationServiceUnavailableError,
   PrismaAuthenticationRateLimiter,
-  requireAdmin,
+  requireSuperAdmin,
 } from "@/modules/auth";
 import { createConfiguredLocationProvider } from "@/modules/locations";
 import { getServerEnvironment } from "@/platform/config/env";
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   const requestId = requestIdFrom(request);
   try {
     assertAuthenticationOrigin(request);
-    const administrator = await requireAdmin();
+    const administrator = await requireSuperAdmin();
     const environment = getServerEnvironment();
     const limiter = new PrismaAuthenticationRateLimiter(getPrismaClient(), {
       environment: environment.APP_ENV,

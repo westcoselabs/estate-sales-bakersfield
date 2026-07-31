@@ -14,6 +14,10 @@ export class EventValidationError extends EventError {}
 
 export class EventStateError extends EventError {}
 
+export class EventLifecycleBlockedError extends EventStateError {
+  override readonly name = "EventLifecycleBlockedError";
+}
+
 export type PhotoProcessingStage =
   | "reservation_validation"
   | "upload_validation"

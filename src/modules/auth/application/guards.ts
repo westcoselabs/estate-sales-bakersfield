@@ -3,7 +3,7 @@ import {
   AuthorizationError,
   EmailVerificationRequiredError,
 } from "../domain/errors";
-import type { AuthPrincipal } from "../domain/types";
+import type { AuthPrincipal, CurrentSession } from "../domain/types";
 
 export function requireUserPrincipal(
   principal: AuthPrincipal | null,
@@ -17,14 +17,33 @@ export function requireUserPrincipal(
   return principal;
 }
 
-export function requireAdminPrincipal(
+export function requireSuperAdminPrincipal(
   principal: AuthPrincipal | null,
 ): AuthPrincipal {
   const user = requireUserPrincipal(principal);
-  if (user.role !== "ADMIN" || user.status !== "ACTIVE") {
+  if (
+    user.role !== "SUPER_ADMIN" ||
+    user.status !== "ACTIVE" ||
+    !user.emailVerifiedAt
+  ) {
     throw new AuthorizationError("Administrator access is required");
   }
   return user;
+}
+
+export function requireRecentSuperAdminSession(
+  session: CurrentSession | null,
+  now: Date = new Date(),
+): CurrentSession {
+  requireSuperAdminPrincipal(session?.principal ?? null);
+  if (
+    !session ||
+    now.getTime() - session.passwordAuthenticatedAt.getTime() >
+      15 * 60 * 1000
+  ) {
+    throw new AuthorizationError("Recent password confirmation is required");
+  }
+  return session;
 }
 
 export function requireVerifiedPublishingPrincipal(

@@ -85,6 +85,11 @@ export const photoMutationSchema = z.object({
   expectedVersion: expectedVersionSchema,
 });
 
+export const eventLifecycleMutationSchema = z.object({
+  expectedVersion: expectedVersionSchema,
+  confirmation: z.string().trim().min(1).max(120),
+});
+
 export const eventApprovalSchema = z.object({
   expectedVersion: expectedVersionSchema,
   acceptedTerms: z.literal(true),

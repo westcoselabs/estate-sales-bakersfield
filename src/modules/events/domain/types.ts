@@ -102,6 +102,7 @@ export interface EventRecord {
   readonly currentApprovalId: string | null;
   readonly coverPhotoId: string | null;
   readonly canceledAt: Date | null;
+  readonly deletedAt: Date | null;
   readonly removedAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -128,6 +129,7 @@ export interface EventListItemDto {
   readonly readyPhotoCount: number;
   readonly hasReadyCover: boolean;
   readonly approvalReady: boolean;
+  readonly canceledAt: string | null;
   readonly version: number;
   readonly updatedAt: string;
 }

@@ -48,6 +48,7 @@ if (process.env.APP_ENV !== "preview") {
             userId: user.id,
             tokenHash: fixtureHash("session"),
             expiresAt: new Date(Date.now() + 60_000),
+            passwordAuthenticatedAt: new Date(),
           },
         });
         await transaction.emailVerificationToken.create({

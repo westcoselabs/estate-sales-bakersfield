@@ -3,7 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 
 import {
-  requireAdminPrincipal,
+  requireSuperAdminPrincipal,
   requireVerifiedPublishingPrincipal,
   requireUserPrincipal,
 } from "../application/guards";
@@ -41,8 +41,8 @@ export async function requireUser(): Promise<AuthPrincipal> {
   return requireUserPrincipal(await getCurrentUser());
 }
 
-export async function requireAdmin(): Promise<AuthPrincipal> {
-  return requireAdminPrincipal(await getCurrentUser());
+export async function requireSuperAdmin(): Promise<AuthPrincipal> {
+  return requireSuperAdminPrincipal(await getCurrentUser());
 }
 
 export async function requireVerifiedPublishingUser(): Promise<AuthPrincipal> {

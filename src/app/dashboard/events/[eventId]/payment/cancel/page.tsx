@@ -31,7 +31,10 @@ export default async function PaymentCancelPage({
   ]);
   return (
     <BuilderShell
-      account={{ displayName: user.displayName }}
+      account={{
+        displayName: user.displayName,
+        isSuperAdmin: user.role === "SUPER_ADMIN",
+      }}
       eyebrow="Checkout canceled"
       title={event.title ?? "Payment canceled"}
     >

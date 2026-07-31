@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function EventsPage({
   searchParams,
 }: {
-  readonly searchParams: Promise<{ view?: string }>;
+  readonly searchParams: Promise<{ view?: string; notice?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user || user.status === "DISABLED")
@@ -27,14 +27,17 @@ export default async function EventsPage({
   const requested = query.view;
   const view: ListingView =
     requested &&
-    ["drafts", "ready", "published", "attention"].includes(requested)
+    ["drafts", "ready", "published", "attention", "history"].includes(requested)
       ? (requested as ListingView)
       : "all";
   const listings = await loadDashboardListings(user);
   return (
     <DashboardShell
       active="listings"
-      account={{ displayName: user.displayName }}
+      account={{
+        displayName: user.displayName,
+        isSuperAdmin: user.role === "SUPER_ADMIN",
+      }}
     >
       <div className="dashboard-content">
         <header className="dashboard-page-header">
@@ -52,6 +55,16 @@ export default async function EventsPage({
             <Icon name="plus" /> Create event
           </Link>
         </header>
+        {query.notice === "deleted" ? (
+          <div className="success-box" role="status">
+            Draft deleted. Its uploaded photos are queued for permanent removal.
+          </div>
+        ) : query.notice === "canceled" ? (
+          <div className="success-box" role="status">
+            Event canceled. The public listing is unavailable, no refund was
+            initiated, and its retained record is shown below.
+          </div>
+        ) : null}
         <ListingTabs current={view} listings={listings} />
         <ListingCollection listings={listings} view={view} />
       </div>

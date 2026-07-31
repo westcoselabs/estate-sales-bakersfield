@@ -10,14 +10,17 @@ import type {
 import type { Clock } from "./session-service";
 import { boundSessionMetadata, type SessionService } from "./session-service";
 import { SESSION_TTL_MS } from "./session-cookie";
+import { SUPER_ADMIN_SESSION_TTL_MS } from "./session-cookie";
 import {
   AccountConflictError,
   InvalidCredentialsError,
   InvalidTokenError,
   MalformedPasswordHashError,
 } from "../domain/errors";
+import { requireSuperAdminPrincipal } from "./guards";
 import type {
   AccountSummary,
+  AuthPrincipal,
   AuthenticationAccount,
   SessionGrant,
   SessionMetadata,
@@ -77,6 +80,7 @@ export class AuthenticationWorkflowService {
       readonly displayName: string;
       readonly email: string;
       readonly password: string;
+      readonly marketingOptIn?: boolean;
     },
     audit: AuditContext = {},
   ): Promise<RegistrationResult> {
@@ -91,6 +95,8 @@ export class AuthenticationWorkflowService {
       verificationTokenHash: this.tokens.hash(token),
       verificationExpiresAt: new Date(now.getTime() + VERIFICATION_TTL_MS),
       recipientHash: this.fingerprints.create(input.email),
+      marketingOptIn: input.marketingOptIn ?? false,
+      consentAt: now,
       audit,
     });
 
@@ -145,15 +151,54 @@ export class AuthenticationWorkflowService {
       );
     }
 
-    const grant = await this.sessions.create(account.id, metadata, {
-      ...audit,
-      actorUserId: account.id,
-    });
-    await this.accounts.recordLogin(account.id, {
+    const grant = await this.sessions.create(
+      account.id,
+      metadata,
+      {
+        ...audit,
+        actorUserId: account.id,
+      },
+      account.role === "SUPER_ADMIN"
+        ? SUPER_ADMIN_SESSION_TTL_MS
+        : SESSION_TTL_MS,
+    );
+    await this.accounts.recordLogin(account.id, account.role === "SUPER_ADMIN", {
       ...audit,
       actorUserId: account.id,
     });
     return { grant, account: summarize(account) };
+  }
+
+  async reauthenticateSuperAdmin(
+    principal: AuthPrincipal | null,
+    currentSessionToken: string | undefined,
+    password: string,
+    metadata: SessionMetadata = {},
+    audit: AuditContext = {},
+  ): Promise<SessionGrant> {
+    const administrator = requireSuperAdminPrincipal(principal);
+    const account = await this.accounts.findByNormalizedEmail(
+      administrator.email,
+    );
+    if (
+      !account ||
+      account.id !== administrator.id ||
+      !(await this.passwords.verify(account.passwordHash, password))
+    ) {
+      throw new InvalidCredentialsError("Invalid password");
+    }
+    if (!currentSessionToken) {
+      throw new InvalidCredentialsError("The session is unavailable");
+    }
+    const grant = await this.sessions.reauthenticate(
+      currentSessionToken,
+      metadata,
+      { ...audit, actorUserId: administrator.id },
+    );
+    if (!grant) {
+      throw new InvalidCredentialsError("The session is unavailable");
+    }
+    return grant;
   }
 
   async verifyEmail(

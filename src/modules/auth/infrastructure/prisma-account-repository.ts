@@ -23,7 +23,7 @@ type StoredAccount = {
   normalizedEmail: string;
   passwordHash: string;
   emailVerifiedAt: Date | null;
-  role: "USER" | "ADMIN";
+  role: "USER" | "SUPER_ADMIN";
   status: "ACTIVE" | "RESTRICTED" | "DISABLED";
 };
 
@@ -32,6 +32,7 @@ type StoredVerificationSession = {
   userId: string;
   expiresAt: Date;
   createdAt: Date;
+  passwordAuthenticatedAt: Date;
   userAgent: string | null;
   deviceLabel: string | null;
   user: Pick<
@@ -57,6 +58,7 @@ function mapVerificationSession(
     userId: session.userId,
     expiresAt: session.expiresAt,
     createdAt: session.createdAt,
+    passwordAuthenticatedAt: session.passwordAuthenticatedAt,
     metadata: {
       ...(session.userAgent ? { userAgent: session.userAgent } : {}),
       ...(session.deviceLabel ? { deviceLabel: session.deviceLabel } : {}),
@@ -138,6 +140,28 @@ export class PrismaAccountRepository implements AccountRepository {
           },
           select: { id: true, userId: true },
         });
+        if (input.marketingOptIn) {
+          await transaction.marketingPreference.create({
+            data: {
+              userId: account.id,
+              consentAt: input.consentAt,
+              consentVersion: "marketing-v1",
+              consentSource: "SIGNUP",
+            },
+          });
+          await transaction.auditEntry.create({
+            data: auditData(input.audit, {
+              action: "MARKETING_CONSENT_GIVEN",
+              targetType: "USER",
+              targetId: account.id,
+              actorUserId: account.id,
+              metadata: {
+                consentVersion: "marketing-v1",
+                consentSource: "SIGNUP",
+              },
+            }),
+          });
+        }
         await transaction.auditEntry.create({
           data: auditData(input.audit, {
             action: "ACCOUNT_CREATED",
@@ -178,10 +202,14 @@ export class PrismaAccountRepository implements AccountRepository {
     });
   }
 
-  async recordLogin(userId: string, audit: AuditContext): Promise<void> {
+  async recordLogin(
+    userId: string,
+    superAdmin: boolean,
+    audit: AuditContext,
+  ): Promise<void> {
     await this.prisma.auditEntry.create({
       data: auditData(audit, {
-        action: "LOGIN_SUCCEEDED",
+        action: superAdmin ? "SUPER_ADMIN_LOGIN" : "LOGIN_SUCCEEDED",
         targetType: "USER",
         targetId: userId,
         actorUserId: userId,
@@ -366,6 +394,7 @@ export class PrismaAccountRepository implements AccountRepository {
               userId,
               tokenHash: input.sessionRotation.replacementTokenHash,
               expiresAt: input.sessionRotation.replacementExpiresAt,
+              passwordAuthenticatedAt: current.passwordAuthenticatedAt,
               ...(input.sessionRotation.metadata.userAgent
                 ? { userAgent: input.sessionRotation.metadata.userAgent }
                 : {}),

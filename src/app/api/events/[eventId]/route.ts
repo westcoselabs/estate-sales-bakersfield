@@ -2,7 +2,9 @@ import { requireUser } from "@/modules/auth";
 import {
   createConfiguredEventService,
   eventDetailsSchema,
+  eventLifecycleMutationSchema,
 } from "@/modules/events";
+import { createConfiguredPaymentService } from "@/modules/payments";
 import { requestIdFrom } from "@/platform/http/request-context";
 
 import {
@@ -45,5 +47,27 @@ export async function PATCH(request: Request, context: Context) {
     return authJson({ event, requestId }, { requestId });
   } catch (error) {
     return eventApiError(error, request, "events.update-details");
+  }
+}
+
+export async function DELETE(request: Request, context: Context) {
+  const requestId = requestIdFrom(request);
+  try {
+    assertAuthenticationOrigin(request);
+    const { eventId } = await context.params;
+    const input = eventLifecycleMutationSchema.parse(await readJson(request));
+    const user = await requireUser();
+    await createConfiguredPaymentService().prepareDraftDeletion(user, eventId, {
+      requestId,
+    });
+    const result = await createConfiguredEventService().deleteDraft(
+      user,
+      eventId,
+      input,
+      { requestId },
+    );
+    return authJson({ ...result, requestId }, { requestId });
+  } catch (error) {
+    return eventApiError(error, request, "events.delete-draft");
   }
 }

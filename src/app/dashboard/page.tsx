@@ -20,7 +20,10 @@ export default async function DashboardPage({
   const query = await searchParams;
   const user = await getCurrentUser();
   if (!user || user.status === "DISABLED") redirect("/login?next=/dashboard");
-  const account = { displayName: user.displayName };
+  const account = {
+    displayName: user.displayName,
+    isSuperAdmin: user.role === "SUPER_ADMIN",
+  };
   if (user.status === "RESTRICTED") {
     return (
       <DashboardShell account={account}>
@@ -39,7 +42,8 @@ export default async function DashboardPage({
     );
   }
   const listings = await loadDashboardListings(user);
-  const attentionCount = listings.filter((item) =>
+  const activeListings = listings.filter((item) => !item.event.canceledAt);
+  const attentionCount = activeListings.filter((item) =>
     [
       "PAYMENT_CANCELED",
       "CHECKOUT_EXPIRED",
@@ -61,7 +65,7 @@ export default async function DashboardPage({
           <dl className="dashboard-summary-chips" aria-label="Listing summary">
             <div>
               <dt>Listings</dt>
-              <dd>{listings.length}</dd>
+              <dd>{activeListings.length}</dd>
             </div>
             <div>
               <dt>Need attention</dt>
@@ -149,7 +153,7 @@ export default async function DashboardPage({
             </div>
             <Link href="/dashboard/events">View all</Link>
           </div>
-          <ListingCollection listings={listings.slice(0, 3)} view="all" />
+          <ListingCollection listings={activeListings.slice(0, 3)} view="all" />
         </section>
       </div>
     </DashboardShell>

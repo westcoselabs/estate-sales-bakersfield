@@ -136,7 +136,10 @@ export async function PublicShell({
   const home = variant === "home";
   const currentUser = await getCurrentUser();
   const account: ShellAccount | null = currentUser
-    ? { displayName: currentUser.displayName }
+    ? {
+        displayName: currentUser.displayName,
+        isSuperAdmin: currentUser.role === "SUPER_ADMIN",
+      }
     : null;
 
   return (
@@ -241,7 +244,12 @@ export function AuthShell({
 }
 
 type DashboardDestination =
-  "overview" | "listings" | "create" | "profile" | "settings";
+  | "overview"
+  | "listings"
+  | "create"
+  | "admin"
+  | "profile"
+  | "settings";
 
 export function DashboardShell({
   children,
@@ -271,6 +279,21 @@ export function DashboardShell({
       key: "create",
       icon: "plus",
     },
+    ...(account?.isSuperAdmin
+      ? ([
+          {
+            href: "/admin",
+            label: "Admin",
+            key: "admin",
+            icon: "shield",
+          },
+        ] satisfies ReadonlyArray<{
+          href: string;
+          label: string;
+          key: DashboardDestination;
+          icon: IconName;
+        }>)
+      : []),
   ];
   const nav = destinations.map((destination) => (
     <Link

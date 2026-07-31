@@ -35,9 +35,11 @@
     "test:contract:stripe": "vitest run --project stripe-contract",
     "test:contract:blob:live": "tsx scripts/run-live-blob-contract.ts",
     "test:e2e": "playwright test",
+    "test:visual": "playwright test --config=playwright.visual.config.ts",
     "test": "vitest run --project unit --project integration --project blob-contract --project email-contract --project location-contract --project image-contract --project stripe-contract",
     "auth:benchmark": "tsx scripts/benchmark-argon2.ts",
     "auth:benchmark:vercel": "tsx scripts/benchmark-vercel-argon2.ts",
+    "admin:provision": "node --conditions=react-server --import tsx scripts/provision-super-admin.ts",
     "jobs:run": "node --conditions=react-server --import tsx scripts/run-jobs.ts --once",
     "payments:reconcile": "node --conditions=react-server --import tsx scripts/reconcile-payment.ts",
     "verify:credential-free": "tsx scripts/verify.ts credential-free",
@@ -99,9 +101,11 @@
     ],
     "overrides": {
       "@hono/node-server": "2.0.11",
+      "minimatch@3.1.5>brace-expansion": "1.1.12",
       "fast-uri": "3.1.4",
-      "postcss": "8.5.10",
-      "sharp": "0.35.3"
+      "postcss": "8.5.18",
+      "sharp": "0.35.3",
+      "valibot": "1.4.2"
     }
   }
 }

@@ -37,6 +37,6 @@ export async function POST(request: Request) {
     await setSessionCookie(result.grant);
     return authJson({ account: result.account, requestId }, { requestId });
   } catch (error) {
-    return authenticationApiError(error, request, "auth.login");
+    return authenticationApiError(error, request, "auth.login", requestId);
   }
 }

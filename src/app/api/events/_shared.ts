@@ -7,6 +7,7 @@ import {
 } from "@/modules/auth";
 import {
   EventConflictError,
+  EventLifecycleBlockedError,
   EventNotFoundError,
   EventStateError,
   EventValidationError,
@@ -77,6 +78,16 @@ export function eventApiError(
   if (error instanceof EventConflictError) {
     return authJson(
       { error: error.message, code: "STALE_VERSION", requestId },
+      { status: 409, requestId },
+    );
+  }
+  if (error instanceof EventLifecycleBlockedError) {
+    return authJson(
+      {
+        error: error.message,
+        code: "EVENT_LIFECYCLE_BLOCKED",
+        requestId,
+      },
       { status: 409, requestId },
     );
   }

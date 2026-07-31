@@ -7,6 +7,7 @@ The application is a modular monolith using Next.js App Router and strict TypeSc
 ```text
 src/app                  Pages, route handlers, and HTTP composition
 src/modules/auth         Accounts, opaque sessions, email, limits, and guards
+src/modules/admin        Owner reporting, user administration, exports, and listing moderation
 src/modules/organizers   User-owned organizer onboarding
 src/modules/events       Draft state, ownership, projections, and approval
 src/modules/payments     Checkout, payment evidence, fulfillment, and publication

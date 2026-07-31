@@ -16,7 +16,10 @@ export default async function ProfilePage() {
   const organizer = await createConfiguredOrganizerService().getForUser(
     user.id,
   );
-  const account = { displayName: user.displayName };
+  const account = {
+    displayName: user.displayName,
+    isSuperAdmin: user.role === "SUPER_ADMIN",
+  };
   return (
     <DashboardShell active="profile" account={account}>
       <div className="dashboard-content">

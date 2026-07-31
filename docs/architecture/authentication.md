@@ -26,7 +26,13 @@ Forgot-password always returns the same response. Eligible accounts receive a on
 
 ## Sessions and authorization
 
-Sessions contain seven-day absolute expiration and never slide. Raw tokens exist only in the request cookie and session grant; PostgreSQL stores SHA-256 hashes. Preview and Production cookies are host-only, HTTP-only, Secure, `SameSite=Lax`, path `/`, and use the `__Host-` prefix.
+Ordinary sessions contain seven-day absolute expiration and never slide.
+Super-admin sessions contain eight-hour absolute expiration and track the last
+password authentication time. Owner reauthentication rotates the opaque token,
+updates that timestamp, and preserves the original expiration. Raw tokens exist
+only in the request cookie and session grant; PostgreSQL stores SHA-256 hashes.
+Preview and Production cookies are host-only, HTTP-only, Secure,
+`SameSite=Lax`, path `/`, and use the `__Host-` prefix.
 
 The central server functions are `getCurrentSession`, `getCurrentUser`, `requireUser`, `requireAdmin`, and `requireVerifiedPublishingUser`. They return a narrow principal and reject disabled or restricted accounts. Organizer commands derive ownership from `requireUser` and repeat ownership enforcement in the repository key. The verified-publishing guard exists for Phase 3 commands but no publishing workflow is implemented in Phase 2.
 

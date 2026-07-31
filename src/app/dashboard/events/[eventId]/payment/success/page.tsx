@@ -23,7 +23,10 @@ export default async function PaymentSuccessPage({ params }: Props) {
   ]);
   return (
     <BuilderShell
-      account={{ displayName: user.displayName }}
+      account={{
+        displayName: user.displayName,
+        isSuperAdmin: user.role === "SUPER_ADMIN",
+      }}
       eyebrow="Checkout return"
       title={event.title ?? "Payment status"}
     >

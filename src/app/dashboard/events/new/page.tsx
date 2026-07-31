@@ -13,7 +13,13 @@ export default async function NewEventPage() {
     redirect("/login?next=/dashboard/events/new");
   if (user.status === "RESTRICTED") redirect("/dashboard");
   return (
-    <DashboardShell active="create" account={{ displayName: user.displayName }}>
+    <DashboardShell
+      active="create"
+      account={{
+        displayName: user.displayName,
+        isSuperAdmin: user.role === "SUPER_ADMIN",
+      }}
+    >
       <div className="dashboard-content dashboard-create-page">
         <section className="dashboard-state-panel">
           <span className="dashboard-state-panel__icon">

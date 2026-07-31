@@ -41,6 +41,7 @@ function dependencies() {
     userId: account.id,
     createdAt: now,
     expiresAt: new Date("2026-07-24T12:00:00.000Z"),
+    passwordAuthenticatedAt: now,
     metadata: {},
     principal: account,
   };
@@ -94,6 +95,7 @@ function dependencies() {
     create: vi.fn(async () => current),
     findActiveByTokenHash: vi.fn(async () => current),
     rotate: vi.fn(async () => ({ ...current, id: "session-2" })),
+    reauthenticate: vi.fn(async () => ({ ...current, id: "session-2" })),
     deleteCurrent: vi.fn(async () => true),
     deleteOwnedById: vi.fn(async () => true),
     deleteAllForUser: vi.fn(async () => 2),
@@ -218,6 +220,7 @@ describe("AuthenticationWorkflowService", () => {
     expect(sessionRepository.create).toHaveBeenCalled();
     expect(accounts.recordLogin).toHaveBeenCalledWith(
       account.id,
+      false,
       expect.objectContaining({ actorUserId: account.id }),
     );
   });
