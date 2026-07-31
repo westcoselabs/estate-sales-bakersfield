@@ -8939,16 +8939,42 @@ button {
 .email-template-row > span:first-child { display: grid; min-width: 0; }
 .email-template-row small { overflow: hidden; color: var(--color-text-secondary); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 
-.email-editor-shell { display: grid; gap: 1rem; }
-.email-editor-toolbar { display: grid; grid-template-columns: minmax(18rem, 1fr) auto; align-items: end; gap: 1rem; padding: 1rem 1.25rem; }
-.email-editor-toolbar__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.65rem; }
+.email-editor-shell {
+  display: grid;
+  gap: clamp(1rem, 2vw, 1.5rem);
+  container: email-editor / inline-size;
+}
+.email-editor-shell > section {
+  width: 100%;
+  max-width: none;
+}
+.email-editor-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 1rem 1.5rem;
+  padding: clamp(1.25rem, 2vw, 1.75rem);
+}
+.email-editor-toolbar__actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 0.65rem; }
 .email-upload { position: relative; overflow: hidden; }
 .email-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .email-save-state { grid-column: 1 / -1; margin: 0; color: var(--color-text-secondary); font-size: 0.8rem; }
 .email-editor-tabs { display: none; }
-.email-editor-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(24rem, 0.95fr); gap: 1rem; min-height: 44rem; }
+.email-editor-grid {
+  display: grid;
+  width: 100%;
+  max-width: none;
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(1rem, 2vw, 1.5rem);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
 .email-code-pane,
-.email-preview-pane { min-width: 0; overflow: hidden; padding: 0; }
+.email-preview-pane { min-width: 0; min-height: 40rem; overflow: hidden; padding: 0; }
 .email-pane-heading { display: flex; min-height: 4.5rem; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--color-border); }
 .email-pane-heading > div:first-child { display: grid; }
 .email-pane-heading small { color: var(--color-text-secondary); }
@@ -8969,6 +8995,15 @@ button {
 .email-iframe-wrap--mobile iframe { width: 375px; max-width: 100%; }
 .email-publish-grid,
 .campaign-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.email-publish-grid {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
 .email-publish-card,
 .email-revision-card,
 .campaign-summary,
@@ -9010,6 +9045,77 @@ button {
 .campaign-send-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(22rem, 0.6fr); gap: 2rem; align-items: end; margin-top: 1rem; }
 .campaign-send-panel__controls { display: grid; gap: 0.75rem; }
 .campaign-draft-fields { display: grid; gap: 0.75rem; margin-top: 1.25rem; }
+
+@container email-editor (max-width: 42rem) {
+  .email-editor-toolbar {
+    padding: 1rem;
+  }
+
+  .email-editor-toolbar__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .email-editor-toolbar__actions .ui-button:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .email-editor-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 0.25rem;
+    border-radius: 999px;
+    background: var(--color-surface-muted);
+  }
+
+  .email-editor-tabs button {
+    min-height: 3rem;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--color-text);
+    font-weight: 800;
+  }
+
+  .email-editor-tabs button[aria-selected="true"] {
+    background: #fff;
+    color: var(--color-primary);
+    box-shadow: var(--shadow-1);
+  }
+
+  .email-pane--mobile-hidden {
+    display: none;
+  }
+
+  .email-code-pane,
+  .email-preview-pane {
+    min-height: 34rem;
+  }
+
+  .email-code-pane .cm-editor {
+    height: 34rem !important;
+  }
+
+  .email-pane-heading {
+    min-height: 0;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 1rem;
+  }
+
+  .email-preview-toggle {
+    width: 100%;
+  }
+
+  .email-preview-toggle button {
+    flex: 1 1 0;
+  }
+
+  .email-iframe-wrap {
+    height: 32rem;
+    padding: 0.75rem;
+  }
+}
 
 @media (max-width: 1100px) {
   .email-overview-grid,
