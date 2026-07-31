@@ -50,6 +50,8 @@ export default async function AdminUsersPage({
   if (criteria.search) query.set("q", criteria.search);
   query.set("filter", criteria.filter);
   if (directory.nextCursor) query.set("cursor", directory.nextCursor);
+  const marketingQuery = new URLSearchParams({ filter: "marketing" });
+  if (criteria.search) marketingQuery.set("q", criteria.search);
 
   return (
     <div className="admin-page">
@@ -64,9 +66,18 @@ export default async function AdminUsersPage({
           <h1>Users</h1>
           <p>Inspect signup, listing, purchase, and consent history.</p>
         </div>
-        {criteria.filter === "marketing" ? (
-          <MarketingExport search={criteria.search} />
-        ) : null}
+        <div className="admin-page-header__actions">
+          {criteria.filter === "marketing" ? (
+            <MarketingExport search={criteria.search} />
+          ) : (
+            <Link
+              className="ui-button ui-button--secondary"
+              href={`/admin/users?${marketingQuery}`}
+            >
+              Export contacts
+            </Link>
+          )}
+        </div>
       </header>
       <section
         className="admin-panel admin-filter-panel"
@@ -107,6 +118,10 @@ export default async function AdminUsersPage({
             Apply
           </button>
         </form>
+        <p className="admin-filter-panel__helper">
+          Contact export includes active, verified users who explicitly opted
+          into marketing. Choose the marketing-eligible filter to download it.
+        </p>
       </section>
       <section className="admin-panel admin-panel--table">
         <div className="admin-table-toolbar">

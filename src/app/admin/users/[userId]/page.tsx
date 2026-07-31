@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
+import { Icon } from "@/components/ui/icons";
 import {
   AdminNotFoundError,
   createConfiguredAdminUserDetail,
@@ -58,12 +59,21 @@ export default async function AdminUserDetailPage({
           <h1>{user.name}</h1>
           <p>{user.email}</p>
         </div>
-        <UserActions
-          capabilities={user.capabilities}
-          name={user.name}
-          updatedAt={user.updatedAt.toISOString()}
-          userId={user.id}
-        />
+        <div className="admin-page-header__actions">
+          <Link
+            className="ui-button ui-button--secondary admin-back-link"
+            href="/admin/users"
+          >
+            <Icon name="arrow" size={18} />
+            Back to users
+          </Link>
+          <UserActions
+            capabilities={user.capabilities}
+            name={user.name}
+            updatedAt={user.updatedAt.toISOString()}
+            userId={user.id}
+          />
+        </div>
       </header>
 
       <section className="admin-panel" aria-labelledby="identity-title">

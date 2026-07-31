@@ -101,6 +101,10 @@ export function AdminShell({
             <Icon name="external" />
             View website
           </Link>
+          <Link href="/dashboard">
+            <Icon name="home" />
+            Organizer dashboard
+          </Link>
           <Link href="/dashboard/settings">
             <Icon name="settings" />
             Admin account

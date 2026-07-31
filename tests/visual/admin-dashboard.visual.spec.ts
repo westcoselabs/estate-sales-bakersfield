@@ -7,16 +7,16 @@ async function renderAdminFixture(
   viewport: { width: number; height: number },
 ) {
   await page.setViewportSize(viewport);
-  const css = await readFile(
-    path.join(process.cwd(), "src/app/foundation.css"),
-    "utf8",
-  );
+  const [globalCss, css] = await Promise.all([
+    readFile(path.join(process.cwd(), "src/app/globals.css"), "utf8"),
+    readFile(path.join(process.cwd(), "src/app/foundation.css"), "utf8"),
+  ]);
   await page.setContent(`
     <!doctype html>
     <html lang="en">
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>${css}
+        <style>${globalCss}\n${css}
           :root { --font-manrope: Arial; }
         </style>
       </head>
@@ -202,11 +202,16 @@ test("admin visual system holds at desktop width", async ({
     .evaluateAll((cards) =>
       cards.map((card) => Math.round(card.getBoundingClientRect().top)),
     );
-  expect(new Set(columns).size).toBe(1);
+  expect(new Set(columns).size).toBe(2);
   const viewportFits = await page.evaluate(
     () => document.documentElement.scrollWidth <= window.innerWidth,
   );
   expect(viewportFits).toBe(true);
+  const panelWidth = await page
+    .locator(".admin-panel")
+    .first()
+    .evaluate((panel) => panel.getBoundingClientRect().width);
+  expect(panelWidth).toBeGreaterThan(900);
 
   await page.screenshot({
     fullPage: true,

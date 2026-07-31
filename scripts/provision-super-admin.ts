@@ -1,9 +1,52 @@
 import { stdin, stdout } from "node:process";
 
-import { Prisma } from "../src/generated/prisma/client";
+import { PrismaNeon } from "@prisma/adapter-neon";
+
+import { Prisma, PrismaClient } from "../src/generated/prisma/client";
 import { Argon2PasswordHasher, normalizeEmail } from "../src/modules/auth";
-import { getServerEnvironment } from "../src/platform/config/env";
-import { getPrismaClient } from "../src/platform/database/client";
+
+const deploymentEnvironments = new Set([
+  "local",
+  "test",
+  "preview",
+  "production",
+]);
+
+function provisioningEnvironment(): {
+  readonly APP_ENV: string;
+  readonly DATABASE_RESOURCE_ENV: string;
+  readonly DATABASE_URL: string;
+} {
+  const appEnvironment = process.env.APP_ENV;
+  if (!appEnvironment || !deploymentEnvironments.has(appEnvironment)) {
+    throw new Error(
+      "APP_ENV must identify a supported application environment.",
+    );
+  }
+
+  const resourceEnvironment =
+    process.env.DATABASE_RESOURCE_ENV ?? appEnvironment;
+  if (!deploymentEnvironments.has(resourceEnvironment)) {
+    throw new Error(
+      "DATABASE_RESOURCE_ENV must identify a supported database environment.",
+    );
+  }
+
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL is required for super-admin provisioning.");
+  }
+  const protocol = new URL(databaseUrl).protocol;
+  if (protocol !== "postgres:" && protocol !== "postgresql:") {
+    throw new Error("DATABASE_URL must be a PostgreSQL connection URL.");
+  }
+
+  return {
+    APP_ENV: appEnvironment,
+    DATABASE_RESOURCE_ENV: resourceEnvironment,
+    DATABASE_URL: databaseUrl,
+  };
+}
 
 function argument(name: string): string | undefined {
   return process.argv
@@ -55,9 +98,8 @@ if (!userId || !suppliedEmail || !suppliedEnvironment || !suppliedResource) {
   );
 }
 
-const environment = getServerEnvironment();
-const expectedResource =
-  environment.DATABASE_RESOURCE_ENV ?? environment.APP_ENV;
+const environment = provisioningEnvironment();
+const expectedResource = environment.DATABASE_RESOURCE_ENV;
 if (
   suppliedEnvironment !== environment.APP_ENV ||
   suppliedResource !== expectedResource
@@ -68,7 +110,9 @@ if (
 }
 
 const normalizedEmail = normalizeEmail(suppliedEmail);
-const prisma = getPrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaNeon({ connectionString: environment.DATABASE_URL }),
+});
 const account = await prisma.user.findFirst({
   where: { id: userId, normalizedEmail },
 });

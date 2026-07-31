@@ -8477,6 +8477,18 @@ button {
   max-width: 104rem;
 }
 
+/* globals.css uses a narrow generic section for unauthenticated pages.
+   Admin sections are application surfaces and must occupy the workspace. */
+.admin-page > * {
+  min-width: 0;
+  max-width: none;
+}
+
+.admin-page > section,
+.admin-page > .admin-grid--two {
+  width: 100%;
+}
+
 .admin-page-header {
   display: grid;
   min-height: 0;
@@ -8505,6 +8517,25 @@ button {
   font-size: clamp(0.9375rem, 1.15vw, 1.0625rem);
 }
 
+.admin-page-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.admin-back-link svg {
+  transform: rotate(180deg);
+}
+
+.admin-filter-panel__helper {
+  max-width: 70ch;
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+}
+
 .admin-range-form {
   align-self: end;
   box-shadow: 0 12px 30px rgb(23 32 27 / 6%);
@@ -8513,6 +8544,10 @@ button {
 .admin-metric-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: clamp(0.75rem, 1.3vw, 1.15rem);
+  border: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
 }
 
 .admin-metric-card {
@@ -8659,7 +8694,7 @@ button {
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 1540px) {
   .admin-app {
     --admin-sidebar-width: 16.5rem;
   }
@@ -8764,6 +8799,10 @@ button {
     align-items: start;
     gap: var(--space-4);
     padding-top: var(--space-2);
+  }
+
+  .admin-page-header__actions {
+    justify-content: flex-start;
   }
 
   .admin-page-header h1 {

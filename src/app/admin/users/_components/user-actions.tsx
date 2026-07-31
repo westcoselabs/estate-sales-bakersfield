@@ -109,7 +109,7 @@ export function UserActions({
             className="ui-button ui-button--secondary"
             onClick={() => open("revoke-sessions")}
           >
-            Revoke sessions
+            Revoke all sessions
           </button>
         ) : null}
       </div>
