@@ -12,6 +12,7 @@ export type AdminRateLimitAction =
   | "USER_MANAGEMENT"
   | "VERIFICATION_RESEND"
   | "LISTING_MODERATION"
+  | "LISTING_IMPORT"
   | "EMAIL_TEMPLATE"
   | "EMAIL_CAMPAIGN";
 
@@ -23,6 +24,7 @@ const ADMIN_LIMITS: Readonly<
   USER_MANAGEMENT: { limit: 20, windowSeconds: 60 * 60 },
   VERIFICATION_RESEND: { limit: 20, windowSeconds: 60 * 60 },
   LISTING_MODERATION: { limit: 20, windowSeconds: 60 * 60 },
+  LISTING_IMPORT: { limit: 30, windowSeconds: 60 * 60 },
   EMAIL_TEMPLATE: { limit: 30, windowSeconds: 60 * 60 },
   EMAIL_CAMPAIGN: { limit: 10, windowSeconds: 60 * 60 },
 };

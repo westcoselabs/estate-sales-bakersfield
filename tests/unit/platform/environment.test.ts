@@ -14,6 +14,80 @@ describe("server environment validation", () => {
     expect(parseServerEnvironment(base)).toMatchObject(base);
   });
 
+  it("allows only Development database resources in local and test modes", () => {
+    const development = {
+      ...base,
+      APP_ENV: "local",
+      NODE_ENV: "development",
+      DATABASE_URL: "postgresql://example.test/database",
+      DIRECT_URL: "postgresql://example.test/database",
+      DATABASE_RESOURCE_ENV: "development",
+    };
+    expect(parseServerEnvironment(development)).toMatchObject({
+      APP_ENV: "local",
+      DATABASE_RESOURCE_ENV: "development",
+    });
+    expect(() =>
+      parseServerEnvironment({
+        ...development,
+        DATABASE_RESOURCE_ENV: "production",
+      }),
+    ).toThrow(/DATABASE_RESOURCE_ENV must be development/);
+  });
+
+  it("requires database-backed tests to use an isolated Development schema", () => {
+    const schema = "codex_test_1785888000000_0123456789ab";
+    const schemaQuery = `schema=${schema}&options=${encodeURIComponent(`-c search_path=${schema},public`)}`;
+    const testDatabase = {
+      ...base,
+      DATABASE_URL: `postgresql://example.test/database?${schemaQuery}`,
+      DIRECT_URL: `postgresql://example.test/database?${schemaQuery}`,
+      DATABASE_RESOURCE_ENV: "development",
+      TEST_SCHEMA_NAME: schema,
+      TEST_RUN_ID: "testrun-environment-1234",
+    };
+    expect(parseServerEnvironment(testDatabase)).toMatchObject({
+      APP_ENV: "test",
+      DATABASE_RESOURCE_ENV: "development",
+    });
+    expect(() =>
+      parseServerEnvironment({
+        ...testDatabase,
+        DATABASE_URL: "postgresql://example.test/database",
+      }),
+    ).toThrow(/isolated Development test schema/);
+    expect(() =>
+      parseServerEnvironment({
+        ...testDatabase,
+        DIRECT_URL: testDatabase.DIRECT_URL.replace(
+          schema,
+          "codex_test_1785888000001_abcdefabcdef",
+        ),
+      }),
+    ).toThrow(/TEST_SCHEMA_NAME/);
+    expect(() =>
+      parseServerEnvironment({
+        ...testDatabase,
+        TEST_SCHEMA_NAME: undefined,
+      }),
+    ).toThrow(/TEST_SCHEMA_NAME/);
+    expect(() =>
+      parseServerEnvironment({
+        ...testDatabase,
+        DIRECT_URL: testDatabase.DIRECT_URL.replace(
+          encodeURIComponent(`-c search_path=${schema},public`),
+          encodeURIComponent("-c search_path=public"),
+        ),
+      }),
+    ).toThrow(/schema search path/);
+    expect(() =>
+      parseServerEnvironment({
+        ...testDatabase,
+        DATABASE_URL: undefined,
+      }),
+    ).toThrow(/DATABASE_URL/);
+  });
+
   it("requires Neon and durable secrets for deployed environments", () => {
     expect(() =>
       parseServerEnvironment({
@@ -27,6 +101,7 @@ describe("server environment validation", () => {
         ...base,
         NODE_ENV: "production",
         APP_ENV: "production",
+        VERCEL_ENV: "production",
         APP_URL: "https://production.example.test",
         DATABASE_URL: "postgresql://example.test/database",
         DIRECT_URL: "postgresql://example.test/database",
@@ -37,6 +112,21 @@ describe("server environment validation", () => {
           "https://tiles.openfreemap.org/styles/liberty",
       }),
     ).toMatchObject({ APP_ENV: "production" });
+    expect(() =>
+      parseServerEnvironment({
+        ...base,
+        NODE_ENV: "production",
+        APP_ENV: "production",
+        APP_URL: "https://production.example.test",
+        DATABASE_URL: "postgresql://example.test/database",
+        DIRECT_URL: "postgresql://example.test/database",
+        DATABASE_RESOURCE_ENV: "production",
+        CRON_SECRET: "a".repeat(32),
+        GEOAPIFY_API_KEY: "g".repeat(32),
+        NEXT_PUBLIC_MAP_STYLE_URL:
+          "https://tiles.openfreemap.org/styles/liberty",
+      }),
+    ).toThrow(/Vercel Production runtime/);
   });
 
   it("requires provider credential pairs and confines capture to local/test", () => {
@@ -217,6 +307,7 @@ describe("server environment validation", () => {
       ...base,
       NODE_ENV: "production",
       APP_ENV: "production",
+      VERCEL_ENV: "production",
       PRODUCTION_BETA_MODE: "true",
       APP_URL: "https://production.example.test",
       DATABASE_URL: "postgresql://example.test/database",
@@ -259,6 +350,7 @@ describe("server environment validation", () => {
       ...base,
       NODE_ENV: "production",
       APP_ENV: "production",
+      VERCEL_ENV: "production",
       APP_URL: "https://production.example.test",
       DATABASE_URL: "postgresql://example.test/database",
       DIRECT_URL: "postgresql://example.test/database",

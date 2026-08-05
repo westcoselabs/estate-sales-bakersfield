@@ -124,7 +124,7 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-describe("Phase 3 event builder against isolated Test Neon", () => {
+describe("Phase 3 event builder in an isolated Development Neon schema", () => {
   it("creates the internal profile automatically for an account with no profile", async () => {
     const email = testEmail("phase3-no-profile");
     const user = await prisma.user.create({

@@ -1,0 +1,22 @@
+{
+  "contractVersion": "listing-import-result.v1",
+  "batchId": "33333333-3333-4333-8333-333333333333",
+  "replayed": false,
+  "status": "REJECTED",
+  "counts": {
+    "total": 1,
+    "candidateCreated": 0,
+    "invalid": 1,
+    "exactDuplicate": 0,
+    "sourceChanged": 0,
+    "identityConflict": 0
+  },
+  "rows": [
+    {
+      "rowNumber": 1,
+      "status": "INVALID",
+      "candidateId": null,
+      "validationCodes": ["CONTENT_HASH_MISMATCH"]
+    }
+  ]
+}

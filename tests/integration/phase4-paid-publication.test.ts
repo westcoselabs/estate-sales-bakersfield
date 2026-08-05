@@ -242,7 +242,7 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-describe("Phase 4 paid publication against isolated Test Neon", () => {
+describe("Phase 4 paid publication in an isolated Development Neon schema", () => {
   it("records the forward migration, expected constraints, indexes, and triggers", async () => {
     const migrations = await prisma.$queryRaw<
       Array<{ migration_name: string }>

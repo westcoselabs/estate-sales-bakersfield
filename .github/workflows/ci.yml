@@ -24,15 +24,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify:credential-free
 
-  test-neon:
+  development-neon:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       APP_ENV: test
-      TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
-      TEST_DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
-      TEST_NEON_ENDPOINT_ID: ${{ secrets.TEST_NEON_ENDPOINT_ID }}
-      TEST_DATABASE_CONFIRMATION: estate-sales-bakersfield-isolated-test-neon
+      DATABASE_RESOURCE_ENV: development
+      DATABASE_URL: ${{ secrets.DEVELOPMENT_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DEVELOPMENT_DIRECT_URL }}
+      DEVELOPMENT_NEON_ENDPOINT_ID: ${{ secrets.DEVELOPMENT_NEON_ENDPOINT_ID }}
+      PRODUCTION_NEON_ENDPOINT_ID: ${{ secrets.PRODUCTION_NEON_ENDPOINT_ID }}
+      DEVELOPMENT_DATABASE_CONFIRMATION: estate-sales-bakersfield-development-neon-test-schemas
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -43,15 +45,22 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - if: env.TEST_DATABASE_URL == ''
-        run: echo "BLOCKED - isolated Test Neon secrets are not configured"
-      - if: env.TEST_DATABASE_URL != ''
-        run: pnpm exec playwright install --with-deps chromium
-      - if: env.TEST_DATABASE_URL != ''
-        run: pnpm db:test:check
-      - if: env.TEST_DATABASE_URL != ''
-        run: pnpm test:integration
-      - if: env.TEST_DATABASE_URL != ''
-        run: pnpm test:e2e
+      - name: Require Development Neon identity
+        shell: bash
+        run: |
+          for name in DATABASE_URL DIRECT_URL DEVELOPMENT_NEON_ENDPOINT_ID PRODUCTION_NEON_ENDPOINT_ID; do
+            if [ -z "${!name}" ]; then
+              echo "BLOCKED - $name is not configured"
+              exit 2
+            fi
+          done
+          if [ "$DEVELOPMENT_NEON_ENDPOINT_ID" = "$PRODUCTION_NEON_ENDPOINT_ID" ]; then
+            echo "BLOCKED - Development and Production endpoint identifiers must differ"
+            exit 2
+          fi
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm db:test:check
+      - run: pnpm test:integration
+      - run: pnpm test:e2e
         env:
           CI: "true"

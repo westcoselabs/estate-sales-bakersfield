@@ -2,7 +2,11 @@
 
 Date: 2026-07-16  
 Scope status: Phase 1 implemented; no Phase 2 or later workflow implemented.  
-Verification status: credential-free suite `PASS`; external live-provider suite `PASS` against isolated Preview Neon, Vercel, and Private Blob resources.
+Verification status: the historical credential-free and provider results below
+are retained as evidence only. The current approved topology is Local/Test
+processes using Development Neon (with disposable test schemas) and Vercel
+Production using Production Neon. There is no active Preview or separate Test
+resource.
 
 ## Inspection prerequisite
 
@@ -14,7 +18,7 @@ Before implementation, `txlocallist`, its existing `graphify-out` graph, and the
 | -------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pnpm install --frozen-lockfile` | PASS         | Exact lockfile accepted; Prisma Client 7.8.0 regenerated successfully.                                                                                                                                                                                                                 |
 | `pnpm verify`                    | PASS         | Formatting, ESLint, dependency boundaries, strict TypeScript, Prisma validation, production dependency audit, 21 unit tests, 13 offline Blob contract tests, 12 integration tests, production build, and 2 Playwright tests all passed on the final lockfile.                          |
-| Post-live `pnpm verify` rerun    | HISTORICAL   | This Phase 1-era result is superseded by the guarded persistent Test Neon workflow documented under `docs/operations/test-neon.md`.                                                                                                                                                    |
+| Post-live `pnpm verify` rerun    | HISTORICAL   | This Phase 1-era result is superseded by the guarded Development-schema workflow documented under `docs/operations/development-neon-testing.md`.                                                                                                                                       |
 | `pnpm audit:prod`                | PASS         | No known production dependency vulnerability at moderate-or-higher severity.                                                                                                                                                                                                           |
 | `pnpm test:integration`          | PASS         | Fresh migration and repositories verified against PostgreSQL 16.14 with PostGIS 3.6.2 in a temporary localhost-only database.                                                                                                                                                          |
 | `pnpm auth:benchmark`            | PASS (local) | Final Argon2id policy: 64 MiB, four iterations, one lane; p50 510.51 ms and p95 569.84 ms on Node 24.11.1 on this host.                                                                                                                                                                |
@@ -23,7 +27,10 @@ Before implementation, `txlocallist`, its existing `graphify-out` graph, and the
 | `pnpm test:e2e`                  | PASS         | Chromium verified the foundation page, health route, request ID, no-store behavior, CSP, frame denial, and MIME-sniffing protection.                                                                                                                                                   |
 | `pnpm verify:live`               | PASS         | Executed through `npx vercel env run -e preview` with `APP_ENV=preview`. Preview Neon had no pending migration, PostGIS 3.6.0 and rollback passed; protected Vercel Node 24.18.0 measured Argon2id p50 205.16 ms/p95 229.26 ms; the full Private Blob lifecycle passed and cleaned up. |
 
-The original Phase 1 database-harness description is retired. Current integration and browser suites use only the guarded persistent isolated Test Neon branch; no local PostgreSQL or container runtime is part of the project.
+The original Phase 1 database-harness description is retired. Current
+integration and browser suites use guarded, disposable schemas inside
+Development Neon; no separate Test database, local PostgreSQL, or container
+runtime is part of the project.
 
 ## Acceptance criteria
 
@@ -48,7 +55,12 @@ The original Phase 1 database-harness description is retired. Current integratio
 | Authentication, Blob, jobs, dependency, audit, and module architecture documented            | PASS                                       |
 | Better Auth/alternate auth, second storage adapter, and Phase 2+ features absent             | PASS                                       |
 
-## Live Preview verification
+## Retired historical Preview evidence
+
+The facts in this section describe a completed historical run. They are not an
+approved environment, deployment target, credential source, or prerequisite.
+Do not recreate these resources. Current hosted verification uses the stable
+Vercel Production beta and Production-scoped providers.
 
 - The final deployment is the READY Preview deployment at `https://estate-sales-bakersfield-cmmeqnxtr-westcoselabs-projects.vercel.app`; `VERCEL_BENCHMARK_URL` is scoped to Preview and points to this immutable deployment.
 - `APP_ENV=preview` and a valid `CRON_SECRET` were confirmed in the effective verification environment. All configured Vercel variables changed during this run were targeted to Preview only.
@@ -61,7 +73,8 @@ The original Phase 1 database-harness description is retired. Current integratio
 
 1. TypeScript 7.0.2 did not type-check the selected Next.js declarations with library checking enabled, so TypeScript 5.9.3 is pinned. ESLint 10.7 conflicted with the selected Next.js ESLint peer range, so ESLint 9.39.5 is pinned. Exact versions remain repository configuration, not roadmap law.
 2. The initial 64 MiB/two-iteration policy measured only 114.35 ms p50 on Vercel Preview. The centralized policy was raised to four iterations and revalidated at p50 205.16 ms/p95 229.26 ms; older parameter strings are marked for rehash.
-3. The historical local integration override is retired; current database tests use the isolated Test Neon guard.
+3. The historical local integration override is retired; current database
+   tests use guarded, disposable schemas inside Development Neon.
 4. No GitHub owner, organization, repository name, or remote URL was invented. The user-supplied `origin` remote and linked Vercel project were used as configured.
 5. Two moderate transitive advisories found during bootstrap were removed with narrow overrides to patched PostCSS and `@hono/node-server` releases; the final production audit reports no known vulnerabilities.
 6. Vercel CLI does not override selector values already loaded from local dotenv files, and sensitive Preview variables are intentionally not downloadable. The live run therefore preseeded only the public `APP_ENV=preview` and immutable Preview URL selectors while using the distinct local non-production credentials.

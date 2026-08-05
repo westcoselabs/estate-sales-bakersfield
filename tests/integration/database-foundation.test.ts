@@ -19,7 +19,7 @@ describe("fresh PostgreSQL/PostGIS foundation", () => {
     const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
       SELECT "table_name"::text AS "table_name"
       FROM "information_schema"."tables"
-      WHERE "table_schema" = 'public'
+      WHERE "table_schema" = current_schema()
       ORDER BY "table_name"
     `;
     expect(tables.map((row) => row.table_name)).toEqual(

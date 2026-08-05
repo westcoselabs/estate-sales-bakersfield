@@ -18,6 +18,18 @@ Public detail, metadata, structured data, caches, and media authorization requir
 
 ## Environment isolation
 
-Local/Test default to deterministic fake Stripe. Test strips/rejects real Stripe credentials. Preview requires a test key, `STRIPE_MODE=test`, and `STRIPE_RESOURCE_ENV=preview`. Provider markers are an application safety check, not cryptographic account attestation, so the operator must still verify the Stripe account/Product/Price/webhook in the dashboard. Production configuration remains separate, unset, and untouched.
+Local and logical Test mode default to deterministic fake Stripe. Test strips
+and rejects real Stripe credentials and runs database work in disposable
+Development Neon schemas. The stable Vercel Production beta requires a
+Production-scoped test key, `STRIPE_MODE=test`,
+`STRIPE_RESOURCE_ENV=production`, and `PRODUCTION_BETA_MODE=true`. Provider
+markers are an application safety check, not cryptographic account attestation,
+so the operator must still verify the Stripe account, Product, Price, and
+stable Production webhook in the dashboard.
 
-Residual operational risks are Preview resource misidentification, webhook endpoint misconfiguration, an unapproved business price, delayed job scheduling, paid-but-blocked support handling, and Production legal/tax/refund decisions. The Preview checklist and recovery runbook make these explicit launch blockers.
+Residual operational risks are Production resource misidentification, webhook
+endpoint misconfiguration, an unapproved business price, delayed job
+scheduling, paid-but-blocked support handling, and Production legal, tax, and
+refund decisions. The Production-beta checklist and recovery runbook make
+these explicit launch blockers. Preview and separate Test resources are not
+approved fallback environments.

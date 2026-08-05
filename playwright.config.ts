@@ -6,7 +6,8 @@ process.env.TEST_RUN_ID ??= `testrun-e2e-${Date.now().toString(36)}-${crypto.ran
 
 export default defineConfig({
   testDir: "tests/e2e",
-  // Capture email, deterministic media, fake Stripe, and the Test Neon branch
+  // Capture email, deterministic media, fake Stripe, and one isolated schema
+  // inside Development Neon
   // are intentionally shared integration fixtures. Serialize browser journeys
   // so provider-heavy workflows cannot contend through the single test server.
   fullyParallel: false,

@@ -1,0 +1,22 @@
+{
+  "contractVersion": "listing-import-result.v1",
+  "batchId": "11111111-1111-4111-8111-111111111111",
+  "replayed": false,
+  "status": "COMPLETED",
+  "counts": {
+    "total": 1,
+    "candidateCreated": 1,
+    "invalid": 0,
+    "exactDuplicate": 0,
+    "sourceChanged": 0,
+    "identityConflict": 0
+  },
+  "rows": [
+    {
+      "rowNumber": 1,
+      "status": "CANDIDATE_CREATED",
+      "candidateId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "validationCodes": []
+    }
+  ]
+}

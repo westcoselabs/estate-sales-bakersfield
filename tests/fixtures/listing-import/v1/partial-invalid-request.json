@@ -1,0 +1,47 @@
+{
+  "contractVersion": "listing-import.v1",
+  "sourceKey": "fixture",
+  "ingestorRunId": "fixture-run-partial-001",
+  "ingestorInstanceId": "fixture-instance-001",
+  "parserVersion": "fixture-parser@1.0.0",
+  "items": [
+    {
+      "sourceListingId": "fixture-2001",
+      "sourceUrl": "https://fixture.invalid/listings/fixture-partial-valid-2001",
+      "retrievedAt": "2026-08-04T16:10:00.000Z",
+      "contentHash": "3e12ddd6f21f7caaba598c3aecfd4053feab8cbf990ef986cdc0cba989d4d66b",
+      "eventType": "ESTATE_SALE",
+      "title": "Fixture Partial Batch Sale",
+      "description": "A deterministic valid row used to exercise partial batch acceptance.",
+      "localStartsAt": "2026-09-19T08:00",
+      "localEndsAt": "2026-09-19T14:00",
+      "timezone": "America/Los_Angeles",
+      "addressLine1": "202 Example Boulevard",
+      "addressLine2": "Suite 2",
+      "city": "Bakersfield",
+      "region": "CA",
+      "postalCode": "93301",
+      "countryCode": "US",
+      "privacyMode": "APPROXIMATE_LOCATION"
+    },
+    {
+      "sourceListingId": "fixture-2002",
+      "sourceUrl": "https://fixture.invalid/listings/fixture-invalid-title-2002",
+      "retrievedAt": "2026-08-04T16:10:01.000Z",
+      "contentHash": "cb67108a735c38456068f2f4d945ea2079012228b74e19d10137d9b2c3d7adae",
+      "eventType": "YARD_SALE",
+      "title": "No",
+      "description": "A deterministic invalid fixture row with a title that is too short.",
+      "localStartsAt": "2026-09-20T08:00",
+      "localEndsAt": "2026-09-20T13:00",
+      "timezone": "America/Los_Angeles",
+      "addressLine1": null,
+      "addressLine2": null,
+      "city": "Bakersfield",
+      "region": "CA",
+      "postalCode": "93301",
+      "countryCode": "US",
+      "privacyMode": "APPROXIMATE_LOCATION"
+    }
+  ]
+}

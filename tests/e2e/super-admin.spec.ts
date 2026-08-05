@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { PrismaNeon } from "@prisma/adapter-neon";
 import { expect, test, type Page } from "@playwright/test";
 
 import { PrismaClient } from "@/generated/prisma/client";
@@ -10,10 +9,8 @@ import {
   emailContentDigest,
   sanitizeEmailHtml,
 } from "@/modules/email/application/rendering";
-import {
-  loadDedicatedTestEnvironment,
-  requireSafeTestDatabase,
-} from "../../scripts/test-database-safety";
+import { createNeonAdapter } from "@/platform/database/neon-adapter";
+import { requireIsolatedTestDatabase } from "../../scripts/test-database-safety";
 
 interface CapturedEmail {
   kind: "EMAIL_VERIFICATION";
@@ -26,8 +23,7 @@ const runId = process.env.TEST_RUN_ID;
 if (!runId || !/^testrun-[a-z0-9-]+$/.test(runId)) {
   throw new Error("Playwright requires a valid TEST_RUN_ID");
 }
-loadDedicatedTestEnvironment();
-const database = requireSafeTestDatabase();
+const database = requireIsolatedTestDatabase();
 
 async function registerAndVerify(
   page: Page,
@@ -103,7 +99,7 @@ test("guards and operates the focused owner portal on desktop and mobile", async
     password: ownerPassword,
   });
   const prisma = new PrismaClient({
-    adapter: new PrismaNeon({ connectionString: database.pooledUrl }),
+    adapter: createNeonAdapter(database.directUrl),
   });
   const owner = await prisma.user.findUniqueOrThrow({
     where: { normalizedEmail: ownerEmail },
@@ -259,7 +255,9 @@ test("guards and operates the focused owner portal on desktop and mobile", async
     page.getByRole("heading", { name: "Email center" }),
   ).toBeVisible();
   expect(
-    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
   ).toBe(true);
   await ordinaryContext.close();
 });

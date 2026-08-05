@@ -1,0 +1,28 @@
+{
+  "contractVersion": "listing-import.v1",
+  "sourceKey": "fixture",
+  "ingestorRunId": "fixture-run-valid-001",
+  "ingestorInstanceId": "fixture-instance-001",
+  "parserVersion": "fixture-parser@1.0.0",
+  "items": [
+    {
+      "sourceListingId": "fixture-1001",
+      "sourceUrl": "https://fixture.invalid/listings/fixture-estate-sale-1001",
+      "retrievedAt": "2026-08-04T16:00:00.000Z",
+      "contentHash": "0cd9cf8ffadf29ca81904b86e33cea5442e3e6425f7fd33b5cd2a4bdb0041b7f",
+      "eventType": "ESTATE_SALE",
+      "title": "Fixture Estate Sale",
+      "description": "A deterministic fixture listing with household goods and books.",
+      "localStartsAt": "2026-09-12T09:00",
+      "localEndsAt": "2026-09-13T15:00",
+      "timezone": "America/Los_Angeles",
+      "addressLine1": "101 Example Avenue",
+      "addressLine2": null,
+      "city": "Bakersfield",
+      "region": "CA",
+      "postalCode": "93301",
+      "countryCode": "US",
+      "privacyMode": "APPROXIMATE_LOCATION"
+    }
+  ]
+}

@@ -472,7 +472,11 @@ describe("Phase 2 authentication persistence", () => {
     });
     await prisma.user.update({
       where: { normalizedEmail },
-      data: { status: "RESTRICTED", restrictedAt: new Date() },
+      data: {
+        status: "RESTRICTED",
+        restrictedAt: new Date(),
+        restrictionReason: "Integration-test restriction fixture",
+      },
     });
 
     await expect(

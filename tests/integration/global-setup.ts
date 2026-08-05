@@ -1,24 +1,13 @@
 import type { TestProject } from "vitest/node";
 
-import {
-  createTestRunId,
-  loadDedicatedTestEnvironment,
-  requireSafeTestDatabase,
-} from "../../scripts/test-database-safety";
-import {
-  cleanupTestRun,
-  deployTestMigrations,
-} from "../../scripts/test-database-run";
+import { requireIsolatedTestDatabase } from "../../scripts/test-database-safety";
 
 export default async function setup(project: TestProject) {
-  loadDedicatedTestEnvironment();
-  const database = requireSafeTestDatabase();
-  const runId = createTestRunId();
-  deployTestMigrations(database, runId);
-  project.provide("databaseUrl", database.pooledUrl);
+  const database = requireIsolatedTestDatabase();
+  const runId = process.env.TEST_RUN_ID;
+  if (!runId || !/^testrun-[a-z0-9-]+$/.test(runId)) {
+    throw new Error("Integration tests require a valid TEST_RUN_ID");
+  }
+  project.provide("databaseUrl", database.directUrl);
   project.provide("testRunId", runId);
-
-  return async () => {
-    await cleanupTestRun(database, runId);
-  };
 }

@@ -4,7 +4,12 @@ Status: accepted for Phase 3
 
 ## Decision
 
-Store exact address, normalized provider identity, decimal coordinates, PostGIS geography, IANA timezone, precision/confidence, and validation state in one event-owned `event_locations` row separate from public DTOs. Mapbox Geocoding v6 is the Preview/Production provider behind `LocationProvider`; automated tests use deterministic Bakersfield fixtures.
+Store exact address, normalized provider identity, decimal coordinates, PostGIS
+geography, IANA timezone, precision/confidence, and validation state in one
+event-owned `event_locations` row separate from public DTOs. Server-mediated
+Geoapify is the configured Production provider behind `LocationProvider`;
+MapLibre/OpenFreeMap renders browser maps, and automated tests use deterministic
+Bakersfield fixtures. There is no Preview provider.
 
 The server validates the IANA zone and converts local start/end values into unambiguous UTC instants. Nonexistent and ambiguous daylight-saving local times are rejected. Saved schedule and location zones must match.
 
@@ -16,4 +21,8 @@ Public projections enforce one of three modes:
 
 ## Consequences
 
-Owner editor DTOs may contain exact private fields. Dashboard lists, ordinary audit metadata, approximate/hidden public DTOs, and logs do not. Mapbox does not select application state or expose SDK types outside infrastructure. Live Mapbox checks are Preview-only and require `MAPBOX_RESOURCE_ENV=preview`.
+Owner editor DTOs may contain exact private fields. Dashboard lists, ordinary
+audit metadata, approximate/hidden public DTOs, and logs do not. Geoapify does
+not select application state or expose SDK types outside infrastructure. Live
+provider checks are controlled Production-beta checks; ordinary tests make no
+provider request.

@@ -1,18 +1,24 @@
 import {
-  loadDedicatedTestEnvironment,
-  requireSafeTestDatabase,
+  createTestRunId,
+  isolateDevelopmentDatabase,
+  knownProductionDatabaseEnvironment,
+  loadDevelopmentTestEnvironment,
+  requireSafeDevelopmentDatabase,
 } from "./test-database-safety";
 
-loadDedicatedTestEnvironment();
-
 try {
-  const database = requireSafeTestDatabase();
+  loadDevelopmentTestEnvironment();
+  const development = requireSafeDevelopmentDatabase({
+    ...process.env,
+    ...knownProductionDatabaseEnvironment(),
+  });
+  const database = isolateDevelopmentDatabase(development, createTestRunId());
   process.stdout.write(
-    `Test Neon safety guard passed for endpoint ${database.endpointId}.\n`,
+    `Development Neon test-schema guard passed for endpoint ${database.endpointId} using ${database.schemaName}.\n`,
   );
 } catch (error) {
   process.stderr.write(
-    `BLOCKED: ${error instanceof Error ? error.message : "Test Neon configuration is unavailable"}\n`,
+    `BLOCKED: ${error instanceof Error ? error.message : "Development Neon configuration is unavailable"}\n`,
   );
   process.exitCode = 2;
 }

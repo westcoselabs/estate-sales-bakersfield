@@ -15,6 +15,7 @@ describe("payment provider environment selection", () => {
     const environment = parseServerEnvironment({
       NODE_ENV: "production",
       APP_ENV: "production",
+      VERCEL_ENV: "production",
       PRODUCTION_BETA_MODE: "true",
       APP_URL: "https://production.example.test",
       LOG_LEVEL: "info",

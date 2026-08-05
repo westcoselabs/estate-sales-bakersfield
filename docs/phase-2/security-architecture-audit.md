@@ -5,6 +5,11 @@ Auditor role: independent senior application-security and TypeScript/Next.js arc
 Scope: uncommitted Phase 1 inheritance plus Phase 2 account/organizer implementation  
 Evidence state: findings below were recorded before implementation fixes were started.
 
+> Environment references in this audit are historical evidence. Current tests
+> use disposable schemas inside Development Neon; Vercel Production with
+> Production Neon is the only hosted target. Preview and separate Test resources
+> must not be created to reproduce an old audit gate.
+
 ## Baseline verdict
 
 `NOT READY` at the pre-fix audit baseline. Four confirmed High findings affect authentication confidentiality, enumeration resistance, or session elevation. Four Medium findings affect trusted configuration, environment isolation, real-email safety, and the dependency/test acceptance gates. Provider configuration must wait until the High findings and provider-boundary Medium findings are corrected and credential-free verification is rerun.
@@ -161,7 +166,9 @@ No confirmed Critical finding.
 
 ## Post-remediation disposition
 
-Final code-review verdict: `READY FOR PROVIDER CONFIGURATION`. This is not Phase 2 acceptance: the remediated revision still needs a new non-Production Preview deployment, isolated Preview providers, a controlled delivery target/test mode, and actual execution of all Docker-dependent tests.
+The historical post-remediation verdict was `READY FOR PROVIDER
+CONFIGURATION`. Its former Preview/Docker prerequisites are superseded by the
+Development-schema test harness and stable Production-beta verification path.
 
 | Finding | Disposition                                             | Post-remediation evidence                                                                                                                                                                                                                                                                      |
 | ------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -203,12 +210,14 @@ No Critical finding was identified. No confirmed High or provider-boundary Mediu
 
 The previously reported live Preview Neon/PostGIS, Private Blob, and Argon2 checks were not rerun. No live-provider command was run, and no credential value was inspected or changed during this audit.
 
-## Remaining blocked acceptance work
+## Superseding current acceptance work
 
-- Deploy this remediated, still-uncommitted revision to a new non-Production Preview.
-- Apply the PostgreSQL rate-limit migration to isolated Preview Neon and configure Preview Resend without reusing Production credentials.
-- Approve a controlled Preview recipient or provider test mode, then exercise delivery and full Preview authentication recovery paths.
-- Execute all 23 PostgreSQL integration and 4 Playwright tests on a Docker-capable host or CI and retain their actual results.
+- Execute database integration and Playwright in guarded, disposable
+  Development Neon schemas and retain their actual results.
+- For an approved hosted release, apply migrations to Production Neon, deploy
+  `main` to Vercel Production, and use Production-scoped provider credentials
+  plus a controlled recipient/test mode.
+- Never substitute a Preview or separate Test resource for a failed check.
 - Complete administrator TOTP/recovery custody before public launch, as already required by the frozen roadmap.
 
 The existing Preview URL contains the pre-audit revision and is not evidence for the fixes in this report. Production was not accessed, configured, deployed, or modified. Phase 3 was not started.

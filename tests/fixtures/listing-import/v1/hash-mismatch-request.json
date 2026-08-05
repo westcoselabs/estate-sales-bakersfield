@@ -1,0 +1,28 @@
+{
+  "contractVersion": "listing-import.v1",
+  "sourceKey": "fixture",
+  "ingestorRunId": "fixture-run-hash-mismatch-001",
+  "ingestorInstanceId": "fixture-instance-001",
+  "parserVersion": "fixture-parser@1.0.0",
+  "items": [
+    {
+      "sourceListingId": "fixture-3001",
+      "sourceUrl": "https://fixture.invalid/listings/fixture-hash-mismatch-3001",
+      "retrievedAt": "2026-08-04T16:20:00.000Z",
+      "contentHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "eventType": "ESTATE_SALE",
+      "title": "Fixture Hash Mismatch Sale",
+      "description": "A deterministic fixture whose submitted content hash is intentionally wrong.",
+      "localStartsAt": "2026-09-26T09:00",
+      "localEndsAt": "2026-09-27T15:00",
+      "timezone": "America/Los_Angeles",
+      "addressLine1": "303 Example Court",
+      "addressLine2": null,
+      "city": "Bakersfield",
+      "region": "CA",
+      "postalCode": "93301",
+      "countryCode": "US",
+      "privacyMode": "APPROXIMATE_LOCATION"
+    }
+  ]
+}

@@ -4,12 +4,21 @@ import { ZodError } from "zod";
 import { AdminApplicationError } from "@/modules/admin";
 import { EmailApplicationError } from "@/modules/email";
 import {
+  ListingImportConflictError,
+  ListingImportError,
+  ListingIngestionCredentialError,
+} from "@/modules/listing-imports";
+import {
   AuthenticationError,
   AuthenticationServiceUnavailableError,
   AuthorizationError,
   RateLimitExceededError,
 } from "@/modules/auth";
 import { getTrustedApplicationUrls } from "@/platform/config/application-url";
+import {
+  BoundedBodyError,
+  readBoundedText,
+} from "@/platform/http/bounded-body";
 import { logger } from "@/platform/observability/logger";
 import {
   assertTrustedOrigin,
@@ -24,6 +33,10 @@ const adminHeaders = {
   "X-Robots-Tag": "noindex, nofollow, noarchive",
 } as const;
 
+export class AdminUnsupportedMediaTypeError extends Error {
+  override readonly name = "AdminUnsupportedMediaTypeError";
+}
+
 export function assertAdminOrigin(request: Request): void {
   assertTrustedOrigin(request, getTrustedApplicationUrls());
 }
@@ -35,6 +48,20 @@ export async function readAdminJson(request: Request): Promise<unknown> {
     throw new ZodError([]);
   }
   return request.json();
+}
+
+export async function readAdminBoundedJson(request: Request): Promise<unknown> {
+  if (
+    (request.headers.get("content-type") ?? "")
+      .split(";", 1)[0]
+      ?.trim()
+      .toLowerCase() !== "application/json"
+  ) {
+    throw new AdminUnsupportedMediaTypeError(
+      "Content-Type must be application/json.",
+    );
+  }
+  return JSON.parse(await readBoundedText(request));
 }
 
 export function adminJson(
@@ -67,7 +94,18 @@ export function adminApiError(
   let message = "An unexpected error occurred.";
   let retryAfter: string | undefined;
 
-  if (error instanceof ZodError || error instanceof SyntaxError) {
+  if (error instanceof BoundedBodyError) {
+    status = error.code === "PAYLOAD_TOO_LARGE" ? 413 : 400;
+    code = error.code;
+    message =
+      error.code === "PAYLOAD_TOO_LARGE"
+        ? "The request body is too large."
+        : "Please check the submitted information.";
+  } else if (error instanceof AdminUnsupportedMediaTypeError) {
+    status = 415;
+    code = "UNSUPPORTED_MEDIA_TYPE";
+    message = "The request content type is not supported.";
+  } else if (error instanceof ZodError || error instanceof SyntaxError) {
     status = 400;
     code = "INVALID_INPUT";
     message = "Please check the submitted information.";
@@ -95,6 +133,24 @@ export function adminApiError(
     status = 503;
     code = "SERVICE_UNAVAILABLE";
     message = "The service is temporarily unavailable.";
+  } else if (error instanceof ListingImportConflictError) {
+    status = 409;
+    code = error.code;
+    message = "The import conflicts with an existing batch.";
+  } else if (error instanceof ListingImportError) {
+    if (error.code === "ACTOR_TRANSPORT_MISMATCH") {
+      status = 403;
+      code = "FORBIDDEN";
+      message = "You do not have access to this action.";
+    } else {
+      status = error.code === "SOURCE_NOT_PRODUCTION_ALLOWED" ? 403 : 400;
+      code = error.code;
+      message = "Please check the listing import information.";
+    }
+  } else if (error instanceof ListingIngestionCredentialError) {
+    status = error.code === "SOURCE_NOT_PRODUCTION_ALLOWED" ? 403 : 400;
+    code = error.code;
+    message = "Please check the ingestion credential information.";
   } else if (error instanceof AdminApplicationError) {
     status = error.status;
     code = error.code;

@@ -1,5 +1,3 @@
-import "dotenv/config";
-
 import { defineConfig } from "prisma/config";
 
 const migrationUrl =
@@ -9,6 +7,8 @@ const migrationUrl =
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
-  migrations: { path: "prisma/migrations" },
+  migrations: {
+    path: process.env.PRISMA_MIGRATIONS_PATH ?? "prisma/migrations",
+  },
   datasource: { url: migrationUrl },
 });

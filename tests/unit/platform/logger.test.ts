@@ -22,6 +22,21 @@ describe("structured logger", () => {
         stripeSignature: "raw-stripe-signature",
         checkoutUrl: "https://checkout.example.test/raw-session",
         rawBody: "raw-webhook-body",
+        ingestionToken: "esb_ing_raw-ingestion-token",
+        requestBody: "raw-ingestion-request-body",
+        sourceUrl: "https://source.example/listing?private=query-value",
+        request: {
+          headers: { authorization: "Bearer nested-authorization" },
+          body: "nested-request-body",
+        },
+        payload: {
+          items: [
+            {
+              sourceUrl:
+                "https://source.example/listing?nested=private-query-value",
+            },
+          ],
+        },
         geoapifyApiKey: "raw-geoapify-key",
         addressQuery: "123 Private Street",
         coordinates: [-119.1, 35.3],
@@ -42,6 +57,12 @@ describe("structured logger", () => {
     expect(serialized).not.toContain("raw-stripe-signature");
     expect(serialized).not.toContain("raw-session");
     expect(serialized).not.toContain("raw-webhook-body");
+    expect(serialized).not.toContain("raw-ingestion-token");
+    expect(serialized).not.toContain("raw-ingestion-request-body");
+    expect(serialized).not.toContain("private=query-value");
+    expect(serialized).not.toContain("nested-authorization");
+    expect(serialized).not.toContain("nested-request-body");
+    expect(serialized).not.toContain("nested=private-query-value");
     expect(serialized).not.toContain("raw-geoapify-key");
     expect(serialized).not.toContain("123 Private Street");
     expect(serialized).not.toContain("-119.1");

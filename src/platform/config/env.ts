@@ -9,6 +9,12 @@ const providerEnvironmentSchema = z.enum([
   "production",
 ]);
 
+const databaseResourceEnvironmentSchema = z.enum([
+  "development",
+  "preview",
+  "production",
+]);
+
 const optionalBooleanFlag = z.preprocess(
   (value) => (value === "" || value === undefined ? "false" : value),
   z.enum(["true", "false"]).transform((value) => value === "true"),
@@ -70,24 +76,7 @@ export const serverEnvironmentSchema = z
     DIRECT_URL: optionalUrl,
     DATABASE_RESOURCE_ENV: z.preprocess(
       (value) => (value === "" ? undefined : value),
-      providerEnvironmentSchema.optional(),
-    ),
-    TEST_DATABASE_URL: optionalUrl,
-    TEST_DIRECT_URL: optionalUrl,
-    TEST_NEON_ENDPOINT_ID: z.preprocess(
-      (value) => (value === "" ? undefined : value),
-      z
-        .string()
-        .regex(/^ep-[a-z0-9-]{6,80}$/)
-        .optional(),
-    ),
-    TEST_DATABASE_CONFIRMATION: z.preprocess(
-      (value) => (value === "" ? undefined : value),
-      z.string().max(100).optional(),
-    ),
-    TEST_DATABASE_RESET_CONFIRMATION: z.preprocess(
-      (value) => (value === "" ? undefined : value),
-      z.string().max(100).optional(),
+      databaseResourceEnvironmentSchema.optional(),
     ),
     TEST_RUN_ID: z.preprocess(
       (value) => (value === "" ? undefined : value),
@@ -96,6 +85,17 @@ export const serverEnvironmentSchema = z
         .regex(/^testrun-[a-z0-9-]+$/)
         .max(100)
         .optional(),
+    ),
+    TEST_SCHEMA_NAME: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z
+        .string()
+        .regex(/^codex_test_[0-9]{13}_[a-f0-9]{12}$/)
+        .optional(),
+    ),
+    VERCEL_ENV: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.enum(["development", "preview", "production"]).optional(),
     ),
     CRON_SECRET: z.preprocess(
       (value) => (value === "" ? undefined : value),
@@ -189,6 +189,17 @@ export const serverEnvironmentSchema = z
     SENTRY_DSN: optionalUrl,
   })
   .superRefine((environment, context) => {
+    if (
+      environment.APP_ENV === "production" &&
+      environment.VERCEL_ENV !== "production"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "APP_ENV=production is allowed only in the Vercel Production runtime",
+        path: ["VERCEL_ENV"],
+      });
+    }
     if (
       environment.PRODUCTION_BETA_MODE &&
       environment.APP_ENV !== "production"
@@ -285,9 +296,107 @@ export const serverEnvironmentSchema = z
       }
     }
 
+    const databaseConfigured = Boolean(
+      environment.DATABASE_URL ||
+      environment.DIRECT_URL ||
+      environment.DATABASE_RESOURCE_ENV,
+    );
+    if (databaseConfigured) {
+      if (!environment.DATABASE_URL || !environment.DIRECT_URL) {
+        for (const key of ["DATABASE_URL", "DIRECT_URL"] as const) {
+          if (!environment[key]) {
+            context.addIssue({
+              code: "custom",
+              message: `${key} is required when a database is configured`,
+              path: [key],
+            });
+          }
+        }
+      }
+      const expectedDatabaseResourceEnvironment =
+        environment.APP_ENV === "production"
+          ? "production"
+          : environment.APP_ENV === "preview"
+            ? "preview"
+            : "development";
+      if (
+        environment.DATABASE_RESOURCE_ENV !==
+        expectedDatabaseResourceEnvironment
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: `DATABASE_RESOURCE_ENV must be ${expectedDatabaseResourceEnvironment} in ${environment.APP_ENV}`,
+          path: ["DATABASE_RESOURCE_ENV"],
+        });
+      }
+      if (environment.APP_ENV === "test") {
+        const configuredSchemas = [
+          environment.DATABASE_URL
+            ? new URL(environment.DATABASE_URL).searchParams.get("schema")
+            : null,
+          environment.DIRECT_URL
+            ? new URL(environment.DIRECT_URL).searchParams.get("schema")
+            : null,
+        ];
+        for (const key of ["DATABASE_URL", "DIRECT_URL"] as const) {
+          const value = environment[key];
+          const url = value ? new URL(value) : undefined;
+          const schema = url?.searchParams.get("schema") ?? "";
+          if (value && !/^codex_test_[0-9]{13}_[a-f0-9]{12}$/.test(schema)) {
+            context.addIssue({
+              code: "custom",
+              message: `${key} must target an isolated Development test schema`,
+              path: [key],
+            });
+          }
+          if (
+            value &&
+            url?.searchParams.get("options") !==
+              `-c search_path=${schema},public`
+          ) {
+            context.addIssue({
+              code: "custom",
+              message: `${key} must use the isolated Development schema search path`,
+              path: [key],
+            });
+          }
+        }
+        if (
+          configuredSchemas[0] !== configuredSchemas[1] ||
+          environment.TEST_SCHEMA_NAME !== configuredSchemas[0]
+        ) {
+          context.addIssue({
+            code: "custom",
+            message:
+              "TEST_SCHEMA_NAME must match the isolated Development test schema",
+            path: ["TEST_SCHEMA_NAME"],
+          });
+        }
+        if (!environment.TEST_RUN_ID) {
+          context.addIssue({
+            code: "custom",
+            message: "Database-backed tests require TEST_RUN_ID",
+            path: ["TEST_RUN_ID"],
+          });
+        }
+      } else {
+        for (const key of ["DATABASE_URL", "DIRECT_URL"] as const) {
+          const schema = environment[key]
+            ? new URL(environment[key]).searchParams.get("schema")
+            : null;
+          if (schema) {
+            context.addIssue({
+              code: "custom",
+              message: `${key} cannot select a schema outside Test`,
+              path: [key],
+            });
+          }
+        }
+      }
+    }
+
     if (["preview", "production"].includes(environment.APP_ENV)) {
       const configuredProviders = [
-        ["DATABASE_URL", "DATABASE_RESOURCE_ENV"],
         ["BLOB_READ_WRITE_TOKEN", "BLOB_RESOURCE_ENV"],
         ["RESEND_API_KEY", "RESEND_RESOURCE_ENV"],
         ["STRIPE_SECRET_KEY", "STRIPE_RESOURCE_ENV"],
@@ -412,10 +521,14 @@ export const serverEnvironmentSchema = z
       });
     }
 
-    if (environment.APP_ENV !== "test" && environment.TEST_RUN_ID) {
+    if (
+      environment.APP_ENV !== "test" &&
+      (environment.TEST_RUN_ID || environment.TEST_SCHEMA_NAME)
+    ) {
       context.addIssue({
         code: "custom",
-        message: "TEST_RUN_ID is permitted only in APP_ENV=test",
+        message:
+          "TEST_RUN_ID and TEST_SCHEMA_NAME are permitted only in APP_ENV=test",
         path: ["TEST_RUN_ID"],
       });
     }

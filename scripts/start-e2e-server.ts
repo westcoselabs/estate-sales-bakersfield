@@ -3,45 +3,33 @@ import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  loadDedicatedTestEnvironment,
   redactTestDatabaseText,
-  requireSafeTestDatabase,
+  requireIsolatedTestDatabase,
 } from "./test-database-safety";
-import {
-  cleanupTestRun,
-  deployTestMigrations,
-  testDatabaseEnvironment,
-} from "./test-database-run";
+import { testDatabaseEnvironment } from "./test-database-run";
 
 const port = 3417;
 const capturePath = path.resolve(".tmp/e2e-auth-emails.jsonl");
 let application: ChildProcess | undefined;
 let stopping = false;
 
-loadDedicatedTestEnvironment();
-const database = requireSafeTestDatabase();
+const database = requireIsolatedTestDatabase();
 const configuredRunId = process.env.TEST_RUN_ID;
 if (!configuredRunId || !/^testrun-[a-z0-9-]+$/.test(configuredRunId)) {
   throw new Error("Playwright requires a valid TEST_RUN_ID");
 }
 const runId: string = configuredRunId;
 
-async function stop(exitCode: number): Promise<void> {
+function stop(exitCode: number): void {
   if (stopping) return;
   stopping = true;
   application?.kill();
-  await cleanupTestRun(database, runId).catch((error: unknown) => {
-    console.error(
-      error instanceof Error ? error.message : "Test-run cleanup failed",
-    );
-  });
   process.exit(exitCode);
 }
 
 async function main(): Promise<void> {
   await mkdir(path.dirname(capturePath), { recursive: true });
   await rm(capturePath, { force: true });
-  deployTestMigrations(database, runId);
 
   const environment: NodeJS.ProcessEnv = {
     ...testDatabaseEnvironment(database, runId),
@@ -55,9 +43,9 @@ async function main(): Promise<void> {
       "phase-three-e2e-media-signing-secret-32-characters",
     TEST_LOCATION_FIXTURES: "bakersfield",
     NEXT_PUBLIC_MAP_STYLE_URL: "https://map-style.test.invalid/fixture",
-    // Keep Next's dotenv loading from reintroducing local, Preview, or
-    // Production provider credentials into the isolated test server.
-    DATABASE_RESOURCE_ENV: "",
+    // Keep Next's dotenv loading from reintroducing Preview or Production
+    // provider credentials into the isolated Development test schema.
+    DATABASE_RESOURCE_ENV: "development",
     BLOB_READ_WRITE_TOKEN: "",
     BLOB_RESOURCE_ENV: "",
     RESEND_API_KEY: "",
@@ -105,18 +93,18 @@ async function main(): Promise<void> {
       : ["exec", "next", "start", "-p", String(port)],
     { cwd: process.cwd(), env: environment, stdio: "inherit" },
   );
-  application.on("exit", (code) => void stop(code ?? 1));
+  application.on("exit", (code) => stop(code ?? 1));
 }
 
-process.on("SIGINT", () => void stop(0));
-process.on("SIGTERM", () => void stop(0));
+process.on("SIGINT", () => stop(0));
+process.on("SIGTERM", () => stop(0));
 process.on("uncaughtException", (error) => {
   console.error(error instanceof Error ? error.message : "E2E server failed");
-  void stop(1);
+  stop(1);
 });
 process.on("unhandledRejection", (error) => {
   console.error(error instanceof Error ? error.message : "E2E server failed");
-  void stop(1);
+  stop(1);
 });
 
 void main();

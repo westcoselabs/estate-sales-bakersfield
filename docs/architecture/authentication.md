@@ -31,16 +31,16 @@ Super-admin sessions contain eight-hour absolute expiration and track the last
 password authentication time. Owner reauthentication rotates the opaque token,
 updates that timestamp, and preserves the original expiration. Raw tokens exist
 only in the request cookie and session grant; PostgreSQL stores SHA-256 hashes.
-Preview and Production cookies are host-only, HTTP-only, Secure,
+Production cookies are host-only, HTTP-only, Secure,
 `SameSite=Lax`, path `/`, and use the `__Host-` prefix.
 
 The central server functions are `getCurrentSession`, `getCurrentUser`, `requireUser`, `requireAdmin`, and `requireVerifiedPublishingUser`. They return a narrow principal and reject disabled or restricted accounts. Organizer commands derive ownership from `requireUser` and repeat ownership enforcement in the repository key. The verified-publishing guard exists for Phase 3 commands but no publishing workflow is implemented in Phase 2.
 
 ## Email delivery
 
-`EmailService` is provider-neutral. The Resend adapter renders verification and reset messages and returns only an application-owned provider-message ID. Delivery records retain status, attempts, a keyed recipient fingerprint, and bounded provider/error identifiers; they do not retain message bodies or raw tokens. Local/test environments can use only a `.tmp` file-capture adapter and never select Resend; Preview and Production never select capture.
+`EmailService` is provider-neutral. The Resend adapter renders verification and reset messages and returns only an application-owned provider-message ID. Delivery records retain status, attempts, a keyed recipient fingerprint, and bounded provider/error identifiers; they do not retain message bodies or raw tokens. Local/test environments can use only a `.tmp` file-capture adapter and never select Resend; Production never selects capture.
 
-Application links come from validated server configuration. A Preview deployment uses its validated `VERCEL_URL`, preventing links from falling back to another environment.
+Application links come from validated server configuration. Production uses its validated application origin and cannot fall back to a local or legacy Preview origin.
 
 ## Abuse controls
 

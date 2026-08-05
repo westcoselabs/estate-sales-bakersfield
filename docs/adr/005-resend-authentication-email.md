@@ -14,4 +14,7 @@ This follows the frozen roadmap, keeps launch configuration and expected cost sm
 
 ## Consequences
 
-Preview and Production require separate Resend credentials and approved sender identities. Missing credentials fail closed; they are never replaced by real sends from automated tests. A verified sending domain and controlled Preview recipient remain external prerequisites.
+Production requires a Production-scoped Resend credential and approved sender
+identity. Missing credentials fail closed; they are never replaced by real
+sends from automated tests. Local and logical Test mode use capture only. No
+Preview credential, provider, or recipient is provisioned.

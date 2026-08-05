@@ -16,7 +16,7 @@ src/modules/media        Provider-neutral private objects and image processing
 src/modules/jobs         PostgreSQL durable work foundation
 src/platform             Configuration, database, observability, and security
 prisma                   Immutable migrations and schema
-tests                    Unit, Test Neon integration, contracts, live, and E2E
+tests                    Unit, Development-schema integration, contracts, live, and E2E
 ```
 
 Dependency Cruiser enforces circular-dependency, layer, App-import, and provider-SDK boundaries. Prisma-generated code is not committed and is regenerated from the pinned toolchain.
@@ -25,7 +25,11 @@ Dependency Cruiser enforces circular-dependency, layer, App-import, and provider
 
 Phase 1 owns users, sessions, hashed verification/reset tokens, append-only audit entries, durable jobs, and PostGIS. Phase 2 adds organizer profiles, delivery tracking, account display names, and token invalidation. Phase 3 adds organizer-owned events, separate private locations, event photos and upload reservations, approval history, and current approval proof. Phase 4 adds immutable payment attempts, bounded Stripe webhook receipts, immutable publication snapshots, and exact payment/approval correlation.
 
-Local manual development and Vercel Preview use Preview Neon where appropriate. Automated database and browser tests use only the persistent isolated Test Neon branch. Test runs use unique identifiers and delete only their own users/jobs; broad reset is a separate explicitly confirmed Test-only command.
+Local manual development uses Development Neon. Automated database and browser
+tests replay migrations into generated schemas inside that same Development
+database and drop only those schemas. Vercel Production uses Production Neon.
+There is no Preview or separate Test database, and broad database reset is not
+part of the workflow.
 
 ## Security baseline
 

@@ -1,0 +1,28 @@
+{
+  "contractVersion": "listing-import-result.v1",
+  "batchId": "22222222-2222-4222-8222-222222222222",
+  "replayed": false,
+  "status": "PARTIAL",
+  "counts": {
+    "total": 2,
+    "candidateCreated": 1,
+    "invalid": 1,
+    "exactDuplicate": 0,
+    "sourceChanged": 0,
+    "identityConflict": 0
+  },
+  "rows": [
+    {
+      "rowNumber": 1,
+      "status": "CANDIDATE_CREATED",
+      "candidateId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "validationCodes": []
+    },
+    {
+      "rowNumber": 2,
+      "status": "INVALID",
+      "candidateId": null,
+      "validationCodes": ["TITLE_INVALID"]
+    }
+  ]
+}

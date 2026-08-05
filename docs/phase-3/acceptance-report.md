@@ -1,8 +1,13 @@
 # Phase 3 Acceptance Report
 
 Date: 2026-07-21  
-Implementation status: **COMPLETE through exact pre-payment revision approval**  
-Acceptance status: **BLOCKED on Test Neon execution and live Preview prerequisites**
+Implementation status: **historical Phase 3 record; superseded operationally**
+
+> The blocked environment results below are retained as historical evidence,
+> not as current prerequisites. Current database-bearing tests use disposable
+> schemas inside Development Neon, and the only hosted target is Vercel
+> Production with Production-scoped resources. Do not create a Preview or
+> separate Test resource to reproduce this report.
 
 ## Implemented workflows
 
@@ -19,9 +24,12 @@ Stripe, checkout, webhooks, payment fulfillment, publication, public draft visib
 
 ## Migration
 
-Phase 3 migration: `20260721000000_phase3_event_builder`. The architecture simplification adds forward-only `20260722000000_postgresql_auth_rate_limits`; Phase 1-3 migration files are unchanged. Static migration guarantees pass; Test/Preview application remains `BLOCKED` until the corresponding isolated credentials and safety gate are available.
+Phase 3 migration: `20260721000000_phase3_event_builder`. The architecture
+simplification adds forward-only `20260722000000_postgresql_auth_rate_limits`;
+Phase 1-3 migration files are unchanged. The old blocked Test/Preview statement
+is superseded by the Development-schema test workflow.
 
-## Current results
+## Historical results at the time of this report
 
 | Check                                  | Status  | Result                                                                     |
 | -------------------------------------- | ------- | -------------------------------------------------------------------------- |
@@ -61,16 +69,24 @@ All event mutations use trusted-origin validation. Authentication, verification 
 
 ## Known limitations and human review
 
-- Mapbox live result quality, normalized address, and the organizer-supplied IANA timezone association require controlled Preview review; server syntax/DST validation is implemented.
-- Browser and real-transaction assertions are authored but not claimed without Test Neon.
-- HEIC/HEIF decode support depends on the deployed Sharp/libvips build and requires Preview fixture verification.
+- Live provider result quality and organizer-supplied timezone association
+  require a controlled Production-beta review; server syntax/DST validation is
+  implemented.
+- Browser and real-transaction assertions now run in disposable Development
+  Neon schemas.
+- HEIC/HEIF decode support depends on the deployed Sharp/libvips build and
+  requires controlled Production-beta fixture verification.
 - The current Git branch is `main`; no local Vercel metadata identifies the configured Production Branch. No deployment was attempted from this potentially protected branch.
 - Human review should prioritize the new rate-limit migration/upsert/cleanup SQL, the Phase 3 migration/trigger SQL, event repository transactions, privacy projector/digest, private media route, and Test Neon guard.
 
 Preview deployment identifier for this revision: **none**. Redacted provider identifiers: **none available**. The historical Phase 2 Preview is not claimed as evidence for these changes.
 
-## External actions required
+## Superseding current actions
 
-Provide isolated Test Neon credentials; configure isolated Preview provider resources and scope markers; approve a controlled recipient/test mode; confirm a non-Production deployment path; apply migrations only to Preview; then execute [Preview verification](../operations/preview-verification.md).
+Use Development Neon identity in ignored local test configuration, run the
+guarded schema-based integration and browser suites, then use the stable
+[Production-beta verification](../operations/production-beta-verification.md)
+workflow for an approved hosted release. Preview and separate Test resources
+are not permitted fallback targets.
 
 Production was not accessed. Phase 4 and Stripe were not started. No commit, push, merge, or deployment was performed.

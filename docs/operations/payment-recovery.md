@@ -9,10 +9,10 @@
 
 ## Missing or failed webhook
 
-- Confirm the endpoint is exactly `/api/webhooks/stripe` on the active deployment origin and is subscribed to Checkout completion, async success/failure, and expiry events. Preview and stable Production beta require separate test-mode endpoints and signing secrets.
+- Confirm the endpoint is exactly `/api/webhooks/stripe` on the Production deployment origin and is subscribed to Checkout completion, async success/failure, and expiry events. Local development uses the deterministic adapter and has no hosted webhook.
 - Stripe replay is safe: the event ID is deduplicated and fulfillment is idempotent.
-- A signature failure requires checking the endpoint-specific webhook secret. Never reuse a Stripe CLI, Preview, stable Production-beta, or live Production endpoint secret for another endpoint.
-- For a known attempt, run `pnpm payments:reconcile -- --attempt=<internal-uuid>` in a protected environment with the same Preview variables. For discovery, run `pnpm payments:reconcile`, then invoke the authenticated job runner.
+- A signature failure requires checking the endpoint-specific webhook secret. Never reuse a Stripe CLI or another endpoint secret for Production.
+- For a known attempt, run `pnpm payments:reconcile -- --attempt=<internal-uuid>` only in the protected Production environment. For discovery, run `pnpm payments:reconcile`, then invoke the authenticated job runner.
 - The job runner may retry up to the row's bounded `maxAttempts`; stale processing locks are recovered by the existing runner. A dead job retains sanitized error code/message and requires operator review before a new deliberate enqueue.
 
 ## Acceptance evidence

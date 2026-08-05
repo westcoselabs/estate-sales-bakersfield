@@ -29,9 +29,10 @@ No result replaces `pnpm verify` or hosted Production-beta smoke testing.
 
 ### Local and CI
 
-Run `pnpm verify` before promotion. Use the guarded Test environment for
-database integration and Playwright. Fake and capture adapters are expected in
-normal automated tests; no Production provider call is required to pass.
+Run `pnpm verify` before promotion. Use logical `APP_ENV=test` with a guarded,
+disposable schema inside Development Neon for database integration and
+Playwright. Fake and capture adapters are expected in normal automated tests;
+no Production provider call is required to pass.
 
 ### Stable Production beta
 

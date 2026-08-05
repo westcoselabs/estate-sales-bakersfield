@@ -224,6 +224,58 @@ enum StripeWebhookProcessingState {
   @@map("stripe_webhook_processing_state")
 }
 
+enum ListingImportTransport {
+  API
+  MANUAL_JSON
+  MANUAL_CSV
+
+  @@map("listing_import_transport")
+}
+
+enum ListingImportBatchStatus {
+  COMPLETED
+  PARTIAL
+  REJECTED
+
+  @@map("listing_import_batch_status")
+}
+
+enum ListingImportRowStatus {
+  CANDIDATE_CREATED
+  INVALID
+  EXACT_DUPLICATE
+  SOURCE_CHANGED
+  IDENTITY_CONFLICT
+
+  @@map("listing_import_row_status")
+}
+
+enum ListingImportCandidateStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  DUPLICATE_LINKED
+  DELETED
+
+  @@map("listing_import_candidate_status")
+}
+
+enum ListingDuplicateResolution {
+  UNRESOLVED
+  NOT_DUPLICATE
+  LINKED
+
+  @@map("listing_duplicate_resolution")
+}
+
+enum ExternalListingStatus {
+  PUBLISHED
+  EXPIRED
+  REMOVED
+
+  @@map("external_listing_status")
+}
+
 model User {
   id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   displayName       String        @map("display_name") @db.VarChar(100)
@@ -238,20 +290,26 @@ model User {
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  sessions                Session[]
-  marketingPreference     MarketingPreference?
-  emailVerificationTokens EmailVerificationToken[]
-  passwordResetTokens     PasswordResetToken[]
-  emailDeliveries         EmailDelivery[]
-  emailTemplatesCreated   EmailTemplate[]          @relation("EmailTemplateCreator")
-  emailRevisionsPublished EmailTemplateRevision[]  @relation("EmailTemplateRevisionPublisher")
-  emailCampaignsCreated   EmailCampaign[]          @relation("EmailCampaignCreator")
-  emailCampaignRecipients EmailCampaignRecipient[]
-  organizerProfile        OrganizerProfile?
-  termsAcceptedEvents     Event[]                  @relation("EventTermsAcceptedBy")
-  eventApprovals          EventApproval[]          @relation("EventApprovalUser")
-  paymentAttempts         PaymentAttempt[]
-  auditEntries            AuditEntry[]             @relation("AuditActor")
+  sessions                           Session[]
+  marketingPreference                MarketingPreference?
+  emailVerificationTokens            EmailVerificationToken[]
+  passwordResetTokens                PasswordResetToken[]
+  emailDeliveries                    EmailDelivery[]
+  emailTemplatesCreated              EmailTemplate[]              @relation("EmailTemplateCreator")
+  emailRevisionsPublished            EmailTemplateRevision[]      @relation("EmailTemplateRevisionPublisher")
+  emailCampaignsCreated              EmailCampaign[]              @relation("EmailCampaignCreator")
+  emailCampaignRecipients            EmailCampaignRecipient[]
+  organizerProfile                   OrganizerProfile?
+  termsAcceptedEvents                Event[]                      @relation("EventTermsAcceptedBy")
+  eventApprovals                     EventApproval[]              @relation("EventApprovalUser")
+  paymentAttempts                    PaymentAttempt[]
+  auditEntries                       AuditEntry[]                 @relation("AuditActor")
+  listingCredentialsCreated          ListingIngestionCredential[] @relation("ListingIngestionCredentialCreator")
+  listingImportBatches               ListingImportBatch[]         @relation("ListingImportBatchAdminActor")
+  listingCandidatesReviewed          ListingImportCandidate[]     @relation("ListingImportCandidateReviewer")
+  listingCandidateLocationsConfirmed ListingImportCandidate[]     @relation("ListingImportCandidateLocationConfirmer")
+  listingMatchesResolved             ListingDuplicateMatch[]      @relation("ListingDuplicateMatchResolver")
+  externalLocationsConfirmed         ExternalListingLocation[]    @relation("ExternalListingLocationConfirmer")
 
   @@index([role])
   @@index([status])
@@ -379,16 +437,18 @@ model Event {
   createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organizer          OrganizerProfile    @relation(fields: [organizerId], references: [id], onDelete: Cascade)
-  termsAcceptedBy    User?               @relation("EventTermsAcceptedBy", fields: [termsAcceptedByUserId], references: [id], onDelete: SetNull)
-  location           EventLocation?
-  photos             EventPhoto[]        @relation("EventPhotos")
-  coverPhoto         EventPhoto?         @relation("EventCoverPhoto", fields: [coverPhotoId], references: [id], onDelete: SetNull)
-  uploadReservations UploadReservation[]
-  approvals          EventApproval[]     @relation("EventApprovals")
-  currentApproval    EventApproval?      @relation("CurrentEventApproval", fields: [currentApprovalId], references: [id], onDelete: SetNull)
-  paymentAttempts    PaymentAttempt[]
-  publication        EventPublication?
+  organizer               OrganizerProfile        @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  termsAcceptedBy         User?                   @relation("EventTermsAcceptedBy", fields: [termsAcceptedByUserId], references: [id], onDelete: SetNull)
+  location                EventLocation?
+  photos                  EventPhoto[]            @relation("EventPhotos")
+  coverPhoto              EventPhoto?             @relation("EventCoverPhoto", fields: [coverPhotoId], references: [id], onDelete: SetNull)
+  uploadReservations      UploadReservation[]
+  approvals               EventApproval[]         @relation("EventApprovals")
+  currentApproval         EventApproval?          @relation("CurrentEventApproval", fields: [currentApprovalId], references: [id], onDelete: SetNull)
+  paymentAttempts         PaymentAttempt[]
+  publication             EventPublication?
+  listingSourceRecords    ListingSourceRecord[]   @relation("ListingSourceRecordLinkedEvent")
+  listingDuplicateMatches ListingDuplicateMatch[] @relation("ListingDuplicateMatchEvent")
 
   @@index([organizerId, updatedAt])
   @@index([organizerId, deletedAt, canceledAt, updatedAt])
@@ -787,4 +847,274 @@ model DurableJob {
   @@index([status, runAt])
   @@index([lockedAt])
   @@map("durable_jobs")
+}
+
+model ListingImportSource {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key                    String   @unique @db.VarChar(64)
+  name                   String   @db.VarChar(120)
+  allowedHosts           String[] @default([]) @map("allowed_hosts") @db.VarChar(253)
+  allowedQueryParameters String[] @default([]) @map("allowed_query_parameters") @db.VarChar(100)
+  enabled                Boolean  @default(true)
+  productionAllowed      Boolean  @default(false) @map("production_allowed")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  credentials   ListingIngestionCredential[]
+  batches       ListingImportBatch[]
+  sourceRecords ListingSourceRecord[]
+
+  @@index([enabled, productionAllowed])
+  @@map("listing_import_sources")
+}
+
+model ListingIngestionCredential {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sourceId        String    @map("source_id") @db.Uuid
+  name            String    @db.VarChar(100)
+  tokenDigest     String    @unique @map("token_digest") @db.Char(64)
+  displayPrefix   String    @map("display_prefix") @db.VarChar(24)
+  createdByUserId String    @map("created_by_user_id") @db.Uuid
+  lastUsedAt      DateTime? @map("last_used_at") @db.Timestamptz(3)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  source    ListingImportSource  @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  createdBy User                 @relation("ListingIngestionCredentialCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  batches   ListingImportBatch[]
+
+  @@index([sourceId, revokedAt])
+  @@index([createdByUserId, createdAt])
+  @@map("listing_ingestion_credentials")
+}
+
+model ListingImportBatch {
+  id                   String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sourceId             String                   @map("source_id") @db.Uuid
+  credentialId         String?                  @map("credential_id") @db.Uuid
+  adminActorUserId     String?                  @map("admin_actor_user_id") @db.Uuid
+  transport            ListingImportTransport
+  contractVersion      String                   @map("contract_version") @db.VarChar(50)
+  parserVersion        String                   @map("parser_version") @db.VarChar(100)
+  ingestorRunId        String                   @map("ingestor_run_id") @db.VarChar(100)
+  ingestorInstanceId   String                   @map("ingestor_instance_id") @db.VarChar(100)
+  idempotencyKeyDigest String?                  @map("idempotency_key_digest") @db.Char(64)
+  requestDigest        String                   @map("request_digest") @db.Char(64)
+  payloadDigest        String                   @map("payload_digest") @db.Char(64)
+  status               ListingImportBatchStatus
+  totalRows            Int                      @map("total_rows")
+  candidateRows        Int                      @map("candidate_rows")
+  invalidRows          Int                      @map("invalid_rows")
+  exactDuplicateRows   Int                      @map("exact_duplicate_rows")
+  sourceChangedRows    Int                      @map("source_changed_rows")
+  identityConflictRows Int                      @map("identity_conflict_rows")
+  createdAt            DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  completedAt          DateTime                 @map("completed_at") @db.Timestamptz(3)
+
+  source     ListingImportSource         @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  credential ListingIngestionCredential? @relation(fields: [credentialId], references: [id], onDelete: Restrict)
+  adminActor User?                       @relation("ListingImportBatchAdminActor", fields: [adminActorUserId], references: [id], onDelete: Restrict)
+  rows       ListingImportRow[]
+
+  @@unique([credentialId, idempotencyKeyDigest])
+  @@unique([sourceId, ingestorInstanceId, ingestorRunId])
+  @@index([sourceId, createdAt])
+  @@index([status, createdAt])
+  @@index([adminActorUserId, createdAt])
+  @@map("listing_import_batches")
+}
+
+model ListingSourceRecord {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sourceId                String   @map("source_id") @db.Uuid
+  sourceListingId         String   @map("source_listing_id") @db.VarChar(255)
+  canonicalSourceUrl      String   @map("canonical_source_url") @db.VarChar(2048)
+  firstSeenAt             DateTime @map("first_seen_at") @db.Timestamptz(3)
+  lastSeenAt              DateTime @map("last_seen_at") @db.Timestamptz(3)
+  lastContentHash         String   @map("last_content_hash") @db.Char(64)
+  linkedEventId           String?  @map("linked_event_id") @db.Uuid
+  linkedExternalListingId String?  @map("linked_external_listing_id") @db.Uuid
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  source                ListingImportSource     @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  linkedEvent           Event?                  @relation("ListingSourceRecordLinkedEvent", fields: [linkedEventId], references: [id], onDelete: Restrict)
+  linkedExternalListing ExternalListing?        @relation("ListingSourceRecordLinkedExternal", fields: [linkedExternalListingId], references: [id], onDelete: Restrict)
+  observations          ListingImportRow[]
+  candidate             ListingImportCandidate?
+  externalListing       ExternalListing?        @relation("ExternalListingPrimarySource")
+
+  @@unique([sourceId, sourceListingId])
+  @@unique([sourceId, canonicalSourceUrl])
+  @@index([sourceId, lastSeenAt])
+  @@index([linkedEventId])
+  @@index([linkedExternalListingId])
+  @@map("listing_source_records")
+}
+
+model ListingImportRow {
+  id                 String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchId            String                 @map("batch_id") @db.Uuid
+  rowNumber          Int                    @map("row_number")
+  sourceRecordId     String?                @map("source_record_id") @db.Uuid
+  status             ListingImportRowStatus
+  inputJson          Json                   @map("input_json")
+  normalizedJson     Json?                  @map("normalized_json")
+  validationFailures Json                   @default("[]") @map("validation_failures")
+  contentHash        String?                @map("content_hash") @db.Char(64)
+  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  batch              ListingImportBatch      @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  sourceRecord       ListingSourceRecord?    @relation(fields: [sourceRecordId], references: [id], onDelete: Restrict)
+  latestForCandidate ListingImportCandidate? @relation("ListingImportCandidateLatestObservation")
+
+  @@unique([batchId, rowNumber])
+  @@index([batchId, status])
+  @@index([sourceRecordId, createdAt])
+  @@map("listing_import_rows")
+}
+
+model ListingImportCandidate {
+  id                          String                                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sourceRecordId              String                                 @unique @map("source_record_id") @db.Uuid
+  latestObservationId         String                                 @unique @map("latest_observation_id") @db.Uuid
+  currentPayload              Json                                   @map("current_payload")
+  normalizedTitle             String                                 @map("normalized_title") @db.VarChar(120)
+  normalizedAddress           String?                                @map("normalized_address") @db.VarChar(500)
+  normalizedCity              String                                 @map("normalized_city") @db.VarChar(100)
+  normalizedPostalCode        String?                                @map("normalized_postal_code") @db.VarChar(20)
+  startsAt                    DateTime                               @map("starts_at") @db.Timestamptz(3)
+  endsAt                      DateTime                               @map("ends_at") @db.Timestamptz(3)
+  latitude                    Decimal?                               @db.Decimal(9, 6)
+  longitude                   Decimal?                               @db.Decimal(9, 6)
+  coordinates                 Unsupported("geography(Point, 4326)")?
+  locationProviderPlaceId     String?                                @map("location_provider_place_id") @db.VarChar(255)
+  locationProviderName        String?                                @map("location_provider_name") @db.VarChar(50)
+  locationProviderVersion     String?                                @map("location_provider_version") @db.VarChar(50)
+  locationProviderAttribution String?                                @map("location_provider_attribution") @db.VarChar(255)
+  locationResolutionSource    LocationResolutionSource               @default(UNCONFIRMED_DRAFT) @map("location_resolution_source")
+  locationConfirmationStatus  LocationConfirmationStatus             @default(UNCONFIRMED) @map("location_confirmation_status")
+  locationConfirmedByUserId   String?                                @map("location_confirmed_by_user_id") @db.Uuid
+  locationConfirmedAt         DateTime?                              @map("location_confirmed_at") @db.Timestamptz(3)
+  status                      ListingImportCandidateStatus           @default(PENDING_REVIEW)
+  version                     Int                                    @default(1)
+  reviewedByUserId            String?                                @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt                  DateTime?                              @map("reviewed_at") @db.Timestamptz(3)
+  reviewReason                String?                                @map("review_reason") @db.VarChar(500)
+  createdAt                   DateTime                               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                   DateTime                               @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sourceRecord      ListingSourceRecord     @relation(fields: [sourceRecordId], references: [id], onDelete: Restrict)
+  latestObservation ListingImportRow        @relation("ListingImportCandidateLatestObservation", fields: [latestObservationId], references: [id], onDelete: Restrict)
+  locationConfirmer User?                   @relation("ListingImportCandidateLocationConfirmer", fields: [locationConfirmedByUserId], references: [id], onDelete: Restrict)
+  reviewer          User?                   @relation("ListingImportCandidateReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  duplicateMatches  ListingDuplicateMatch[]
+  externalListing   ExternalListing?
+
+  @@index([status, startsAt, id])
+  @@index([normalizedCity, startsAt])
+  @@index([normalizedAddress, startsAt])
+  @@index([normalizedPostalCode, startsAt])
+  @@index([locationConfirmationStatus, status])
+  @@map("listing_import_candidates")
+}
+
+model ListingDuplicateMatch {
+  id                String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  candidateId       String                     @map("candidate_id") @db.Uuid
+  eventId           String?                    @map("event_id") @db.Uuid
+  externalListingId String?                    @map("external_listing_id") @db.Uuid
+  reasons           Json
+  resolution        ListingDuplicateResolution @default(UNRESOLVED)
+  resolvedByUserId  String?                    @map("resolved_by_user_id") @db.Uuid
+  resolvedAt        DateTime?                  @map("resolved_at") @db.Timestamptz(3)
+  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  candidate       ListingImportCandidate @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  event           Event?                 @relation("ListingDuplicateMatchEvent", fields: [eventId], references: [id], onDelete: Restrict)
+  externalListing ExternalListing?       @relation("ListingDuplicateMatchExternalListing", fields: [externalListingId], references: [id], onDelete: Restrict)
+  resolvedBy      User?                  @relation("ListingDuplicateMatchResolver", fields: [resolvedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([candidateId, resolution])
+  @@index([eventId])
+  @@index([externalListingId])
+  @@index([resolvedByUserId, resolvedAt])
+  @@map("listing_duplicate_matches")
+}
+
+model ExternalListing {
+  id                    String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  candidateId           String                @unique @map("candidate_id") @db.Uuid
+  primarySourceRecordId String                @unique @map("primary_source_record_id") @db.Uuid
+  publicId              String                @unique @map("public_id") @db.VarChar(12)
+  slug                  String                @db.VarChar(100)
+  canonicalPath         String                @unique @map("canonical_path") @db.VarChar(255)
+  eventType             EventType             @map("event_type")
+  title                 String                @db.VarChar(120)
+  description           String                @db.VarChar(5000)
+  localStartsAt         String                @map("local_starts_at") @db.VarChar(16)
+  localEndsAt           String                @map("local_ends_at") @db.VarChar(16)
+  startsAt              DateTime              @map("starts_at") @db.Timestamptz(3)
+  endsAt                DateTime              @map("ends_at") @db.Timestamptz(3)
+  timezone              String                @db.VarChar(64)
+  privacyMode           AddressPrivacyMode    @map("privacy_mode")
+  status                ExternalListingStatus @default(PUBLISHED)
+  version               Int                   @default(1)
+  attribution           Json
+  publishedAt           DateTime              @map("published_at") @db.Timestamptz(3)
+  expiredAt             DateTime?             @map("expired_at") @db.Timestamptz(3)
+  removedAt             DateTime?             @map("removed_at") @db.Timestamptz(3)
+  removalReason         String?               @map("removal_reason") @db.VarChar(500)
+  createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  candidate           ListingImportCandidate   @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  primarySourceRecord ListingSourceRecord      @relation("ExternalListingPrimarySource", fields: [primarySourceRecordId], references: [id], onDelete: Restrict)
+  location            ExternalListingLocation?
+  duplicateMatches    ListingDuplicateMatch[]  @relation("ListingDuplicateMatchExternalListing")
+  linkedSourceRecords ListingSourceRecord[]    @relation("ListingSourceRecordLinkedExternal")
+
+  @@index([status, startsAt, publicId])
+  @@index([status, endsAt])
+  @@index([eventType, status, startsAt])
+  @@map("external_listings")
+}
+
+model ExternalListingLocation {
+  id                  String                                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  listingId           String                                 @unique @map("listing_id") @db.Uuid
+  addressLine1        String                                 @map("address_line_1") @db.VarChar(200)
+  addressLine2        String?                                @map("address_line_2") @db.VarChar(100)
+  city                String                                 @db.VarChar(100)
+  region              String                                 @db.VarChar(100)
+  postalCode          String                                 @map("postal_code") @db.VarChar(20)
+  countryCode         String                                 @map("country_code") @db.Char(2)
+  normalizedAddress   String                                 @map("normalized_address") @db.VarChar(500)
+  latitude            Decimal?                               @db.Decimal(9, 6)
+  longitude           Decimal?                               @db.Decimal(9, 6)
+  coordinates         Unsupported("geography(Point, 4326)")?
+  timezone            String                                 @db.VarChar(64)
+  providerPlaceId     String?                                @map("provider_place_id") @db.VarChar(255)
+  providerName        String?                                @map("provider_name") @db.VarChar(50)
+  providerVersion     String?                                @map("provider_version") @db.VarChar(50)
+  providerAttribution String?                                @map("provider_attribution") @db.VarChar(255)
+  resolutionSource    LocationResolutionSource               @default(UNCONFIRMED_DRAFT) @map("resolution_source")
+  confirmationStatus  LocationConfirmationStatus             @default(UNCONFIRMED) @map("confirmation_status")
+  confirmedByUserId   String?                                @map("confirmed_by_user_id") @db.Uuid
+  confirmedAt         DateTime?                              @map("confirmed_at") @db.Timestamptz(3)
+  publicZone          String                                 @default("bakersfield") @map("public_zone") @db.VarChar(50)
+  precision           String?                                @db.VarChar(50)
+  confidence          Decimal?                               @db.Decimal(5, 4)
+  validationStatus    LocationValidationStatus               @map("validation_status")
+  createdAt           DateTime                               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime                               @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  listing     ExternalListing @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  confirmedBy User?           @relation("ExternalListingLocationConfirmer", fields: [confirmedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([city, region])
+  @@index([validationStatus])
+  @@index([confirmationStatus])
+  @@map("external_listing_locations")
 }

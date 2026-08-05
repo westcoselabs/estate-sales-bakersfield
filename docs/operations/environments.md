@@ -1,15 +1,15 @@
 # Application Environments
 
-The source accepts exactly four `APP_ENV` values: `local`, `test`, `preview`,
-and `production`. That compatibility model is broader than the approved
-operating topology.
+The source accepts `local`, `test`, `preview`, and `production` as logical
+`APP_ENV` values, but the approved operating topology has exactly two database
+resources: Development Neon and Production Neon.
 
-| Environment | Current approved use                 | Database and provider posture                                                                                            |
-| ----------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| Local       | Unhosted manual development          | Non-Production data; capture or fake providers by default; never inherit Production credentials                          |
-| Test        | Automated integration and Playwright | Persistent isolated Test Neon, scoped PostgreSQL limits, capture email, fixture media/location, deterministic Stripe     |
-| Preview     | Legacy compatibility only            | Do not deploy, provision Preview-specific providers, or create Preview webhooks                                          |
-| Production  | The only hosted beta                 | Production-scoped Neon/PostGIS, Blob, email, Geoapify, OpenFreeMap, and the existing Stripe test-mode beta configuration |
+| Logical mode | Approved use                         | Database and provider posture                                                                                            |
+| ------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Local        | Unhosted manual development          | Development Neon; capture or fake providers by default; never inherit Production credentials                             |
+| Test         | Automated integration and Playwright | Generated per-run schemas inside Development Neon; capture email, fixture media/location, deterministic Stripe           |
+| Preview      | Legacy parser compatibility only     | No deployment, database, providers, credentials, webhook, or importer target                                             |
+| Production   | The only hosted beta                 | Production-scoped Neon/PostGIS, Blob, email, Geoapify, OpenFreeMap, and the existing Stripe test-mode beta configuration |
 
 Only `main` deploys automatically to Vercel Production. Work locally on
 `main`, run the complete verification suite, and push without force. Do not
@@ -17,21 +17,31 @@ use a Vercel Preview as an intermediate review environment.
 
 ## Current environment validation
 
-The checked-in validator recognizes `DATABASE_RESOURCE_ENV`,
+The checked-in validator requires `DATABASE_RESOURCE_ENV=development` for
+Local and Test database access and `DATABASE_RESOURCE_ENV=production` for the
+hosted application. It also recognizes
 `BLOB_RESOURCE_ENV`, `RESEND_RESOURCE_ENV`, and `STRIPE_RESOURCE_ENV`. A
-marker must match the application environment
-consuming the credential. The marker is a guard against accidental scope
-mixing, not cryptographic proof of the vendor resource; operators must still
-verify resource identity without printing values.
+marker is a guard against accidental scope mixing, not cryptographic proof of
+the vendor resource; operators must still verify resource identity without
+printing values.
 
 `APP_ENV=preview` and its resource-marker rules remain in source for legacy
 compatibility. Their presence does not authorize a Preview deployment. Do not
 delete or relax those guards as an operations-only cleanup.
 
-Test commands load only `.env.test.local`, override runtime database URLs with
-guarded Test URLs, and strip common real provider credentials. `TEST_RUN_ID`
-is accepted only in `APP_ENV=test` and produces a hashed PostgreSQL rate-limit
-scope; it is not an authentication bypass.
+Test commands load the confirmed Development database identity from ignored
+`.env.local` and an optional `.env.test.local` override based on
+`.env.test.example`, switch only the logical process mode to `APP_ENV=test`, derive a
+`codex_test_...` schema URL, replay migrations into that schema, and drop only
+that exact schema afterward. Common real provider credentials are stripped.
+`TEST_RUN_ID` is accepted only in `APP_ENV=test` and produces a hashed
+PostgreSQL rate-limit scope; it is not an authentication bypass.
+
+Normal `pnpm dev` and local `pnpm build` are guarded entry points: they require
+`.env.local`, reject a database or credential that matches the ignored
+Production configuration, and prevent `.env` fallback. Application
+`APP_ENV=production` additionally requires `VERCEL_ENV=production`, which
+Vercel supplies only to the Production deployment.
 
 ## Stable Production beta
 

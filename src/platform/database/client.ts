@@ -1,9 +1,8 @@
 import "server-only";
 
-import { PrismaNeon } from "@prisma/adapter-neon";
-
 import { PrismaClient } from "@/generated/prisma/client";
 import { getServerEnvironment } from "@/platform/config/env";
+import { createNeonAdapter } from "@/platform/database/neon-adapter";
 
 declare global {
   var __estateSalesPrisma: PrismaClient | undefined;
@@ -16,7 +15,7 @@ function buildPrismaClient(): PrismaClient {
   }
 
   return new PrismaClient({
-    adapter: new PrismaNeon({ connectionString: environment.DATABASE_URL }),
+    adapter: createNeonAdapter(environment.DATABASE_URL),
   });
 }
 

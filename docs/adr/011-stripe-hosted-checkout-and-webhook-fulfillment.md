@@ -4,9 +4,16 @@ Status: accepted for Phase 4
 
 ## Decision
 
-Use a regular Stripe account and one-time Stripe Checkout Sessions in hosted mode for owner-created listing publication. Do not use Stripe Connect, a cart, subscriptions, embedded Checkout, a custom Elements form, marketplace payouts, or direct card-data collection. Checkout is restricted to immediate card payment for the Phase 4 Preview proof.
+Use a regular Stripe account and one-time Stripe Checkout Sessions in hosted mode for owner-created listing publication. Do not use Stripe Connect, a cart, subscriptions, embedded Checkout, a custom Elements form, marketplace payouts, or direct card-data collection. Checkout is restricted to immediate card payment for the stable Production-beta proof.
 
-Pricing is server-authoritative. The browser submits only the event identifier and optimistic event version. Vercel Preview must configure a test-mode Stripe Price ID, expected minor-unit amount, expected three-letter currency, test secret key, Preview-only webhook signing secret, and `STRIPE_RESOURCE_ENV=preview`. The frozen roadmap does not define a final fee, so this ADR deliberately does not choose one. Local and Test use clearly labeled deterministic fixtures that are not business pricing.
+Pricing is server-authoritative. The browser submits only the event identifier
+and optimistic event version. The stable Vercel Production beta configures a
+test-mode Stripe Price ID, expected minor-unit amount, expected three-letter
+currency, a Production-scoped test secret and webhook signing secret, and
+`STRIPE_RESOURCE_ENV=production`. The frozen roadmap does not define a final
+fee, so this ADR deliberately does not choose one. Local and logical Test mode
+use clearly labeled deterministic fixtures that are not business pricing; Test
+database work runs in disposable Development Neon schemas.
 
 A stable Vercel Production beta may run real Stripe-hosted Checkout against test-mode resources only when `APP_ENV=production` and the server-only `PRODUCTION_BETA_MODE=true` gate are both present. That mode requires `STRIPE_MODE=test`, an `sk_test_...` secret key, `STRIPE_RESOURCE_ENV=production`, and a test webhook signing secret created specifically for the stable Production endpoint. It does not enable the deterministic provider or test-control routes. Normal Production retains the `STRIPE_MODE=live` plus `sk_live_...` requirement. Moving from beta to live mode is a separate launch decision that must replace all test Product, Price, key, and webhook resources together and remove the beta flag.
 
@@ -30,4 +37,12 @@ Each attached Checkout Session enqueues a deduplicated PostgreSQL durable reconc
 
 ## Consequences
 
-Preview and Production-beta Checkout require manual Stripe test resources and environment-specific webhook endpoints. Ordinary automated tests require no network or real Stripe credentials. Payment and publication records retain only bounded correlation and financial evidence; full webhook payloads, card data, signatures, Checkout URLs, private addresses in payment metadata, raw exceptions, and secrets are not retained or logged. Production pricing, live Product/Price, live webhook, tax/legal approval, refunds, packages, coupons, and final launch remain separate work.
+Production-beta Checkout requires manually verified, Production-scoped Stripe
+test resources and the stable Production webhook endpoint. Preview resources
+are not created or used. Ordinary automated tests require no network or real
+Stripe credentials. Payment and publication records retain only bounded
+correlation and financial evidence; full webhook payloads, card data,
+signatures, Checkout URLs, private addresses in payment metadata, raw
+exceptions, and secrets are not retained or logged. Production pricing, live
+Product/Price, live webhook, tax/legal approval, refunds, packages, coupons,
+and final launch remain separate work.

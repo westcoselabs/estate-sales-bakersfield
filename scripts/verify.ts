@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
 
 import {
-  loadDedicatedTestEnvironment,
-  requireSafeTestDatabase,
+  knownProductionDatabaseEnvironment,
+  loadDevelopmentTestEnvironment,
+  requireSafeDevelopmentDatabase,
 } from "./test-database-safety";
 
 const mode = process.argv[2];
@@ -25,7 +26,6 @@ const credentialFreeCommands = [
   "format:check",
   "lint",
   "arch:check",
-  "build",
   "typecheck",
   "prisma:validate",
   "audit:prod",
@@ -50,24 +50,27 @@ if (mode === "credential-free") {
   process.exitCode = runCredentialFreeChecks() ? 1 : 0;
 } else if (mode === "offline") {
   let failed = runCredentialFreeChecks();
-  loadDedicatedTestEnvironment();
   let testDatabaseReady = false;
   try {
-    requireSafeTestDatabase();
+    loadDevelopmentTestEnvironment();
+    requireSafeDevelopmentDatabase({
+      ...process.env,
+      ...knownProductionDatabaseEnvironment(),
+    });
     testDatabaseReady = true;
   } catch (error) {
     process.stderr.write(
-      `BLOCKED: ${error instanceof Error ? error.message : "Test Neon is unavailable"}\n`,
+      `BLOCKED: ${error instanceof Error ? error.message : "Development Neon is unavailable"}\n`,
     );
   }
   const blocked = !testDatabaseReady;
   if (testDatabaseReady) {
-    for (const command of ["test:integration", "test:e2e"]) {
+    for (const command of ["build", "test:integration", "test:e2e"]) {
       if (run(command) !== 0) failed = true;
     }
   } else {
     process.stderr.write(
-      "BLOCKED: integration and Playwright checks require the isolated Test Neon configuration.\n",
+      "BLOCKED: integration and Playwright checks require guarded Development Neon test schemas.\n",
     );
   }
   process.exitCode = failed ? 1 : blocked ? 2 : 0;

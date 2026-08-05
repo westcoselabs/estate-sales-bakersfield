@@ -15,8 +15,9 @@ the project's only hosted review environment.
 - Local implementation work is performed on `main`.
 - `main` is the only branch allowed to deploy automatically to the stable
   Vercel Production beta.
-- Local development and automated tests must use local or isolated Test
-  resources. They must not use Production data or credentials.
+- Local development uses Development Neon. Automated database and browser
+  tests use disposable schemas inside that same Development database. Neither
+  workflow may use Production data or credentials.
 - Do not create Vercel Preview deployments, Preview-specific provider
   resources, or Preview webhooks.
 
@@ -38,21 +39,23 @@ pnpm verify
 ```
 
 `pnpm verify:credential-free` runs the deterministic local/CI subset.
-`pnpm verify` adds guarded Test Neon integration and Playwright execution and
-reports those checks as `BLOCKED` when the isolated Test configuration is
+`pnpm verify` adds guarded Development Neon integration and Playwright
+execution. Each suite creates, migrates, and drops its own generated schema and
+reports those checks as `BLOCKED` when the Development safety markers are
 absent.
 
-Credential-free checks always run. Database integration and Playwright checks
-additionally require the guarded `.env.test.local` configuration described in
-[Test Neon operations](./docs/operations/test-neon.md). Without it,
-`pnpm verify` reports those checks as `BLOCKED`, runs the remaining
-credential-free checks, and exits with status 2.
+Credential-free checks always run. The guarded local build, database
+integration, and Playwright checks reuse the Development credentials from
+ignored `.env.local`, with an optional `.env.test.local` override copied from
+`.env.test.example`, as
+described in [Development Neon testing](./docs/operations/development-neon-testing.md).
+Without a confirmed Development endpoint, `pnpm verify` reports those checks
+as `BLOCKED`, runs the remaining credential-free checks, and exits with status 2.
 
 After local verification and explicit promotion approval, follow the
 [Production-beta verification checklist](./docs/operations/production-beta-verification.md).
 Missing credentials or unavailable providers are reported as `BLOCKED`, never
-as passing. The repository's older Preview-only live-provider command is not
-the active hosted workflow; its retained behavior is documented in
+as passing. Production-only provider verification is documented in
 [Live-provider verification](./docs/operations/live-verification.md).
 
 ## Location and Explore providers

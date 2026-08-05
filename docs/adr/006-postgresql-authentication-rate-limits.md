@@ -4,7 +4,12 @@ Status: accepted; amended on 2026-07-21 by the architecture simplification decis
 
 ## Decision
 
-Use the environment-specific Neon PostgreSQL database as the distributed authority for authentication rate limits in local, test, Preview, and Production. Keep the provider-neutral `RateLimiter` application port so a future Redis adapter would not change authentication workflows.
+Use Neon PostgreSQL as the distributed authority for authentication rate
+limits. Local and logical Test mode use Development Neon, with Test buckets
+scoped to a disposable per-run schema. Vercel Production uses Production Neon.
+Legacy Preview parsing remains source compatibility only and has no database
+resource. Keep the provider-neutral `RateLimiter` application port so a future
+adapter would not change authentication workflows.
 
 The Prisma infrastructure adapter applies a fixed window with one atomic `INSERT ... ON CONFLICT ... DO UPDATE ... RETURNING` statement. Its primary key separates the application environment, a SHA-256 scope hash, the workflow and network/subject namespace, and a SHA-256 identifier hash. The identifier received from `AuthenticationAbuseControl` is already an HMAC-SHA-256 privacy fingerprint; the adapter hashes it again with its environment, scope, and namespace before persistence. Raw email addresses, IP addresses, verification/reset tokens, and passwords never enter the table.
 
@@ -20,7 +25,10 @@ Limits apply independently to network and subject fingerprints:
 
 Every protected workflow fails closed when the rate-limit database operation fails. Registration, login, and reset receive a sanitized 503. Verification-resend and forgot-password threshold rejections retain their generic 202 response, while a database outage returns the same sanitized 503 for every submitted identity. No workflow falls back to process memory.
 
-The authenticated cron/job runner deletes expired buckets from its environment-specific Neon database whenever it runs. It must run at least hourly in deployed environments; local operators can run `pnpm jobs:run`. Test runs use a hashed `TEST_RUN_ID` scope and delete only their own buckets during teardown.
+The authenticated cron/job runner deletes expired buckets from its active Neon
+database whenever it runs. It must run at least hourly in Vercel Production;
+local operators can run `pnpm jobs:run`. Test runs use a hashed `TEST_RUN_ID`
+scope inside their disposable Development schema, which is dropped at teardown.
 
 ## Rationale
 
