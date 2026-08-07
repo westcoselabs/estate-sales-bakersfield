@@ -50,6 +50,7 @@ export async function POST(request: Request) {
       await createConfiguredListingIngestionCredentialService().create({
         ...input,
         actorUserId: session.principal.id,
+        actorSessionId: session.id,
         requestId,
       });
 

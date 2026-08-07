@@ -33,9 +33,12 @@ import type {
 } from "../domain/types";
 
 const MAX_TRANSACTION_ATTEMPTS = 4;
+const TRANSACTION_TIMEOUT_MILLISECONDS = 15_000;
+const MAXIMUM_DUPLICATE_TARGET_PAIRS = 20_000;
 const ONE_DAY_MILLISECONDS = 24 * 60 * 60 * 1000;
 
 interface DuplicateTargetRow {
+  readonly candidate_id: string;
   readonly id: string;
   readonly title: string | null;
   readonly starts_at: Date;
@@ -48,13 +51,43 @@ interface DuplicateTargetRow {
 }
 
 interface StagedRow {
+  readonly rowId: string;
   readonly prepared: PreparedListingImportRow;
   readonly status: ListingImportRowStatus;
   readonly sourceRecordId: string | null;
   readonly candidateId: string | null;
 }
 
+interface SourceRecordState {
+  readonly id: string;
+  readonly sourceListingId: string;
+  canonicalSourceUrl: string;
+  readonly firstSeenAt: Date;
+  lastSeenAt: Date;
+  lastContentHash: string;
+  readonly isNew: boolean;
+  dirty: boolean;
+}
+
+interface CandidateToCreate {
+  readonly candidateId: string;
+  readonly rowId: string;
+  readonly sourceRecordId: string;
+  readonly item: NormalizedListingImportItem;
+  readonly normalizedJson: Readonly<Record<string, ListingImportJsonValue>>;
+}
+
 type Transaction = Prisma.TransactionClient;
+
+function sameStrings(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
 
 function isRetryableTransactionError(error: unknown): boolean {
   return (
@@ -155,22 +188,53 @@ function comparableCandidate(
 
 async function findDuplicateTargets(
   transaction: Transaction,
-  item: NormalizedListingImportItem,
+  candidates: readonly CandidateToCreate[],
 ): Promise<
-  readonly {
-    targetKind: "EVENT" | "EXTERNAL_LISTING";
-    targetId: string;
-    reasons: readonly ListingProbableDuplicateReason[];
-  }[]
+  ReadonlyMap<
+    string,
+    readonly {
+      targetKind: "EVENT" | "EXTERNAL_LISTING";
+      targetId: string;
+      reasons: readonly ListingProbableDuplicateReason[];
+    }[]
+  >
 > {
-  const lowerStart = new Date(item.startsAt.getTime() - ONE_DAY_MILLISECONDS);
-  const upperStart = new Date(item.startsAt.getTime() + ONE_DAY_MILLISECONDS);
+  if (candidates.length === 0) return new Map();
+  const windowsJson = JSON.stringify(
+    candidates.map(({ candidateId, item }) => ({
+      candidate_id: candidateId,
+      starts_at: item.startsAt.toISOString(),
+      ends_at: item.endsAt.toISOString(),
+      lower_start: new Date(
+        item.startsAt.getTime() - ONE_DAY_MILLISECONDS,
+      ).toISOString(),
+      upper_start: new Date(
+        item.startsAt.getTime() + ONE_DAY_MILLISECONDS,
+      ).toISOString(),
+    })),
+  );
+  const windows = Prisma.sql`
+    SELECT *
+    FROM jsonb_to_recordset(${windowsJson}::jsonb) AS w(
+      candidate_id uuid,
+      starts_at timestamptz,
+      ends_at timestamptz,
+      lower_start timestamptz,
+      upper_start timestamptz
+    )
+  `;
   const events = await transaction.$queryRaw<DuplicateTargetRow[]>(Prisma.sql`
+    WITH candidate_windows AS (${windows})
     SELECT
+      w.candidate_id::text AS "candidate_id",
       e."id", e."title", e."starts_at", e."ends_at",
       l."normalized_address", l."postal_code", l."latitude", l."longitude",
       l."confirmation_status"::text AS "confirmation_status"
-    FROM "events" e
+    FROM candidate_windows w
+    JOIN "events" e ON (
+      (e."starts_at" < w.ends_at AND w.starts_at < e."ends_at")
+      OR e."starts_at" BETWEEN w.lower_start AND w.upper_start
+    )
     LEFT JOIN "event_locations" l ON l."event_id" = e."id"
     WHERE e."title" IS NOT NULL
       AND e."starts_at" IS NOT NULL
@@ -178,39 +242,69 @@ async function findDuplicateTargets(
       AND e."deleted_at" IS NULL
       AND e."canceled_at" IS NULL
       AND e."removed_at" IS NULL
-      AND (
-        (e."starts_at" < ${item.endsAt} AND ${item.startsAt} < e."ends_at")
-        OR e."starts_at" BETWEEN ${lowerStart} AND ${upperStart}
-      )
+    ORDER BY w.candidate_id, e."id"
+    LIMIT ${MAXIMUM_DUPLICATE_TARGET_PAIRS + 1}
   `);
   const externalListings = await transaction.$queryRaw<DuplicateTargetRow[]>(
     Prisma.sql`
+      WITH candidate_windows AS (${windows})
       SELECT
+        w.candidate_id::text AS "candidate_id",
         e."id", e."title", e."starts_at", e."ends_at",
         l."normalized_address", l."postal_code", l."latitude", l."longitude",
         l."confirmation_status"::text AS "confirmation_status"
-      FROM "external_listings" e
+      FROM candidate_windows w
+      JOIN "external_listings" e ON (
+        (e."starts_at" < w.ends_at AND w.starts_at < e."ends_at")
+        OR e."starts_at" BETWEEN w.lower_start AND w.upper_start
+      )
       LEFT JOIN "external_listing_locations" l ON l."listing_id" = e."id"
       WHERE e."status" <> 'REMOVED'::"external_listing_status"
-        AND (
-          (e."starts_at" < ${item.endsAt} AND ${item.startsAt} < e."ends_at")
-          OR e."starts_at" BETWEEN ${lowerStart} AND ${upperStart}
-        )
+      ORDER BY w.candidate_id, e."id"
+      LIMIT ${MAXIMUM_DUPLICATE_TARGET_PAIRS + 1}
     `,
   );
-  const candidate = comparableCandidate(item);
-  return [
-    ...events.map((target) => ({
-      targetKind: "EVENT" as const,
-      targetId: target.id,
-      reasons: probableDuplicateReasons(candidate, comparableTarget(target)),
-    })),
-    ...externalListings.map((target) => ({
-      targetKind: "EXTERNAL_LISTING" as const,
-      targetId: target.id,
-      reasons: probableDuplicateReasons(candidate, comparableTarget(target)),
-    })),
-  ].filter((target) => target.reasons.length > 0);
+  if (
+    events.length > MAXIMUM_DUPLICATE_TARGET_PAIRS ||
+    externalListings.length > MAXIMUM_DUPLICATE_TARGET_PAIRS
+  ) {
+    throw new ListingImportConflictError(
+      "IMPORT_CONFLICT",
+      "The duplicate comparison scope is too broad to process safely.",
+    );
+  }
+
+  const candidateById = new Map(
+    candidates.map(({ candidateId, item }) => [candidateId, item] as const),
+  );
+  const result = new Map<
+    string,
+    {
+      targetKind: "EVENT" | "EXTERNAL_LISTING";
+      targetId: string;
+      reasons: readonly ListingProbableDuplicateReason[];
+    }[]
+  >();
+  const addTargets = (
+    rows: readonly DuplicateTargetRow[],
+    targetKind: "EVENT" | "EXTERNAL_LISTING",
+  ) => {
+    for (const target of rows) {
+      const item = candidateById.get(target.candidate_id);
+      if (!item) continue;
+      const reasons = probableDuplicateReasons(
+        comparableCandidate(item),
+        comparableTarget(target),
+      );
+      if (reasons.length === 0) continue;
+      const current = result.get(target.candidate_id) ?? [];
+      current.push({ targetKind, targetId: target.id, reasons });
+      result.set(target.candidate_id, current);
+    }
+  };
+  addTargets(events, "EVENT");
+  addTargets(externalListings, "EXTERNAL_LISTING");
+  return result;
 }
 
 async function replayResult(
@@ -222,13 +316,7 @@ async function replayResult(
     include: {
       rows: {
         orderBy: { rowNumber: "asc" },
-        include: {
-          sourceRecord: {
-            select: {
-              candidate: { select: { id: true, latestObservationId: true } },
-            },
-          },
-        },
+        include: { createdCandidate: { select: { id: true } } },
       },
     },
   });
@@ -248,9 +336,8 @@ async function replayResult(
       rowNumber: row.rowNumber,
       status: row.status,
       candidateId:
-        row.status === "CANDIDATE_CREATED" &&
-        row.sourceRecord?.candidate?.latestObservationId === row.id
-          ? row.sourceRecord.candidate.id
+        row.status === "CANDIDATE_CREATED"
+          ? (row.createdCandidate?.id ?? null)
           : null,
       validationCodes: validationCodes(row.validationFailures),
     })),
@@ -301,13 +388,17 @@ async function findReplayOrConflict(
   input: ListingImportTransactionInput,
 ): Promise<ListingImportPersistenceResult | null> {
   if (input.actor.kind === "API_CREDENTIAL") {
-    const idempotent = await transaction.listingImportBatch.findFirst({
-      where: {
-        credentialId: input.actor.credentialId,
-        idempotencyKeyDigest: input.actor.idempotencyKeyDigest,
+    const idempotent = await transaction.listingImportIdempotencyKey.findUnique(
+      {
+        where: {
+          credentialId_idempotencyKeyDigest: {
+            credentialId: input.actor.credentialId,
+            idempotencyKeyDigest: input.actor.idempotencyKeyDigest,
+          },
+        },
+        select: { batchId: true, requestDigest: true },
       },
-      select: { id: true, requestDigest: true },
-    });
+    );
     if (idempotent) {
       if (idempotent.requestDigest !== input.requestDigest) {
         throw new ListingImportConflictError(
@@ -319,7 +410,7 @@ async function findReplayOrConflict(
         where: { id: input.actor.credentialId },
         data: { lastUsedAt: new Date() },
       });
-      return replayResult(transaction, idempotent.id);
+      return replayResult(transaction, idempotent.batchId);
     }
   }
 
@@ -339,6 +430,14 @@ async function findReplayOrConflict(
     );
   }
   if (input.actor.kind === "API_CREDENTIAL") {
+    await transaction.listingImportIdempotencyKey.create({
+      data: {
+        credentialId: input.actor.credentialId,
+        idempotencyKeyDigest: input.actor.idempotencyKeyDigest,
+        requestDigest: input.requestDigest,
+        batchId: run.id,
+      },
+    });
     await transaction.listingIngestionCredential.update({
       where: { id: input.actor.credentialId },
       data: { lastUsedAt: new Date() },
@@ -351,10 +450,68 @@ async function stageRows(
   transaction: Transaction,
   input: ListingImportTransactionInput,
 ): Promise<readonly StagedRow[]> {
+  const validRows = input.rows.filter(
+    (
+      row,
+    ): row is Extract<PreparedListingImportRow, { readonly status: "VALID" }> =>
+      row.status === "VALID",
+  );
+  const existing =
+    validRows.length === 0
+      ? []
+      : await transaction.listingSourceRecord.findMany({
+          where: {
+            sourceId: input.sourceId,
+            OR: [
+              {
+                sourceListingId: {
+                  in: [
+                    ...new Set(
+                      validRows.map((row) => row.item.sourceListingId),
+                    ),
+                  ],
+                },
+              },
+              {
+                canonicalSourceUrl: {
+                  in: [
+                    ...new Set(
+                      validRows.map((row) => row.item.canonicalSourceUrl),
+                    ),
+                  ],
+                },
+              },
+            ],
+          },
+          select: {
+            id: true,
+            sourceListingId: true,
+            canonicalSourceUrl: true,
+            firstSeenAt: true,
+            lastSeenAt: true,
+            lastContentHash: true,
+          },
+        });
+  const stateById = new Map<string, SourceRecordState>();
+  const byIdentity = new Map<string, SourceRecordState>();
+  const byUrl = new Map<string, SourceRecordState>();
+  for (const record of existing) {
+    const state: SourceRecordState = {
+      ...record,
+      isNew: false,
+      dirty: false,
+    };
+    stateById.set(state.id, state);
+    byIdentity.set(state.sourceListingId, state);
+    byUrl.set(state.canonicalSourceUrl, state);
+  }
+
   const staged: StagedRow[] = [];
   for (const prepared of input.rows) {
+    const rowId = randomUUID();
     if (prepared.status === "INVALID") {
       staged.push({
+        rowId,
         prepared,
         status: "INVALID",
         sourceRecordId: null,
@@ -364,39 +521,12 @@ async function stageRows(
     }
 
     const { item } = prepared;
-    const [byIdentity, byUrl] = await Promise.all([
-      transaction.listingSourceRecord.findUnique({
-        where: {
-          sourceId_sourceListingId: {
-            sourceId: input.sourceId,
-            sourceListingId: item.sourceListingId,
-          },
-        },
-        select: {
-          id: true,
-          canonicalSourceUrl: true,
-          lastContentHash: true,
-          lastSeenAt: true,
-        },
-      }),
-      transaction.listingSourceRecord.findUnique({
-        where: {
-          sourceId_canonicalSourceUrl: {
-            sourceId: input.sourceId,
-            canonicalSourceUrl: item.canonicalSourceUrl,
-          },
-        },
-        select: {
-          id: true,
-          sourceListingId: true,
-          lastContentHash: true,
-          lastSeenAt: true,
-        },
-      }),
-    ]);
+    const identityRecord = byIdentity.get(item.sourceListingId);
+    const urlRecord = byUrl.get(item.canonicalSourceUrl);
 
-    if (byUrl && (!byIdentity || byUrl.id !== byIdentity.id)) {
+    if (urlRecord && (!identityRecord || urlRecord.id !== identityRecord.id)) {
       staged.push({
+        rowId,
         prepared,
         status: "IDENTITY_CONFLICT",
         sourceRecordId: null,
@@ -405,52 +535,108 @@ async function stageRows(
       continue;
     }
 
-    if (byIdentity) {
+    if (identityRecord) {
       const status: ListingImportRowStatus =
-        byIdentity.lastContentHash === item.contentHash
+        identityRecord.lastContentHash === item.contentHash
           ? "EXACT_DUPLICATE"
           : "SOURCE_CHANGED";
-      const isNewest = item.retrievedAt >= byIdentity.lastSeenAt;
-      await transaction.listingSourceRecord.update({
-        where: { id: byIdentity.id },
-        data: {
-          lastSeenAt:
-            item.retrievedAt > byIdentity.lastSeenAt
-              ? item.retrievedAt
-              : byIdentity.lastSeenAt,
-          ...(isNewest
-            ? {
-                canonicalSourceUrl: item.canonicalSourceUrl,
-                lastContentHash: item.contentHash,
-              }
-            : {}),
-        },
-      });
+      const isNewest = item.retrievedAt >= identityRecord.lastSeenAt;
+      if (item.retrievedAt > identityRecord.lastSeenAt) {
+        identityRecord.lastSeenAt = item.retrievedAt;
+        identityRecord.dirty = true;
+      }
+      if (isNewest) {
+        if (identityRecord.canonicalSourceUrl !== item.canonicalSourceUrl) {
+          if (
+            byUrl.get(identityRecord.canonicalSourceUrl)?.id ===
+            identityRecord.id
+          ) {
+            byUrl.delete(identityRecord.canonicalSourceUrl);
+          }
+          identityRecord.canonicalSourceUrl = item.canonicalSourceUrl;
+          byUrl.set(item.canonicalSourceUrl, identityRecord);
+          identityRecord.dirty = true;
+        }
+        if (identityRecord.lastContentHash !== item.contentHash) {
+          identityRecord.lastContentHash = item.contentHash;
+          identityRecord.dirty = true;
+        }
+      }
       staged.push({
+        rowId,
         prepared,
         status,
-        sourceRecordId: byIdentity.id,
+        sourceRecordId: identityRecord.id,
         candidateId: null,
       });
       continue;
     }
 
-    const sourceRecord = await transaction.listingSourceRecord.create({
-      data: {
-        sourceId: input.sourceId,
-        sourceListingId: item.sourceListingId,
-        canonicalSourceUrl: item.canonicalSourceUrl,
-        firstSeenAt: item.retrievedAt,
-        lastSeenAt: item.retrievedAt,
-        lastContentHash: item.contentHash,
-      },
-      select: { id: true },
-    });
+    const sourceRecord: SourceRecordState = {
+      id: randomUUID(),
+      sourceListingId: item.sourceListingId,
+      canonicalSourceUrl: item.canonicalSourceUrl,
+      firstSeenAt: item.retrievedAt,
+      lastSeenAt: item.retrievedAt,
+      lastContentHash: item.contentHash,
+      isNew: true,
+      dirty: false,
+    };
+    stateById.set(sourceRecord.id, sourceRecord);
+    byIdentity.set(sourceRecord.sourceListingId, sourceRecord);
+    byUrl.set(sourceRecord.canonicalSourceUrl, sourceRecord);
     staged.push({
+      rowId,
       prepared,
       status: "CANDIDATE_CREATED",
       sourceRecordId: sourceRecord.id,
       candidateId: randomUUID(),
+    });
+  }
+
+  const updatedRecords = [...stateById.values()].filter(
+    (record) => !record.isNew && record.dirty,
+  );
+  if (updatedRecords.length > 0) {
+    const updatesJson = JSON.stringify(
+      updatedRecords.map((record) => ({
+        id: record.id,
+        canonical_source_url: record.canonicalSourceUrl,
+        last_seen_at: record.lastSeenAt.toISOString(),
+        last_content_hash: record.lastContentHash,
+      })),
+    );
+    await transaction.$executeRaw(Prisma.sql`
+      UPDATE "listing_source_records" AS target
+      SET
+        "canonical_source_url" = updates.canonical_source_url,
+        "last_seen_at" = updates.last_seen_at,
+        "last_content_hash" = updates.last_content_hash,
+        "updated_at" = CURRENT_TIMESTAMP
+      FROM jsonb_to_recordset(${updatesJson}::jsonb) AS updates(
+        id uuid,
+        canonical_source_url varchar,
+        last_seen_at timestamptz,
+        last_content_hash char(64)
+      )
+      WHERE target."id" = updates.id
+    `);
+  }
+  // Apply URL moves before inserting new identities. A later row in this same
+  // batch may legitimately claim a canonical URL released by an earlier row;
+  // inserting first would hit the old database value's unique constraint.
+  const newRecords = [...stateById.values()].filter((record) => record.isNew);
+  if (newRecords.length > 0) {
+    await transaction.listingSourceRecord.createMany({
+      data: newRecords.map((record) => ({
+        id: record.id,
+        sourceId: input.sourceId,
+        sourceListingId: record.sourceListingId,
+        canonicalSourceUrl: record.canonicalSourceUrl,
+        firstSeenAt: record.firstSeenAt,
+        lastSeenAt: record.lastSeenAt,
+        lastContentHash: record.lastContentHash,
+      })),
     });
   }
   return staged;
@@ -490,7 +676,10 @@ export class PrismaListingImportRepository implements ListingImportRepository {
       try {
         return await this.prisma.$transaction(
           async (transaction) => this.process(transaction, input),
-          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            timeout: TRANSACTION_TIMEOUT_MILLISECONDS,
+          },
         );
       } catch (error) {
         if (
@@ -516,14 +705,40 @@ export class PrismaListingImportRepository implements ListingImportRepository {
     transaction: Transaction,
     input: ListingImportTransactionInput,
   ): Promise<ListingImportPersistenceResult> {
-    const source = await transaction.listingImportSource.findFirst({
-      where: { id: input.sourceId, key: input.sourceKey, enabled: true },
-      select: { id: true },
-    });
-    if (!source) {
+    const sources = await transaction.$queryRaw<
+      {
+        id: string;
+        allowed_hosts: string[];
+        allowed_query_parameters: string[];
+        production_allowed: boolean;
+      }[]
+    >(Prisma.sql`
+      SELECT
+        "id",
+        "allowed_hosts",
+        "allowed_query_parameters",
+        "production_allowed"
+      FROM "listing_import_sources"
+      WHERE "id" = ${input.sourceId}::uuid
+        AND "key" = ${input.sourceKey}
+        AND "enabled" = TRUE
+      FOR SHARE
+    `);
+    const source = sources[0];
+    if (
+      !source ||
+      (input.requireProductionAllowed && !source.production_allowed) ||
+      !sameStrings(source.allowed_hosts, input.sourcePolicy.allowedHosts) ||
+      !sameStrings(
+        source.allowed_query_parameters,
+        input.sourcePolicy.allowedQueryParameters,
+      )
+    ) {
       throw new ListingImportError(
-        "SOURCE_DISABLED",
-        "The listing source is unavailable.",
+        input.requireProductionAllowed && source && !source.production_allowed
+          ? "SOURCE_NOT_PRODUCTION_ALLOWED"
+          : "SOURCE_DISABLED",
+        "The listing source or its URL policy changed before persistence.",
       );
     }
     await assertActor(transaction, input);
@@ -556,21 +771,16 @@ export class PrismaListingImportRepository implements ListingImportRepository {
         createdAt: now,
         completedAt: now,
         ...(input.actor.kind === "API_CREDENTIAL"
-          ? {
-              credentialId: input.actor.credentialId,
-              idempotencyKeyDigest: input.actor.idempotencyKeyDigest,
-            }
+          ? { credentialId: input.actor.credentialId }
           : { adminActorUserId: input.actor.adminUserId }),
       },
     });
 
-    const results: ListingImportRowResult[] = [];
-    for (const stagedRow of staged) {
-      const rowId = randomUUID();
-      const prepared = stagedRow.prepared;
-      await transaction.listingImportRow.create({
-        data: {
-          id: rowId,
+    await transaction.listingImportRow.createMany({
+      data: staged.map((stagedRow) => {
+        const prepared = stagedRow.prepared;
+        return {
+          id: stagedRow.rowId,
           batchId,
           rowNumber: prepared.rowNumber,
           sourceRecordId: stagedRow.sourceRecordId,
@@ -584,79 +794,80 @@ export class PrismaListingImportRepository implements ListingImportRepository {
             prepared.status === "INVALID" ? [...prepared.validationCodes] : [],
           contentHash:
             prepared.status === "VALID" ? prepared.item.contentHash : null,
-        },
-      });
+        };
+      }),
+    });
 
+    const candidates: CandidateToCreate[] = [];
+    for (const stagedRow of staged) {
+      const prepared = stagedRow.prepared;
       if (
         stagedRow.status === "CANDIDATE_CREATED" &&
         stagedRow.candidateId &&
         stagedRow.sourceRecordId &&
         prepared.status === "VALID"
       ) {
-        const item = prepared.item;
-        await transaction.listingImportCandidate.create({
-          data: {
-            id: stagedRow.candidateId,
-            sourceRecordId: stagedRow.sourceRecordId,
+        candidates.push({
+          candidateId: stagedRow.candidateId,
+          rowId: stagedRow.rowId,
+          sourceRecordId: stagedRow.sourceRecordId,
+          item: prepared.item,
+          normalizedJson: prepared.normalizedJson,
+        });
+      }
+    }
+
+    if (candidates.length > 0) {
+      await transaction.listingImportCandidate.createMany({
+        data: candidates.map(
+          ({
+            candidateId,
+            rowId,
+            sourceRecordId,
+            item,
+            normalizedJson: payload,
+          }) => ({
+            id: candidateId,
+            sourceRecordId,
+            creationObservationId: rowId,
             latestObservationId: rowId,
-            currentPayload: jsonWriteValue(prepared.normalizedJson),
+            currentPayload: jsonWriteValue(payload),
             normalizedTitle: item.normalizedTitle,
             normalizedAddress: item.normalizedAddress || null,
             normalizedCity: item.normalizedCity,
             normalizedPostalCode: item.normalizedPostalCode || null,
             startsAt: item.startsAt,
             endsAt: item.endsAt,
-          },
-        });
-        const duplicates = await findDuplicateTargets(transaction, item);
-        if (duplicates.length > 0) {
-          await transaction.listingDuplicateMatch.createMany({
-            data: duplicates.map((duplicate) => ({
-              candidateId: stagedRow.candidateId as string,
-              ...(duplicate.targetKind === "EVENT"
-                ? { eventId: duplicate.targetId }
-                : { externalListingId: duplicate.targetId }),
-              reasons: [...duplicate.reasons],
-            })),
-          });
-        }
-        await transaction.auditEntry.create({
-          data: {
-            actorUserId:
-              input.actor.kind === "ADMIN_USER"
-                ? input.actor.adminUserId
-                : null,
-            action: "LISTING_IMPORT_CANDIDATE_CREATED",
-            targetType: "LISTING_IMPORT_CANDIDATE",
-            targetId: stagedRow.candidateId,
-            ...(input.audit.requestId
-              ? { requestId: input.audit.requestId }
-              : {}),
-            metadata: jsonDocument(
-              candidateAuditMetadata({
-                batchId,
-                candidateId: stagedRow.candidateId,
-                sourceRecordId: stagedRow.sourceRecordId,
-                contentHash: item.contentHash,
-              }),
-            ),
-          },
-        });
-      }
-
-      results.push({
-        rowNumber: prepared.rowNumber,
-        status: stagedRow.status,
-        candidateId:
-          stagedRow.status === "CANDIDATE_CREATED"
-            ? stagedRow.candidateId
-            : null,
-        validationCodes:
-          prepared.status === "INVALID" ? prepared.validationCodes : [],
+          }),
+        ),
       });
+    }
+    const duplicatesByCandidate = await findDuplicateTargets(
+      transaction,
+      candidates,
+    );
+    const duplicates = candidates.flatMap(({ candidateId }) =>
+      (duplicatesByCandidate.get(candidateId) ?? []).map((duplicate) => ({
+        candidateId,
+        ...(duplicate.targetKind === "EVENT"
+          ? { eventId: duplicate.targetId }
+          : { externalListingId: duplicate.targetId }),
+        reasons: [...duplicate.reasons],
+      })),
+    );
+    if (duplicates.length > 0) {
+      await transaction.listingDuplicateMatch.createMany({ data: duplicates });
     }
 
     if (input.actor.kind === "API_CREDENTIAL") {
+      await transaction.listingImportIdempotencyKey.create({
+        data: {
+          credentialId: input.actor.credentialId,
+          idempotencyKeyDigest: input.actor.idempotencyKeyDigest,
+          requestDigest: input.requestDigest,
+          batchId,
+        },
+      });
       await transaction.listingIngestionCredential.update({
         where: { id: input.actor.credentialId },
         data: { lastUsedAt: now },
@@ -667,26 +878,63 @@ export class PrismaListingImportRepository implements ListingImportRepository {
         ? [...row.prepared.validationCodes]
         : [],
     );
-    await transaction.auditEntry.create({
-      data: {
-        actorUserId:
-          input.actor.kind === "ADMIN_USER" ? input.actor.adminUserId : null,
-        action: "LISTING_IMPORT_BATCH_CREATED",
-        targetType: "LISTING_IMPORT_BATCH",
-        targetId: batchId,
-        ...(input.audit.requestId ? { requestId: input.audit.requestId } : {}),
-        metadata: jsonDocument(
-          batchAuditMetadata({
-            batchId,
-            sourceId: input.sourceId,
-            requestDigest: input.requestDigest,
-            payloadDigest: input.payloadDigest,
-            counts,
-            validationCodes: allValidationCodes,
-          }),
-        ),
-      },
+    await transaction.auditEntry.createMany({
+      data: [
+        ...candidates.map(({ candidateId, sourceRecordId, item }) => ({
+          actorUserId:
+            input.actor.kind === "ADMIN_USER" ? input.actor.adminUserId : null,
+          action: "LISTING_IMPORT_CANDIDATE_CREATED",
+          targetType: "LISTING_IMPORT_CANDIDATE",
+          targetId: candidateId,
+          ...(input.audit.requestId
+            ? { requestId: input.audit.requestId }
+            : {}),
+          metadata: jsonDocument(
+            candidateAuditMetadata({
+              batchId,
+              candidateId,
+              sourceRecordId,
+              contentHash: item.contentHash,
+            }),
+          ),
+        })),
+        {
+          actorUserId:
+            input.actor.kind === "ADMIN_USER" ? input.actor.adminUserId : null,
+          action: "LISTING_IMPORT_BATCH_CREATED",
+          targetType: "LISTING_IMPORT_BATCH",
+          targetId: batchId,
+          ...(input.audit.requestId
+            ? { requestId: input.audit.requestId }
+            : {}),
+          metadata: jsonDocument(
+            batchAuditMetadata({
+              batchId,
+              sourceId: input.sourceId,
+              requestDigest: input.requestDigest,
+              payloadDigest: input.payloadDigest,
+              counts,
+              validationCodes: allValidationCodes,
+            }),
+          ),
+        },
+      ],
     });
+    await transaction.listingImportBatch.update({
+      where: { id: batchId },
+      data: { sealedAt: now },
+    });
+
+    const results: ListingImportRowResult[] = staged.map((stagedRow) => ({
+      rowNumber: stagedRow.prepared.rowNumber,
+      status: stagedRow.status,
+      candidateId:
+        stagedRow.status === "CANDIDATE_CREATED" ? stagedRow.candidateId : null,
+      validationCodes:
+        stagedRow.prepared.status === "INVALID"
+          ? stagedRow.prepared.validationCodes
+          : [],
+    }));
 
     return {
       batchId,

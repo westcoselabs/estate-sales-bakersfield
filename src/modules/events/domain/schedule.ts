@@ -10,6 +10,24 @@ interface LocalParts {
   readonly minute: number;
 }
 
+const formatterByTimezone = new Map<string, Intl.DateTimeFormat>();
+
+function formatterFor(timezone: string): Intl.DateTimeFormat {
+  const existing = formatterByTimezone.get(timezone);
+  if (existing) return existing;
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  formatterByTimezone.set(timezone, formatter);
+  return formatter;
+}
+
 function parseLocal(value: string): LocalParts {
   const match = LOCAL_DATE_TIME.exec(value);
   if (!match)
@@ -37,15 +55,7 @@ function parseLocal(value: string): LocalParts {
 }
 
 function formattedParts(date: Date, timezone: string): LocalParts {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  });
+  const formatter = formatterFor(timezone);
   const values = Object.fromEntries(
     formatter
       .formatToParts(date)

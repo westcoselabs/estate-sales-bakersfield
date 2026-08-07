@@ -63,7 +63,8 @@ export function buildLocalRuntimeEnvironment(
     ...local,
     PRODUCTION_DATABASE_URL: production.DATABASE_URL,
     PRODUCTION_DIRECT_URL: production.DIRECT_URL,
-    PRODUCTION_NEON_ENDPOINT_ID: productionEndpointId,
+    PRODUCTION_NEON_ENDPOINT_ID:
+      productionEndpointId ?? local.PRODUCTION_NEON_ENDPOINT_ID,
   });
 
   for (const name of sensitiveNames) {

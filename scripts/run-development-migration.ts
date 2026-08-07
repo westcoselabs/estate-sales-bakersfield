@@ -1,9 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-
-import { parse } from "dotenv";
 
 import {
+  knownProductionDatabaseEnvironment,
   loadLocalDevelopmentEnvironment,
   requireSafeDevelopmentDatabase,
 } from "./test-database-safety";
@@ -30,25 +28,13 @@ function migrationArguments(input: readonly string[]): readonly string[] {
   return result;
 }
 
-const knownProduction: NodeJS.ProcessEnv = {
-  NODE_ENV: process.env.NODE_ENV ?? "development",
-};
-if (existsSync(".env")) {
-  const parsed = parse(readFileSync(".env"));
-  knownProduction.PRODUCTION_DATABASE_URL = parsed.DATABASE_URL;
-  knownProduction.PRODUCTION_DIRECT_URL = parsed.DIRECT_URL;
-  knownProduction.PRODUCTION_NEON_ENDPOINT_ID = parsed.DIRECT_URL
-    ? new URL(parsed.DIRECT_URL).hostname.split(".")[0]
-    : undefined;
-}
-
 loadLocalDevelopmentEnvironment();
 if (process.env.APP_ENV !== "local") {
   throw new Error("Development migrations require APP_ENV=local");
 }
 const database = requireSafeDevelopmentDatabase({
   ...process.env,
-  ...knownProduction,
+  ...knownProductionDatabaseEnvironment(),
 });
 const args = migrationArguments(process.argv.slice(2));
 const environment: NodeJS.ProcessEnv = {

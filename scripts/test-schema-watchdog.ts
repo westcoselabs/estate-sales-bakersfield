@@ -31,19 +31,21 @@ const development = requireSafeDevelopmentDatabase({
 let completed = false;
 let cleaning = false;
 
+function retryDelay(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 500));
+}
+
 async function cleanAfterAbandonedParent(): Promise<void> {
   if (completed || cleaning) return;
   cleaning = true;
-  try {
-    await dropIsolatedTestSchema({
-      ...development,
-      pooledUrl: watchedDirectUrl,
-      directUrl: watchedDirectUrl,
-      schemaName: watchedSchemaName,
-    });
-    process.exit(0);
-  } catch {
-    process.exit(1);
+  for (let attempt = 1; attempt <= 10; attempt += 1) {
+    try {
+      await dropIsolatedTestSchema(development, watchedSchemaName);
+      process.exit(0);
+    } catch {
+      if (attempt === 10) process.exit(1);
+      await retryDelay();
+    }
   }
 }
 

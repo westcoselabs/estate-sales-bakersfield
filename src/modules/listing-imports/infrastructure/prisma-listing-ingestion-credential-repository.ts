@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
+import { RECENT_PASSWORD_TTL_MS } from "@/modules/auth";
 
 import type {
   AuthenticateListingIngestionCredentialInput,
@@ -87,6 +88,9 @@ export class PrismaListingIngestionCredentialRepository implements ListingIngest
     transaction: Transaction,
     input: CreateListingIngestionCredentialRecordInput,
   ): Promise<CreateListingIngestionCredentialRecordResult> {
+    if (!(await this.isAuthorizedActor(transaction, input))) {
+      return { status: "ACTOR_NOT_AUTHORIZED" };
+    }
     const source = await transaction.listingImportSource.findUnique({
       where: { key: input.sourceKey },
       select: {
@@ -146,6 +150,9 @@ export class PrismaListingIngestionCredentialRepository implements ListingIngest
     transaction: Transaction,
     input: RevokeListingIngestionCredentialRecordInput,
   ): Promise<RevokeListingIngestionCredentialRecordResult> {
+    if (!(await this.isAuthorizedActor(transaction, input))) {
+      return { status: "ACTOR_NOT_AUTHORIZED" };
+    }
     const existing = await transaction.listingIngestionCredential.findUnique({
       where: { id: input.credentialId },
       select: { id: true, sourceId: true, revokedAt: true },
@@ -247,5 +254,39 @@ export class PrismaListingIngestionCredentialRepository implements ListingIngest
       credentialId: credential.id,
       source: credential.source,
     };
+  }
+
+  private async isAuthorizedActor(
+    transaction: Transaction,
+    input: {
+      readonly actorSessionId: string;
+      readonly authorizationAt: Date;
+      readonly createdByUserId?: string;
+      readonly revokedByUserId?: string;
+    },
+  ): Promise<boolean> {
+    const actorUserId = input.createdByUserId ?? input.revokedByUserId;
+    if (!actorUserId) return false;
+
+    const recentPasswordCutoff = new Date(
+      input.authorizationAt.getTime() - RECENT_PASSWORD_TTL_MS,
+    );
+    const session = await transaction.session.findFirst({
+      where: {
+        id: input.actorSessionId,
+        userId: actorUserId,
+        expiresAt: { gt: input.authorizationAt },
+        passwordAuthenticatedAt: { gte: recentPasswordCutoff },
+        user: {
+          is: {
+            role: "SUPER_ADMIN",
+            status: "ACTIVE",
+            emailVerifiedAt: { not: null },
+          },
+        },
+      },
+      select: { id: true },
+    });
+    return session !== null;
   }
 }

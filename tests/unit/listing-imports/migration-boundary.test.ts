@@ -17,9 +17,11 @@ const EXPECTED_MODELS = [
   "ListingDuplicateMatch",
   "ListingImportBatch",
   "ListingImportCandidate",
+  "ListingImportIdempotencyKey",
   "ListingImportRow",
   "ListingImportSource",
   "ListingIngestionCredential",
+  "ListingPublicIdReservation",
   "ListingSourceRecord",
 ];
 
@@ -29,9 +31,11 @@ const EXPECTED_TABLES = [
   "listing_duplicate_matches",
   "listing_import_batches",
   "listing_import_candidates",
+  "listing_import_idempotency_keys",
   "listing_import_rows",
   "listing_import_sources",
   "listing_ingestion_credentials",
+  "listing_public_id_reservations",
   "listing_source_records",
 ];
 
@@ -47,7 +51,7 @@ describe("listing imports migration boundary", () => {
     );
   });
 
-  it("creates only the nine bounded tables and leaves organizer invariants untouched", () => {
+  it("creates only the eleven bounded tables and leaves organizer data untouched", () => {
     const tables = [...migration.matchAll(/^CREATE TABLE "([^"]+)"/gmu)]
       .map((match) => match[1] ?? "")
       .sort();

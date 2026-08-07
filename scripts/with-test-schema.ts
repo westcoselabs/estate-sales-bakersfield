@@ -12,6 +12,7 @@ import {
   deployTestMigrations,
   dropIsolatedTestSchema,
   testDatabaseEnvironment,
+  verifyRestrictedTestRuntime,
 } from "./test-database-run";
 import { runTestSchemaLifecycle } from "./test-schema-lifecycle";
 
@@ -40,7 +41,6 @@ function windowsCommandLine(command: readonly string[]): string {
 function startCleanupWatchdog(
   database: ReturnType<typeof isolateDevelopmentDatabase>,
 ): ChildProcess {
-  const knownProduction = knownProductionDatabaseEnvironment();
   const watchdog = spawn(
     process.execPath,
     ["--import", "tsx", "scripts/test-schema-watchdog.ts"],
@@ -56,9 +56,7 @@ function startCleanupWatchdog(
         DEVELOPMENT_NEON_ENDPOINT_ID: database.endpointId,
         DEVELOPMENT_DATABASE_CONFIRMATION:
           process.env.DEVELOPMENT_DATABASE_CONFIRMATION,
-        PRODUCTION_NEON_ENDPOINT_ID:
-          process.env.PRODUCTION_NEON_ENDPOINT_ID ??
-          knownProduction.PRODUCTION_NEON_ENDPOINT_ID,
+        PRODUCTION_NEON_ENDPOINT_ID: database.productionEndpointId,
         TEST_SCHEMA_WATCHDOG_SCHEMA: database.schemaName,
         TEST_SCHEMA_WATCHDOG_DIRECT_URL: database.baseDirectUrl,
         TEST_SCHEMA_WATCHDOG_PARENT_PID: String(process.pid),
@@ -124,13 +122,17 @@ function runChild(
 async function main(): Promise<void> {
   const command = requestedCommand(process.argv.slice(2));
   loadDevelopmentTestEnvironment();
+  const knownProduction = knownProductionDatabaseEnvironment();
   const development = requireSafeDevelopmentDatabase({
     ...process.env,
-    ...knownProductionDatabaseEnvironment(),
+    ...knownProduction,
   });
   const runId = createTestRunId();
   const database = isolateDevelopmentDatabase(development, runId);
-  const environment = testDatabaseEnvironment(database, runId);
+  const environment = testDatabaseEnvironment(database, runId, {
+    ...process.env,
+    ...knownProduction,
+  });
   const watchdog = startCleanupWatchdog(database);
   let cleanupCompleted = false;
   const interruption: {
@@ -157,14 +159,21 @@ async function main(): Promise<void> {
         );
       },
       migrate: () => {
-        if (!interruption.signal) deployTestMigrations(database, runId);
+        if (!interruption.signal) {
+          deployTestMigrations(database, runId);
+          return verifyRestrictedTestRuntime(database);
+        }
       },
       run: () =>
         interruption.signal
           ? Promise.resolve(interruption.signal === "SIGINT" ? 130 : 143)
           : runChild(command, environment, interruption),
       drop: async () => {
-        await dropIsolatedTestSchema(database);
+        await dropIsolatedTestSchema(
+          database,
+          database.schemaName,
+          database.runtimeRoleName,
+        );
         cleanupCompleted = true;
         process.stdout.write(
           `Removed isolated test schema ${database.schemaName}.\n`,

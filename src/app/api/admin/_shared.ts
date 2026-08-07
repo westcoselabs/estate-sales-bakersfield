@@ -148,9 +148,15 @@ export function adminApiError(
       message = "Please check the listing import information.";
     }
   } else if (error instanceof ListingIngestionCredentialError) {
-    status = error.code === "SOURCE_NOT_PRODUCTION_ALLOWED" ? 403 : 400;
-    code = error.code;
-    message = "Please check the ingestion credential information.";
+    if (error.code === "ACTOR_NOT_AUTHORIZED") {
+      status = 403;
+      code = "FORBIDDEN";
+      message = "You do not have access to this action.";
+    } else {
+      status = error.code === "SOURCE_NOT_PRODUCTION_ALLOWED" ? 403 : 400;
+      code = error.code;
+      message = "Please check the ingestion credential information.";
+    }
   } else if (error instanceof AdminApplicationError) {
     status = error.status;
     code = error.code;

@@ -100,7 +100,6 @@ CREATE TABLE "listing_import_batches" (
   "parser_version" VARCHAR(100) NOT NULL,
   "ingestor_run_id" VARCHAR(100) NOT NULL,
   "ingestor_instance_id" VARCHAR(100) NOT NULL,
-  "idempotency_key_digest" CHAR(64),
   "request_digest" CHAR(64) NOT NULL,
   "payload_digest" CHAR(64) NOT NULL,
   "status" "listing_import_batch_status" NOT NULL,
@@ -112,6 +111,7 @@ CREATE TABLE "listing_import_batches" (
   "identity_conflict_rows" INTEGER NOT NULL,
   "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "completed_at" TIMESTAMPTZ(3) NOT NULL,
+  "sealed_at" TIMESTAMPTZ(3),
   CONSTRAINT "listing_import_batches_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "listing_import_batches_metadata_not_blank" CHECK (
     char_length(btrim("contract_version")) > 0
@@ -122,23 +122,17 @@ CREATE TABLE "listing_import_batches" (
   CONSTRAINT "listing_import_batches_digest_format" CHECK (
     "request_digest" ~ '^[0-9a-f]{64}$'
     AND "payload_digest" ~ '^[0-9a-f]{64}$'
-    AND (
-      "idempotency_key_digest" IS NULL
-      OR "idempotency_key_digest" ~ '^[0-9a-f]{64}$'
-    )
   ),
   CONSTRAINT "listing_import_batches_actor" CHECK (
     (
       "transport" = 'API'
       AND "credential_id" IS NOT NULL
       AND "admin_actor_user_id" IS NULL
-      AND "idempotency_key_digest" IS NOT NULL
     )
     OR (
       "transport" IN ('MANUAL_JSON', 'MANUAL_CSV')
       AND "credential_id" IS NULL
       AND "admin_actor_user_id" IS NOT NULL
-      AND "idempotency_key_digest" IS NULL
     )
   ),
   CONSTRAINT "listing_import_batches_counts" CHECK (
@@ -168,6 +162,25 @@ CREATE TABLE "listing_import_batches" (
   ),
   CONSTRAINT "listing_import_batches_completed_after_created" CHECK (
     "completed_at" >= "created_at"
+    AND (
+      "sealed_at" IS NULL
+      OR "sealed_at" >= "completed_at"
+    )
+  )
+);
+
+CREATE TABLE "listing_import_idempotency_keys" (
+  "credential_id" UUID NOT NULL,
+  "idempotency_key_digest" CHAR(64) NOT NULL,
+  "request_digest" CHAR(64) NOT NULL,
+  "batch_id" UUID NOT NULL,
+  "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "listing_import_idempotency_keys_pkey" PRIMARY KEY (
+    "credential_id", "idempotency_key_digest"
+  ),
+  CONSTRAINT "listing_import_idempotency_keys_digest_format" CHECK (
+    "idempotency_key_digest" ~ '^[0-9a-f]{64}$'
+    AND "request_digest" ~ '^[0-9a-f]{64}$'
   )
 );
 
@@ -245,14 +258,21 @@ CREATE TABLE "listing_import_rows" (
     )
   ),
   CONSTRAINT "listing_import_rows_source_record" CHECK (
-    "status" IN ('INVALID', 'IDENTITY_CONFLICT')
-    OR "source_record_id" IS NOT NULL
+    (
+      "status" IN ('INVALID', 'IDENTITY_CONFLICT')
+      AND "source_record_id" IS NULL
+    )
+    OR (
+      "status" NOT IN ('INVALID', 'IDENTITY_CONFLICT')
+      AND "source_record_id" IS NOT NULL
+    )
   )
 );
 
 CREATE TABLE "listing_import_candidates" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "source_record_id" UUID NOT NULL,
+  "creation_observation_id" UUID NOT NULL,
   "latest_observation_id" UUID NOT NULL,
   "current_payload" JSONB NOT NULL,
   "normalized_title" VARCHAR(120) NOT NULL,
@@ -438,6 +458,17 @@ CREATE TABLE "external_listings" (
   )
 );
 
+CREATE TABLE "listing_public_id_reservations" (
+  "public_id" VARCHAR(12) NOT NULL,
+  "event_id" UUID,
+  "external_listing_id" UUID,
+  "reserved_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "listing_public_id_reservations_pkey" PRIMARY KEY ("public_id"),
+  CONSTRAINT "listing_public_id_reservations_owner" CHECK (
+    num_nonnulls("event_id", "external_listing_id") = 1
+  )
+);
+
 CREATE TABLE "external_listing_locations" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "listing_id" UUID NOT NULL,
@@ -561,8 +592,6 @@ CREATE INDEX "listing_ingestion_credentials_source_id_revoked_at_idx"
 CREATE INDEX "listing_ingestion_credentials_created_by_user_id_created_at_idx"
   ON "listing_ingestion_credentials"("created_by_user_id", "created_at");
 
-CREATE UNIQUE INDEX "listing_import_batches_credential_id_idempotency_key_digest_key"
-  ON "listing_import_batches"("credential_id", "idempotency_key_digest");
 CREATE UNIQUE INDEX "listing_import_batches_source_id_ingestor_instance_id_inges_key"
   ON "listing_import_batches"(
     "source_id", "ingestor_instance_id", "ingestor_run_id"
@@ -573,6 +602,9 @@ CREATE INDEX "listing_import_batches_status_created_at_idx"
   ON "listing_import_batches"("status", "created_at");
 CREATE INDEX "listing_import_batches_admin_actor_user_id_created_at_idx"
   ON "listing_import_batches"("admin_actor_user_id", "created_at");
+
+CREATE INDEX "listing_import_idempotency_keys_batch_id_idx"
+  ON "listing_import_idempotency_keys"("batch_id");
 
 CREATE UNIQUE INDEX "listing_source_records_source_id_source_listing_id_key"
   ON "listing_source_records"("source_id", "source_listing_id");
@@ -594,6 +626,8 @@ CREATE INDEX "listing_import_rows_source_record_id_created_at_idx"
 
 CREATE UNIQUE INDEX "listing_import_candidates_source_record_id_key"
   ON "listing_import_candidates"("source_record_id");
+CREATE UNIQUE INDEX "listing_import_candidates_creation_observation_id_key"
+  ON "listing_import_candidates"("creation_observation_id");
 CREATE UNIQUE INDEX "listing_import_candidates_latest_observation_id_key"
   ON "listing_import_candidates"("latest_observation_id");
 CREATE INDEX "listing_import_candidates_status_starts_at_id_idx"
@@ -626,6 +660,16 @@ CREATE INDEX "external_listings_status_ends_at_idx"
   ON "external_listings"("status", "ends_at");
 CREATE INDEX "external_listings_event_type_status_starts_at_idx"
   ON "external_listings"("event_type", "status", "starts_at");
+CREATE INDEX "external_listings_starts_at_ends_at_id_idx"
+  ON "external_listings"("starts_at", "ends_at", "id");
+
+CREATE UNIQUE INDEX "listing_public_id_reservations_event_id_key"
+  ON "listing_public_id_reservations"("event_id");
+CREATE UNIQUE INDEX "listing_public_id_reservations_external_listing_id_key"
+  ON "listing_public_id_reservations"("external_listing_id");
+
+CREATE INDEX "events_starts_at_ends_at_id_idx"
+  ON "events"("starts_at", "ends_at", "id");
 
 CREATE UNIQUE INDEX "external_listing_locations_listing_id_key"
   ON "external_listing_locations"("listing_id");
@@ -679,6 +723,16 @@ ADD CONSTRAINT "listing_import_batches_admin_actor_user_id_fkey"
 FOREIGN KEY ("admin_actor_user_id") REFERENCES "users"("id")
 ON DELETE RESTRICT ON UPDATE CASCADE;
 
+ALTER TABLE "listing_import_idempotency_keys"
+ADD CONSTRAINT "listing_import_idempotency_keys_credential_id_fkey"
+FOREIGN KEY ("credential_id") REFERENCES "listing_ingestion_credentials"("id")
+ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "listing_import_idempotency_keys"
+ADD CONSTRAINT "listing_import_idempotency_keys_batch_id_fkey"
+FOREIGN KEY ("batch_id") REFERENCES "listing_import_batches"("id")
+ON DELETE RESTRICT ON UPDATE CASCADE;
+
 ALTER TABLE "listing_source_records"
 ADD CONSTRAINT "listing_source_records_source_id_fkey"
 FOREIGN KEY ("source_id") REFERENCES "listing_import_sources"("id")
@@ -710,6 +764,11 @@ FOREIGN KEY ("source_record_id") REFERENCES "listing_source_records"("id")
 ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "listing_import_candidates"
+ADD CONSTRAINT "listing_import_candidates_creation_observation_id_fkey"
+FOREIGN KEY ("creation_observation_id") REFERENCES "listing_import_rows"("id")
+ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "listing_import_candidates"
 ADD CONSTRAINT "listing_import_candidates_latest_observation_id_fkey"
 FOREIGN KEY ("latest_observation_id") REFERENCES "listing_import_rows"("id")
 ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -732,6 +791,16 @@ ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "external_listings"
 ADD CONSTRAINT "external_listings_primary_source_record_id_fkey"
 FOREIGN KEY ("primary_source_record_id") REFERENCES "listing_source_records"("id")
+ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "listing_public_id_reservations"
+ADD CONSTRAINT "listing_public_id_reservations_event_id_fkey"
+FOREIGN KEY ("event_id") REFERENCES "events"("id")
+ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "listing_public_id_reservations"
+ADD CONSTRAINT "listing_public_id_reservations_external_listing_id_fkey"
+FOREIGN KEY ("external_listing_id") REFERENCES "external_listings"("id")
 ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "external_listing_locations"
@@ -763,6 +832,80 @@ ALTER TABLE "listing_duplicate_matches"
 ADD CONSTRAINT "listing_duplicate_matches_resolved_by_user_id_fkey"
 FOREIGN KEY ("resolved_by_user_id") REFERENCES "users"("id")
 ON DELETE RESTRICT ON UPDATE CASCADE;
+
+INSERT INTO "listing_public_id_reservations" (
+  "public_id",
+  "event_id"
+)
+SELECT
+  event."public_id",
+  event."id"
+FROM "events" event;
+
+CREATE OR REPLACE FUNCTION reserve_listing_public_id()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF TG_TABLE_NAME = 'events' THEN
+    INSERT INTO "listing_public_id_reservations" (
+      "public_id",
+      "event_id"
+    ) VALUES (
+      NEW."public_id",
+      NEW."id"
+    );
+  ELSE
+    INSERT INTO "listing_public_id_reservations" (
+      "public_id",
+      "external_listing_id"
+    ) VALUES (
+      NEW."public_id",
+      NEW."id"
+    );
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER events_reserve_listing_public_id
+AFTER INSERT ON "events"
+FOR EACH ROW EXECUTE FUNCTION reserve_listing_public_id();
+
+CREATE OR REPLACE FUNCTION protect_event_listing_public_id()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW."public_id" IS DISTINCT FROM OLD."public_id" THEN
+    RAISE EXCEPTION 'event listing public ID is immutable';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER events_listing_public_id_immutable
+BEFORE UPDATE OF "public_id" ON "events"
+FOR EACH ROW EXECUTE FUNCTION protect_event_listing_public_id();
+
+CREATE TRIGGER external_listings_reserve_listing_public_id
+AFTER INSERT ON "external_listings"
+FOR EACH ROW EXECUTE FUNCTION reserve_listing_public_id();
+
+CREATE OR REPLACE FUNCTION protect_listing_public_id_reservation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'listing public ID reservations are immutable';
+END;
+$$;
+
+CREATE TRIGGER listing_public_id_reservations_immutable
+BEFORE UPDATE OR DELETE ON "listing_public_id_reservations"
+FOR EACH ROW EXECUTE FUNCTION protect_listing_public_id_reservation();
 
 CREATE OR REPLACE FUNCTION enforce_listing_import_source_policy()
 RETURNS trigger
@@ -921,7 +1064,19 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  RAISE EXCEPTION 'listing import batches are immutable';
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'listing import batches are immutable';
+  END IF;
+
+  IF OLD."sealed_at" IS NOT NULL
+    OR NEW."sealed_at" IS NULL
+    OR (to_jsonb(NEW) - 'sealed_at')
+      IS DISTINCT FROM (to_jsonb(OLD) - 'sealed_at')
+  THEN
+    RAISE EXCEPTION 'listing import batches are immutable after one-time sealing';
+  END IF;
+
+  RETURN NEW;
 END;
 $$;
 
@@ -934,6 +1089,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 DECLARE
+  batch_record "listing_import_batches"%ROWTYPE;
   observed_total INTEGER;
   observed_candidates INTEGER;
   observed_invalid INTEGER;
@@ -943,6 +1099,26 @@ DECLARE
   observed_minimum_row INTEGER;
   observed_maximum_row INTEGER;
 BEGIN
+  SELECT *
+  INTO batch_record
+  FROM "listing_import_batches"
+  WHERE "id" = NEW."id";
+
+  IF batch_record."sealed_at" IS NULL THEN
+    RAISE EXCEPTION 'listing import batch must be sealed before commit';
+  END IF;
+
+  IF batch_record."transport" = 'API'
+    AND NOT EXISTS (
+      SELECT 1
+      FROM "listing_import_idempotency_keys" idempotency_key
+      WHERE idempotency_key."batch_id" = batch_record."id"
+        AND idempotency_key."credential_id" = batch_record."credential_id"
+    )
+  THEN
+    RAISE EXCEPTION 'API listing import batch requires an idempotency binding';
+  END IF;
+
   SELECT
     count(*)::INTEGER,
     count(*) FILTER (WHERE "status" = 'CANDIDATE_CREATED')::INTEGER,
@@ -964,14 +1140,14 @@ BEGIN
   FROM "listing_import_rows"
   WHERE "batch_id" = NEW."id";
 
-  IF observed_total <> NEW."total_rows"
-    OR observed_candidates <> NEW."candidate_rows"
-    OR observed_invalid <> NEW."invalid_rows"
-    OR observed_exact_duplicates <> NEW."exact_duplicate_rows"
-    OR observed_source_changes <> NEW."source_changed_rows"
-    OR observed_identity_conflicts <> NEW."identity_conflict_rows"
+  IF observed_total <> batch_record."total_rows"
+    OR observed_candidates <> batch_record."candidate_rows"
+    OR observed_invalid <> batch_record."invalid_rows"
+    OR observed_exact_duplicates <> batch_record."exact_duplicate_rows"
+    OR observed_source_changes <> batch_record."source_changed_rows"
+    OR observed_identity_conflicts <> batch_record."identity_conflict_rows"
     OR observed_minimum_row <> 1
-    OR observed_maximum_row <> NEW."total_rows"
+    OR observed_maximum_row <> batch_record."total_rows"
   THEN
     RAISE EXCEPTION 'listing import batch counts do not match immutable rows';
   END IF;
@@ -984,6 +1160,46 @@ CREATE CONSTRAINT TRIGGER listing_import_batches_row_counts
 AFTER INSERT ON "listing_import_batches"
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION enforce_listing_import_batch_row_counts();
+
+CREATE OR REPLACE FUNCTION enforce_listing_import_idempotency_key()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM "listing_ingestion_credentials" credential
+    JOIN "listing_import_batches" batch
+      ON batch."id" = NEW."batch_id"
+      AND batch."source_id" = credential."source_id"
+    WHERE credential."id" = NEW."credential_id"
+      AND credential."revoked_at" IS NULL
+      AND batch."sealed_at" IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'listing import idempotency binding source does not match its batch';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE CONSTRAINT TRIGGER listing_import_idempotency_keys_correlation
+AFTER INSERT ON "listing_import_idempotency_keys"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION enforce_listing_import_idempotency_key();
+
+CREATE OR REPLACE FUNCTION protect_listing_import_idempotency_key()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'listing import idempotency bindings are immutable';
+END;
+$$;
+
+CREATE TRIGGER listing_import_idempotency_keys_immutable
+BEFORE UPDATE OR DELETE ON "listing_import_idempotency_keys"
+FOR EACH ROW EXECUTE FUNCTION protect_listing_import_idempotency_key();
 
 CREATE OR REPLACE FUNCTION protect_listing_source_record()
 RETURNS trigger
@@ -1106,6 +1322,15 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM "listing_import_batches" batch
+    WHERE batch."id" = NEW."batch_id"
+      AND batch."sealed_at" IS NULL
+  ) THEN
+    RAISE EXCEPTION 'listing import rows require an unsealed batch';
+  END IF;
+
   IF NEW."source_record_id" IS NOT NULL AND NOT EXISTS (
     SELECT 1
     FROM "listing_import_batches" batch
@@ -1125,11 +1350,52 @@ CREATE TRIGGER listing_import_rows_source_correlation
 BEFORE INSERT ON "listing_import_rows"
 FOR EACH ROW EXECUTE FUNCTION enforce_listing_import_row_source();
 
+CREATE OR REPLACE FUNCTION enforce_listing_import_row_candidate_result()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  created_candidate_count INTEGER;
+BEGIN
+  SELECT count(*)::INTEGER
+  INTO created_candidate_count
+  FROM "listing_import_candidates" candidate
+  WHERE candidate."creation_observation_id" = NEW."id";
+
+  IF (
+    NEW."status" = 'CANDIDATE_CREATED'
+    AND created_candidate_count <> 1
+  ) OR (
+    NEW."status" <> 'CANDIDATE_CREATED'
+    AND created_candidate_count <> 0
+  ) THEN
+    RAISE EXCEPTION 'listing import row candidate result does not match its status';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE CONSTRAINT TRIGGER listing_import_rows_candidate_result
+AFTER INSERT ON "listing_import_rows"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION enforce_listing_import_row_candidate_result();
+
 CREATE OR REPLACE FUNCTION enforce_listing_import_candidate_correlation()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM "listing_import_rows" observation
+    WHERE observation."id" = NEW."creation_observation_id"
+      AND observation."source_record_id" = NEW."source_record_id"
+      AND observation."status" = 'CANDIDATE_CREATED'
+  ) THEN
+    RAISE EXCEPTION 'listing import candidate creation observation does not match its source';
+  END IF;
+
   IF NOT EXISTS (
     SELECT 1
     FROM "listing_import_rows" observation
@@ -1149,7 +1415,8 @@ END;
 $$;
 
 CREATE TRIGGER listing_import_candidates_correlation
-BEFORE INSERT OR UPDATE OF "source_record_id", "latest_observation_id"
+BEFORE INSERT OR UPDATE OF
+  "source_record_id", "creation_observation_id", "latest_observation_id"
 ON "listing_import_candidates"
 FOR EACH ROW EXECUTE FUNCTION enforce_listing_import_candidate_correlation();
 
@@ -1164,6 +1431,8 @@ BEGIN
 
   IF NEW."id" IS DISTINCT FROM OLD."id"
     OR NEW."source_record_id" IS DISTINCT FROM OLD."source_record_id"
+    OR NEW."creation_observation_id"
+      IS DISTINCT FROM OLD."creation_observation_id"
     OR NEW."created_at" IS DISTINCT FROM OLD."created_at"
   THEN
     RAISE EXCEPTION 'listing import candidate source identity is immutable';
@@ -1190,6 +1459,15 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
+  PERFORM 1
+  FROM "listing_import_candidates" candidate
+  WHERE candidate."id" = NEW."candidate_id"
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'external listing candidate does not exist';
+  END IF;
+
   IF NOT EXISTS (
     SELECT 1
     FROM "listing_import_candidates" candidate
@@ -1212,14 +1490,6 @@ BEGIN
       AND duplicate_match."resolution" = 'UNRESOLVED'
   ) THEN
     RAISE EXCEPTION 'external listing candidate has unresolved duplicate matches';
-  END IF;
-
-  IF EXISTS (
-    SELECT 1
-    FROM "events" event
-    WHERE event."public_id" = NEW."public_id"
-  ) THEN
-    RAISE EXCEPTION 'external listing public ID collides with an organizer event';
   END IF;
 
   RETURN NEW;
@@ -1345,6 +1615,25 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
+  PERFORM 1
+  FROM "listing_import_candidates" candidate
+  WHERE candidate."id" = NEW."candidate_id"
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'listing duplicate match candidate does not exist';
+  END IF;
+
+  IF NEW."resolution" = 'UNRESOLVED'
+    AND EXISTS (
+      SELECT 1
+      FROM "external_listings" listing
+      WHERE listing."candidate_id" = NEW."candidate_id"
+    )
+  THEN
+    RAISE EXCEPTION 'published external listings cannot gain unresolved duplicates';
+  END IF;
+
   IF NEW."resolution" = 'LINKED'
     AND NEW."event_id" IS NOT NULL
     AND NOT EXISTS (

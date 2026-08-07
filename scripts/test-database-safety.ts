@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 
 import { config, parse } from "dotenv";
@@ -6,18 +6,29 @@ import { config, parse } from "dotenv";
 export const DEVELOPMENT_DATABASE_CONFIRMATION =
   "estate-sales-bakersfield-development-neon-test-schemas";
 export const TEST_SCHEMA_PATTERN = /^codex_test_[0-9]{13}_[a-f0-9]{12}$/;
+export const TEST_RUNTIME_ROLE_PATTERN =
+  /^codex_test_role_[0-9]{13}_[a-f0-9]{12}$/;
 
 export interface SafeDevelopmentDatabaseConfiguration {
   readonly basePooledUrl: string;
   readonly baseDirectUrl: string;
   readonly endpointId: string;
+  readonly productionEndpointId: string;
 }
 
-export interface IsolatedTestDatabaseConfiguration extends SafeDevelopmentDatabaseConfiguration {
+export interface TestRuntimeDatabaseConfiguration {
   readonly pooledUrl: string;
   readonly directUrl: string;
   readonly schemaName: string;
+  readonly runtimeRoleName: string;
+  readonly endpointId: string;
+  readonly productionEndpointId: string;
 }
+
+export interface IsolatedTestDatabaseConfiguration
+  extends
+    SafeDevelopmentDatabaseConfiguration,
+    TestRuntimeDatabaseConfiguration {}
 
 export function loadLocalDevelopmentEnvironment(): void {
   config({ path: ".env.local", override: true, quiet: true });
@@ -152,10 +163,16 @@ export function requireSafeDevelopmentDatabase(
   if (!endpointId || !/^ep-[a-z0-9-]{6,80}$/.test(endpointId)) {
     throw new Error("DEVELOPMENT_NEON_ENDPOINT_ID is required and invalid");
   }
+  const productionEndpointId = environment.PRODUCTION_NEON_ENDPOINT_ID;
   if (
-    environment.PRODUCTION_NEON_ENDPOINT_ID &&
-    environment.PRODUCTION_NEON_ENDPOINT_ID === endpointId
+    !productionEndpointId ||
+    !/^ep-[a-z0-9-]{6,80}$/.test(productionEndpointId)
   ) {
+    throw new Error(
+      "PRODUCTION_NEON_ENDPOINT_ID is required for Development database access",
+    );
+  }
+  if (productionEndpointId === endpointId) {
     throw new Error(
       "Development and Production Neon endpoint identifiers must differ",
     );
@@ -203,6 +220,7 @@ export function requireSafeDevelopmentDatabase(
     basePooledUrl: pooled.toString(),
     baseDirectUrl: direct.toString(),
     endpointId,
+    productionEndpointId,
   };
 }
 
@@ -213,8 +231,28 @@ export function schemaNameForTestRun(runId: string): string {
   return `codex_test_${String(Date.now())}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
 }
 
-function urlForSchema(value: string, schemaName: string): string {
+export function runtimeRoleNameForSchema(schemaName: string): string {
+  if (!TEST_SCHEMA_PATTERN.test(schemaName)) {
+    throw new Error(
+      "Test runtime roles require an exact generated schema name",
+    );
+  }
+  const roleName = schemaName.replace("codex_test_", "codex_test_role_");
+  if (!TEST_RUNTIME_ROLE_PATTERN.test(roleName)) {
+    throw new Error("Generated test runtime role name is invalid");
+  }
+  return roleName;
+}
+
+function urlForRuntime(
+  value: string,
+  schemaName: string,
+  runtimeRoleName: string,
+  runtimePassword: string,
+): string {
   const url = new URL(value);
+  url.username = runtimeRoleName;
+  url.password = runtimePassword;
   url.searchParams.set("schema", schemaName);
   url.searchParams.set("options", `-c search_path=${schemaName},public`);
   return url.toString();
@@ -225,17 +263,30 @@ export function isolateDevelopmentDatabase(
   runId: string,
 ): IsolatedTestDatabaseConfiguration {
   const schemaName = schemaNameForTestRun(runId);
+  const runtimeRoleName = runtimeRoleNameForSchema(schemaName);
+  const runtimePassword = randomBytes(32).toString("base64url");
   return {
     ...database,
-    pooledUrl: urlForSchema(database.basePooledUrl, schemaName),
-    directUrl: urlForSchema(database.baseDirectUrl, schemaName),
+    pooledUrl: urlForRuntime(
+      database.basePooledUrl,
+      schemaName,
+      runtimeRoleName,
+      runtimePassword,
+    ),
+    directUrl: urlForRuntime(
+      database.baseDirectUrl,
+      schemaName,
+      runtimeRoleName,
+      runtimePassword,
+    ),
     schemaName,
+    runtimeRoleName,
   };
 }
 
 export function requireIsolatedTestDatabase(
   environment: NodeJS.ProcessEnv = process.env,
-): IsolatedTestDatabaseConfiguration {
+): TestRuntimeDatabaseConfiguration {
   if (environment.APP_ENV !== "test") {
     throw new Error("Isolated database access requires APP_ENV=test");
   }
@@ -249,14 +300,22 @@ export function requireIsolatedTestDatabase(
   const direct = new URL(directValue);
   const pooledSchema = pooled.searchParams.get("schema");
   const directSchema = direct.searchParams.get("schema");
+  const runtimeRoleName = pooledSchema
+    ? runtimeRoleNameForSchema(pooledSchema)
+    : undefined;
   if (
     !pooledSchema ||
     pooledSchema !== directSchema ||
     environment.TEST_SCHEMA_NAME !== pooledSchema ||
-    !TEST_SCHEMA_PATTERN.test(pooledSchema)
+    !TEST_SCHEMA_PATTERN.test(pooledSchema) ||
+    !runtimeRoleName ||
+    pooled.username !== runtimeRoleName ||
+    direct.username !== runtimeRoleName ||
+    !pooled.password ||
+    pooled.password !== direct.password
   ) {
     throw new Error(
-      "Test database URLs and TEST_SCHEMA_NAME must target the same generated codex_test schema",
+      "Test database URLs must use one restricted role for the same generated codex_test schema",
     );
   }
   const expectedOptions = `-c search_path=${pooledSchema},public`;
@@ -279,29 +338,49 @@ export function requireIsolatedTestDatabase(
     DIRECT_URL: direct.toString(),
   });
   return {
-    ...base,
     pooledUrl: pooledValue,
     directUrl: directValue,
     schemaName: pooledSchema,
+    runtimeRoleName,
+    endpointId: base.endpointId,
+    productionEndpointId: base.productionEndpointId,
   };
 }
 
 export function redactTestDatabaseText(
   value: string,
   database:
-    SafeDevelopmentDatabaseConfiguration | IsolatedTestDatabaseConfiguration,
+    | SafeDevelopmentDatabaseConfiguration
+    | IsolatedTestDatabaseConfiguration
+    | TestRuntimeDatabaseConfiguration,
 ): string {
-  let redacted = value
-    .split(database.basePooledUrl)
-    .join("[REDACTED_DEVELOPMENT_DATABASE_URL]")
-    .split(database.baseDirectUrl)
-    .join("[REDACTED_DEVELOPMENT_DIRECT_URL]");
+  let redacted = value;
+  if ("basePooledUrl" in database) {
+    const baseUrls = [database.basePooledUrl, database.baseDirectUrl];
+    for (const baseUrl of baseUrls) {
+      redacted = redacted
+        .split(baseUrl)
+        .join("[REDACTED_DEVELOPMENT_DATABASE_URL]");
+      const password = new URL(baseUrl).password;
+      if (password) {
+        redacted = redacted
+          .split(password)
+          .join("[REDACTED_DATABASE_PASSWORD]");
+      }
+    }
+  }
   if ("pooledUrl" in database) {
-    redacted = redacted
-      .split(database.pooledUrl)
-      .join("[REDACTED_TEST_SCHEMA_DATABASE_URL]")
-      .split(database.directUrl)
-      .join("[REDACTED_TEST_SCHEMA_DIRECT_URL]");
+    for (const runtimeUrl of [database.pooledUrl, database.directUrl]) {
+      redacted = redacted
+        .split(runtimeUrl)
+        .join("[REDACTED_TEST_SCHEMA_DATABASE_URL]");
+      const password = new URL(runtimeUrl).password;
+      if (password) {
+        redacted = redacted
+          .split(password)
+          .join("[REDACTED_TEST_DATABASE_PASSWORD]");
+      }
+    }
   }
   return redacted;
 }

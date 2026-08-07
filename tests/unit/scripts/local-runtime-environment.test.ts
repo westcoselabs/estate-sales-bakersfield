@@ -12,6 +12,7 @@ const local = {
   DIRECT_URL:
     "postgresql://development_user:secret@ep-development-123456.us-east-2.aws.neon.tech/neondb?sslmode=require",
   DEVELOPMENT_NEON_ENDPOINT_ID: "ep-development-123456",
+  PRODUCTION_NEON_ENDPOINT_ID: "ep-production-123456",
   DEVELOPMENT_DATABASE_CONFIRMATION,
   PATH: "retained-path",
 } satisfies NodeJS.ProcessEnv;
@@ -72,6 +73,13 @@ describe("local Next runtime environment", () => {
         "development",
       ),
     ).toThrow(/must differ|matches a known non-Development|does not match/);
+    expect(() =>
+      buildLocalRuntimeEnvironment(
+        { ...local, PRODUCTION_NEON_ENDPOINT_ID: undefined },
+        {},
+        "development",
+      ),
+    ).toThrow(/PRODUCTION_NEON_ENDPOINT_ID is required/);
   });
 
   it.each([

@@ -437,23 +437,25 @@ model Event {
   createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organizer               OrganizerProfile        @relation(fields: [organizerId], references: [id], onDelete: Cascade)
-  termsAcceptedBy         User?                   @relation("EventTermsAcceptedBy", fields: [termsAcceptedByUserId], references: [id], onDelete: SetNull)
+  organizer               OrganizerProfile            @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  termsAcceptedBy         User?                       @relation("EventTermsAcceptedBy", fields: [termsAcceptedByUserId], references: [id], onDelete: SetNull)
   location                EventLocation?
-  photos                  EventPhoto[]            @relation("EventPhotos")
-  coverPhoto              EventPhoto?             @relation("EventCoverPhoto", fields: [coverPhotoId], references: [id], onDelete: SetNull)
+  photos                  EventPhoto[]                @relation("EventPhotos")
+  coverPhoto              EventPhoto?                 @relation("EventCoverPhoto", fields: [coverPhotoId], references: [id], onDelete: SetNull)
   uploadReservations      UploadReservation[]
-  approvals               EventApproval[]         @relation("EventApprovals")
-  currentApproval         EventApproval?          @relation("CurrentEventApproval", fields: [currentApprovalId], references: [id], onDelete: SetNull)
+  approvals               EventApproval[]             @relation("EventApprovals")
+  currentApproval         EventApproval?              @relation("CurrentEventApproval", fields: [currentApprovalId], references: [id], onDelete: SetNull)
   paymentAttempts         PaymentAttempt[]
   publication             EventPublication?
-  listingSourceRecords    ListingSourceRecord[]   @relation("ListingSourceRecordLinkedEvent")
-  listingDuplicateMatches ListingDuplicateMatch[] @relation("ListingDuplicateMatchEvent")
+  publicIdReservation     ListingPublicIdReservation?
+  listingSourceRecords    ListingSourceRecord[]       @relation("ListingSourceRecordLinkedEvent")
+  listingDuplicateMatches ListingDuplicateMatch[]     @relation("ListingDuplicateMatchEvent")
 
   @@index([organizerId, updatedAt])
   @@index([organizerId, deletedAt, canceledAt, updatedAt])
   @@index([workflowState, updatedAt])
   @@index([eventType, startsAt])
+  @@index([startsAt, endsAt, id])
   @@index([updatedAt, id])
   @@index([canceledAt])
   @@map("events")
@@ -879,9 +881,10 @@ model ListingIngestionCredential {
   revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(3)
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  source    ListingImportSource  @relation(fields: [sourceId], references: [id], onDelete: Restrict)
-  createdBy User                 @relation("ListingIngestionCredentialCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  batches   ListingImportBatch[]
+  source          ListingImportSource           @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  createdBy       User                          @relation("ListingIngestionCredentialCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  batches         ListingImportBatch[]
+  idempotencyKeys ListingImportIdempotencyKey[]
 
   @@index([sourceId, revokedAt])
   @@index([createdByUserId, createdAt])
@@ -898,7 +901,6 @@ model ListingImportBatch {
   parserVersion        String                   @map("parser_version") @db.VarChar(100)
   ingestorRunId        String                   @map("ingestor_run_id") @db.VarChar(100)
   ingestorInstanceId   String                   @map("ingestor_instance_id") @db.VarChar(100)
-  idempotencyKeyDigest String?                  @map("idempotency_key_digest") @db.Char(64)
   requestDigest        String                   @map("request_digest") @db.Char(64)
   payloadDigest        String                   @map("payload_digest") @db.Char(64)
   status               ListingImportBatchStatus
@@ -910,18 +912,34 @@ model ListingImportBatch {
   identityConflictRows Int                      @map("identity_conflict_rows")
   createdAt            DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
   completedAt          DateTime                 @map("completed_at") @db.Timestamptz(3)
+  sealedAt             DateTime?                @map("sealed_at") @db.Timestamptz(3)
 
-  source     ListingImportSource         @relation(fields: [sourceId], references: [id], onDelete: Restrict)
-  credential ListingIngestionCredential? @relation(fields: [credentialId], references: [id], onDelete: Restrict)
-  adminActor User?                       @relation("ListingImportBatchAdminActor", fields: [adminActorUserId], references: [id], onDelete: Restrict)
-  rows       ListingImportRow[]
+  source          ListingImportSource           @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  credential      ListingIngestionCredential?   @relation(fields: [credentialId], references: [id], onDelete: Restrict)
+  adminActor      User?                         @relation("ListingImportBatchAdminActor", fields: [adminActorUserId], references: [id], onDelete: Restrict)
+  rows            ListingImportRow[]
+  idempotencyKeys ListingImportIdempotencyKey[]
 
-  @@unique([credentialId, idempotencyKeyDigest])
   @@unique([sourceId, ingestorInstanceId, ingestorRunId])
   @@index([sourceId, createdAt])
   @@index([status, createdAt])
   @@index([adminActorUserId, createdAt])
   @@map("listing_import_batches")
+}
+
+model ListingImportIdempotencyKey {
+  credentialId         String   @map("credential_id") @db.Uuid
+  idempotencyKeyDigest String   @map("idempotency_key_digest") @db.Char(64)
+  requestDigest        String   @map("request_digest") @db.Char(64)
+  batchId              String   @map("batch_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  credential ListingIngestionCredential @relation(fields: [credentialId], references: [id], onDelete: Restrict)
+  batch      ListingImportBatch         @relation(fields: [batchId], references: [id], onDelete: Restrict)
+
+  @@id([credentialId, idempotencyKeyDigest])
+  @@index([batchId])
+  @@map("listing_import_idempotency_keys")
 }
 
 model ListingSourceRecord {
@@ -966,6 +984,7 @@ model ListingImportRow {
 
   batch              ListingImportBatch      @relation(fields: [batchId], references: [id], onDelete: Restrict)
   sourceRecord       ListingSourceRecord?    @relation(fields: [sourceRecordId], references: [id], onDelete: Restrict)
+  createdCandidate   ListingImportCandidate? @relation("ListingImportCandidateCreationObservation")
   latestForCandidate ListingImportCandidate? @relation("ListingImportCandidateLatestObservation")
 
   @@unique([batchId, rowNumber])
@@ -977,6 +996,7 @@ model ListingImportRow {
 model ListingImportCandidate {
   id                          String                                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   sourceRecordId              String                                 @unique @map("source_record_id") @db.Uuid
+  creationObservationId       String                                 @unique @map("creation_observation_id") @db.Uuid
   latestObservationId         String                                 @unique @map("latest_observation_id") @db.Uuid
   currentPayload              Json                                   @map("current_payload")
   normalizedTitle             String                                 @map("normalized_title") @db.VarChar(120)
@@ -1004,12 +1024,13 @@ model ListingImportCandidate {
   createdAt                   DateTime                               @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                   DateTime                               @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  sourceRecord      ListingSourceRecord     @relation(fields: [sourceRecordId], references: [id], onDelete: Restrict)
-  latestObservation ListingImportRow        @relation("ListingImportCandidateLatestObservation", fields: [latestObservationId], references: [id], onDelete: Restrict)
-  locationConfirmer User?                   @relation("ListingImportCandidateLocationConfirmer", fields: [locationConfirmedByUserId], references: [id], onDelete: Restrict)
-  reviewer          User?                   @relation("ListingImportCandidateReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
-  duplicateMatches  ListingDuplicateMatch[]
-  externalListing   ExternalListing?
+  sourceRecord        ListingSourceRecord     @relation(fields: [sourceRecordId], references: [id], onDelete: Restrict)
+  creationObservation ListingImportRow        @relation("ListingImportCandidateCreationObservation", fields: [creationObservationId], references: [id], onDelete: Restrict)
+  latestObservation   ListingImportRow        @relation("ListingImportCandidateLatestObservation", fields: [latestObservationId], references: [id], onDelete: Restrict)
+  locationConfirmer   User?                   @relation("ListingImportCandidateLocationConfirmer", fields: [locationConfirmedByUserId], references: [id], onDelete: Restrict)
+  reviewer            User?                   @relation("ListingImportCandidateReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  duplicateMatches    ListingDuplicateMatch[]
+  externalListing     ExternalListing?
 
   @@index([status, startsAt, id])
   @@index([normalizedCity, startsAt])
@@ -1069,16 +1090,30 @@ model ExternalListing {
   createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  candidate           ListingImportCandidate   @relation(fields: [candidateId], references: [id], onDelete: Restrict)
-  primarySourceRecord ListingSourceRecord      @relation("ExternalListingPrimarySource", fields: [primarySourceRecordId], references: [id], onDelete: Restrict)
+  candidate           ListingImportCandidate      @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  primarySourceRecord ListingSourceRecord         @relation("ExternalListingPrimarySource", fields: [primarySourceRecordId], references: [id], onDelete: Restrict)
   location            ExternalListingLocation?
-  duplicateMatches    ListingDuplicateMatch[]  @relation("ListingDuplicateMatchExternalListing")
-  linkedSourceRecords ListingSourceRecord[]    @relation("ListingSourceRecordLinkedExternal")
+  duplicateMatches    ListingDuplicateMatch[]     @relation("ListingDuplicateMatchExternalListing")
+  linkedSourceRecords ListingSourceRecord[]       @relation("ListingSourceRecordLinkedExternal")
+  publicIdReservation ListingPublicIdReservation?
 
   @@index([status, startsAt, publicId])
   @@index([status, endsAt])
   @@index([eventType, status, startsAt])
+  @@index([startsAt, endsAt, id])
   @@map("external_listings")
+}
+
+model ListingPublicIdReservation {
+  publicId          String   @id @map("public_id") @db.VarChar(12)
+  eventId           String?  @unique @map("event_id") @db.Uuid
+  externalListingId String?  @unique @map("external_listing_id") @db.Uuid
+  reservedAt        DateTime @default(now()) @map("reserved_at") @db.Timestamptz(3)
+
+  event           Event?           @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  externalListing ExternalListing? @relation(fields: [externalListingId], references: [id], onDelete: Restrict)
+
+  @@map("listing_public_id_reservations")
 }
 
 model ExternalListingLocation {

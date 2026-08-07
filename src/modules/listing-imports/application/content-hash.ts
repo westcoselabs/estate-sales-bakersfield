@@ -32,38 +32,86 @@ export function listingContentHash(
   return sha256Digest(JSON.stringify(canonicalListingContent(content)));
 }
 
-function stableValue(value: unknown, seen: Set<object>): unknown {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  ) {
-    return value;
-  }
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value === "bigint") return value.toString();
-  if (typeof value === "undefined") return null;
-  if (value instanceof Date) return value.toISOString();
-  if (Array.isArray(value)) {
-    if (seen.has(value)) return "[circular]";
-    seen.add(value);
-    const result = value.map((entry) => stableValue(entry, seen));
-    seen.delete(value);
-    return result;
-  }
-  if (typeof value !== "object") return String(value);
-  if (seen.has(value)) return "[circular]";
-
-  seen.add(value);
-  const object = value as Readonly<Record<string, unknown>>;
-  const result: Record<string, unknown> = {};
-  for (const key of Object.keys(object).sort()) {
-    result[key] = stableValue(object[key], seen);
-  }
-  seen.delete(value);
-  return result;
-}
-
 export function stableJsonDigest(value: unknown): string {
-  return sha256Digest(JSON.stringify(stableValue(value, new Set())));
+  const hash = createHash("sha256");
+  const ancestors = new Set<object>();
+  type Frame =
+    | { readonly kind: "value"; readonly value: unknown }
+    | { readonly kind: "text"; readonly value: string }
+    | { readonly kind: "leave"; readonly value: object };
+  const stack: Frame[] = [{ kind: "value", value }];
+
+  // Use an explicit stack so hostile but syntactically valid JSON cannot
+  // exhaust the JavaScript call stack while an idempotency digest is built.
+  while (stack.length > 0) {
+    const frame = stack.pop()!;
+    if (frame.kind === "text") {
+      hash.update(frame.value, "utf8");
+      continue;
+    }
+    if (frame.kind === "leave") {
+      ancestors.delete(frame.value);
+      continue;
+    }
+
+    const current = frame.value;
+    if (current === null || typeof current === "string") {
+      hash.update(JSON.stringify(current), "utf8");
+      continue;
+    }
+    if (typeof current === "boolean") {
+      hash.update(current ? "true" : "false", "utf8");
+      continue;
+    }
+    if (typeof current === "number") {
+      hash.update(Number.isFinite(current) ? String(current) : "null", "utf8");
+      continue;
+    }
+    if (typeof current === "bigint") {
+      hash.update(JSON.stringify(current.toString()), "utf8");
+      continue;
+    }
+    if (typeof current === "undefined") {
+      hash.update("null", "utf8");
+      continue;
+    }
+    if (current instanceof Date) {
+      hash.update(JSON.stringify(current.toISOString()), "utf8");
+      continue;
+    }
+    if (typeof current !== "object") {
+      hash.update(JSON.stringify(String(current)), "utf8");
+      continue;
+    }
+    if (ancestors.has(current)) {
+      hash.update(JSON.stringify("[circular]"), "utf8");
+      continue;
+    }
+
+    ancestors.add(current);
+    stack.push({ kind: "leave", value: current });
+    if (Array.isArray(current)) {
+      stack.push({ kind: "text", value: "]" });
+      for (let index = current.length - 1; index >= 0; index -= 1) {
+        stack.push({ kind: "value", value: current[index] });
+        if (index > 0) stack.push({ kind: "text", value: "," });
+      }
+      stack.push({ kind: "text", value: "[" });
+      continue;
+    }
+
+    const object = current as Readonly<Record<string, unknown>>;
+    const keys = Object.keys(object).sort();
+    stack.push({ kind: "text", value: "}" });
+    for (let index = keys.length - 1; index >= 0; index -= 1) {
+      const key = keys[index]!;
+      stack.push({ kind: "value", value: object[key] });
+      stack.push({ kind: "text", value: ":" });
+      stack.push({ kind: "text", value: JSON.stringify(key) });
+      if (index > 0) stack.push({ kind: "text", value: "," });
+    }
+    stack.push({ kind: "text", value: "{" });
+  }
+
+  return hash.digest("hex");
 }

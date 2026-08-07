@@ -13,6 +13,8 @@ export interface CreateListingIngestionCredentialRecordInput {
   readonly tokenDigest: string;
   readonly displayPrefix: string;
   readonly createdByUserId: string;
+  readonly actorSessionId: string;
+  readonly authorizationAt: Date;
   readonly createdAt: Date;
   readonly requireProductionAllowed: boolean;
   readonly requestId?: string;
@@ -31,17 +33,21 @@ export type CreateListingIngestionCredentialRecordResult =
   | { readonly status: "SOURCE_NOT_FOUND" }
   | { readonly status: "SOURCE_DISABLED" }
   | { readonly status: "SOURCE_NOT_PRODUCTION_ALLOWED" }
+  | { readonly status: "ACTOR_NOT_AUTHORIZED" }
   | { readonly status: "TOKEN_DIGEST_CONFLICT" };
 
 export interface RevokeListingIngestionCredentialRecordInput {
   readonly credentialId: string;
   readonly revokedByUserId: string;
+  readonly actorSessionId: string;
+  readonly authorizationAt: Date;
   readonly revokedAt: Date;
   readonly requestId?: string;
 }
 
 export type RevokeListingIngestionCredentialRecordResult =
   | { readonly status: "NOT_FOUND" }
+  | { readonly status: "ACTOR_NOT_AUTHORIZED" }
   | {
       readonly status: "REVOKED";
       readonly credentialId: string;

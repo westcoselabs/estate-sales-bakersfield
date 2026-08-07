@@ -65,6 +65,7 @@ describe("ListingIngestionCredentialService", () => {
         sourceKey: " fixture ",
         name: " Local crawler ",
         actorUserId: "admin-1",
+        actorSessionId: "session-1",
         requestId: "request-1",
       }),
     ).resolves.toEqual({
@@ -83,6 +84,8 @@ describe("ListingIngestionCredentialService", () => {
       tokenDigest: createHash("sha256").update(rawToken, "utf8").digest("hex"),
       displayPrefix: rawToken.slice(0, 24),
       createdByUserId: "admin-1",
+      actorSessionId: "session-1",
+      authorizationAt: now,
       createdAt: now,
       requireProductionAllowed: false,
       requestId: "request-1",
@@ -108,6 +111,7 @@ describe("ListingIngestionCredentialService", () => {
         sourceKey: "fixture",
         name: "Crawler",
         actorUserId: "admin-1",
+        actorSessionId: "session-1",
       }),
     ).rejects.toMatchObject({ code: "TOKEN_GENERATION_FAILED" });
     expect(credentials.createAtomically).toHaveBeenCalledTimes(3);
@@ -128,6 +132,7 @@ describe("ListingIngestionCredentialService", () => {
         sourceKey: "fixture",
         name: "Crawler",
         actorUserId: "admin-1",
+        actorSessionId: "session-1",
       }),
     ).rejects.toMatchObject({ code: "SOURCE_NOT_PRODUCTION_ALLOWED" });
     expect(credentials.createAtomically).toHaveBeenCalledWith(
@@ -176,11 +181,51 @@ describe("ListingIngestionCredentialService", () => {
     );
 
     await expect(
-      service.revoke({ credentialId: "credential-1", actorUserId: "admin-1" }),
+      service.revoke({
+        credentialId: "credential-1",
+        actorUserId: "admin-1",
+        actorSessionId: "session-1",
+      }),
     ).resolves.toMatchObject({ alreadyRevoked: true, revokedAt });
     await expect(
-      service.revoke({ credentialId: "missing", actorUserId: "admin-1" }),
+      service.revoke({
+        credentialId: "missing",
+        actorUserId: "admin-1",
+        actorSessionId: "session-1",
+      }),
     ).resolves.toBeNull();
+  });
+
+  it("fails closed when transactional administrator authorization is stale", async () => {
+    const credentials = repository({
+      createAtomically: vi.fn(async () => ({
+        status: "ACTOR_NOT_AUTHORIZED" as const,
+      })),
+      revokeAtomically: vi.fn(async () => ({
+        status: "ACTOR_NOT_AUTHORIZED" as const,
+      })),
+    });
+    const service = new ListingIngestionCredentialService(
+      credentials,
+      tokenProvider(),
+      { production: false, now: () => now },
+    );
+
+    await expect(
+      service.create({
+        sourceKey: "fixture",
+        name: "Crawler",
+        actorUserId: "admin-1",
+        actorSessionId: "stale-session",
+      }),
+    ).rejects.toMatchObject({ code: "ACTOR_NOT_AUTHORIZED" });
+    await expect(
+      service.revoke({
+        credentialId: "credential-1",
+        actorUserId: "admin-1",
+        actorSessionId: "stale-session",
+      }),
+    ).rejects.toMatchObject({ code: "ACTOR_NOT_AUTHORIZED" });
   });
 });
 

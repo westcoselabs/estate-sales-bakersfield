@@ -12,6 +12,7 @@ export interface CreateListingIngestionCredentialInput {
   readonly sourceKey: string;
   readonly name: string;
   readonly actorUserId: string;
+  readonly actorSessionId: string;
   readonly requestId?: string;
 }
 
@@ -28,6 +29,7 @@ export interface CreatedListingIngestionCredential {
 export interface RevokeListingIngestionCredentialInput {
   readonly credentialId: string;
   readonly actorUserId: string;
+  readonly actorSessionId: string;
   readonly requestId?: string;
 }
 
@@ -107,13 +109,16 @@ export class ListingIngestionCredentialService {
           "A valid ingestion credential could not be generated.",
         );
       }
+      const authorizationAt = this.clock();
       const result = await this.credentials.createAtomically({
         sourceKey,
         name,
         tokenDigest: this.tokens.hash(rawToken),
         displayPrefix: this.tokens.displayPrefix(rawToken),
         createdByUserId: input.actorUserId,
-        createdAt: this.clock(),
+        actorSessionId: input.actorSessionId,
+        authorizationAt,
+        createdAt: authorizationAt,
         requireProductionAllowed: this.options.production,
         ...(input.requestId ? { requestId: input.requestId } : {}),
       });
@@ -131,6 +136,11 @@ export class ListingIngestionCredentialService {
           };
         case "TOKEN_DIGEST_CONFLICT":
           break;
+        case "ACTOR_NOT_AUTHORIZED":
+          throw new ListingIngestionCredentialError(
+            "ACTOR_NOT_AUTHORIZED",
+            "Recent administrator authorization is required.",
+          );
         case "SOURCE_NOT_FOUND":
           throw new ListingIngestionCredentialError(
             "SOURCE_NOT_FOUND",
@@ -158,12 +168,21 @@ export class ListingIngestionCredentialService {
   async revoke(
     input: RevokeListingIngestionCredentialInput,
   ): Promise<RevokedListingIngestionCredential | null> {
+    const authorizationAt = this.clock();
     const result = await this.credentials.revokeAtomically({
       credentialId: input.credentialId,
       revokedByUserId: input.actorUserId,
-      revokedAt: this.clock(),
+      actorSessionId: input.actorSessionId,
+      authorizationAt,
+      revokedAt: authorizationAt,
       ...(input.requestId ? { requestId: input.requestId } : {}),
     });
+    if (result.status === "ACTOR_NOT_AUTHORIZED") {
+      throw new ListingIngestionCredentialError(
+        "ACTOR_NOT_AUTHORIZED",
+        "Recent administrator authorization is required.",
+      );
+    }
     return result.status === "NOT_FOUND" ? null : result;
   }
 

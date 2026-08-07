@@ -7,7 +7,9 @@ import {
   isolateDevelopmentDatabase,
   requireIsolatedTestDatabase,
   requireSafeDevelopmentDatabase,
+  runtimeRoleNameForSchema,
   schemaNameForTestRun,
+  TEST_RUNTIME_ROLE_PATTERN,
   TEST_SCHEMA_PATTERN,
 } from "../../../scripts/test-database-safety";
 import { testDatabaseEnvironment } from "../../../scripts/test-database-run";
@@ -17,6 +19,7 @@ const safe = {
   APP_ENV: "test",
   DATABASE_RESOURCE_ENV: "development",
   DEVELOPMENT_NEON_ENDPOINT_ID: "ep-development-123456",
+  PRODUCTION_NEON_ENDPOINT_ID: "ep-production-123456",
   DEVELOPMENT_DATABASE_CONFIRMATION,
   DATABASE_URL:
     "postgresql://development_user:secret@ep-development-123456-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require",
@@ -47,6 +50,12 @@ describe("Development Neon test-schema safety guard", () => {
         DEVELOPMENT_DATABASE_CONFIRMATION: undefined,
       }),
     ).toThrow(/does not authorize/);
+    expect(() =>
+      requireSafeDevelopmentDatabase({
+        ...safe,
+        PRODUCTION_NEON_ENDPOINT_ID: undefined,
+      }),
+    ).toThrow(/PRODUCTION_NEON_ENDPOINT_ID is required/);
   });
 
   it("rejects endpoint and known Production identity collisions", () => {
@@ -96,6 +105,14 @@ describe("Development Neon test-schema safety guard", () => {
     expect(new URL(isolated.directUrl).searchParams.get("options")).toBe(
       `-c search_path=${isolated.schemaName},public`,
     );
+    expect(isolated.runtimeRoleName).toBe(
+      runtimeRoleNameForSchema(isolated.schemaName),
+    );
+    expect(isolated.runtimeRoleName).toMatch(TEST_RUNTIME_ROLE_PATTERN);
+    expect(new URL(isolated.directUrl).username).toBe(isolated.runtimeRoleName);
+    expect(new URL(isolated.directUrl).username).not.toBe(
+      new URL(isolated.baseDirectUrl).username,
+    );
     expect(schemaNameForTestRun("testrun-parallel-a")).not.toBe(
       schemaNameForTestRun("testrun-parallel-a"),
     );
@@ -116,6 +133,8 @@ describe("Development Neon test-schema safety guard", () => {
       NEXT_PUBLIC_SENTRY_DSN: "https://public-secret@example.test/1",
       PREVIEW_DATABASE_URL: "preview-secret",
       PRODUCTION_DATABASE_URL: "production-secret",
+      DEVELOPMENT_DATABASE_URL: "lifecycle-pooled-secret",
+      DEVELOPMENT_DIRECT_URL: "lifecycle-direct-secret",
       RESEND_API_KEY: "email-secret",
       BLOB_READ_WRITE_TOKEN: "blob-secret",
       SENTRY_DSN: "https://secret@example.test/1",
@@ -128,6 +147,7 @@ describe("Development Neon test-schema safety guard", () => {
       DIRECT_URL: isolated.directUrl,
       TEST_RUN_ID: "testrun-safety-1234",
       TEST_SCHEMA_NAME: isolated.schemaName,
+      PRODUCTION_NEON_ENDPOINT_ID: "ep-production-123456",
     });
     expect(child.VERCEL_ENV).toBeUndefined();
     expect(child.VERCEL_OIDC_TOKEN).toBeUndefined();
@@ -136,6 +156,8 @@ describe("Development Neon test-schema safety guard", () => {
     expect(child.NEXT_PUBLIC_APP_ENV).toBe("test");
     expect(child.PREVIEW_DATABASE_URL).toBeUndefined();
     expect(child.PRODUCTION_DATABASE_URL).toBeUndefined();
+    expect(child.DEVELOPMENT_DATABASE_URL).toBeUndefined();
+    expect(child.DEVELOPMENT_DIRECT_URL).toBeUndefined();
     expect(child.RESEND_API_KEY).toBeUndefined();
     expect(child.BLOB_READ_WRITE_TOKEN).toBeUndefined();
     expect(child.SENTRY_DSN).toBeUndefined();
@@ -156,13 +178,13 @@ describe("Development Neon test-schema safety guard", () => {
         ...child,
         DIRECT_URL: safe.DIRECT_URL,
       }),
-    ).toThrow(/same generated codex_test schema/);
+    ).toThrow(/one restricted role/);
     expect(() =>
       requireIsolatedTestDatabase({
         ...child,
         TEST_SCHEMA_NAME: schemaNameForTestRun("testrun-other-1234"),
       }),
-    ).toThrow(/same generated codex_test schema/);
+    ).toThrow(/one restricted role/);
     expect(() =>
       requireIsolatedTestDatabase({
         ...child,
@@ -175,6 +197,11 @@ describe("Development Neon test-schema safety guard", () => {
     const source = readFileSync("scripts/test-database-run.ts", "utf8");
     expect(source).toContain("TEST_SCHEMA_PATTERN.test(schemaName)");
     expect(source).toContain("DROP SCHEMA IF EXISTS");
+    expect(source).toContain("CREATE ROLE %I WITH LOGIN PASSWORD %L");
+    expect(source).toContain("CREATE SCHEMA %I AUTHORIZATION %I");
+    expect(source).toContain(
+      "restricted runtime mutated a qualified public table",
+    );
     expect(source).not.toContain("eventPublication.deleteMany");
     expect(source).not.toContain("DISABLE TRIGGER");
   });

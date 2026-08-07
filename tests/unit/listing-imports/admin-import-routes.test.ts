@@ -44,6 +44,7 @@ vi.mock("@/platform/config/application-url", async (importOriginal) => ({
 import { POST as importBatch } from "@/app/api/admin/imports/batches/route";
 import { POST as createCredential } from "@/app/api/admin/imports/credentials/route";
 import { POST as revokeCredential } from "@/app/api/admin/imports/credentials/[credentialId]/revoke/route";
+import { ListingIngestionCredentialError } from "@/modules/listing-imports";
 
 import { envelope, listingItem } from "./fixtures";
 
@@ -230,6 +231,7 @@ describe("super-admin listing import routes", () => {
       sourceKey: "fixture",
       name: "Local crawler",
       actorUserId: administratorId,
+      actorSessionId: "10000000-0000-4000-8000-000000000001",
       requestId: "admin-import-route-unit",
     });
   });
@@ -256,6 +258,27 @@ describe("super-admin listing import routes", () => {
     expect(revokeResponse.status).toBe(403);
     expect(mocks.createCredential).not.toHaveBeenCalled();
     expect(mocks.revokeCredential).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when authority changes before the credential transaction", async () => {
+    mocks.createCredential.mockRejectedValueOnce(
+      new ListingIngestionCredentialError(
+        "ACTOR_NOT_AUTHORIZED",
+        "Recent administrator authorization is required.",
+      ),
+    );
+    const response = await createCredential(
+      adminRequest(
+        "/api/admin/imports/credentials",
+        JSON.stringify({ sourceKey: "fixture", name: "Local crawler" }),
+      ),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "FORBIDDEN",
+      error: "You do not have access to this action.",
+    });
   });
 
   it("revokes idempotently and returns a safe 404 for an unknown credential", async () => {

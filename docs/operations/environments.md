@@ -33,7 +33,11 @@ Test commands load the confirmed Development database identity from ignored
 `.env.local` and an optional `.env.test.local` override based on
 `.env.test.example`, switch only the logical process mode to `APP_ENV=test`, derive a
 `codex_test_...` schema URL, replay migrations into that schema, and drop only
-that exact schema afterward. Common real provider credentials are stripped.
+that exact schema afterward. The wrapper uses the configured Development URL
+only as a lifecycle principal: it creates an expiring, per-run restricted login
+that owns one generated schema, and only that login reaches migrations and test
+children. The lifecycle URL is removed from the child environment. Common real
+provider credentials are stripped.
 `TEST_RUN_ID` is accepted only in `APP_ENV=test` and produces a hashed
 PostgreSQL rate-limit scope; it is not an authentication bypass.
 

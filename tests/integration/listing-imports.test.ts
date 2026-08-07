@@ -31,6 +31,7 @@ const credentialService = new ListingIngestionCredentialService(
 );
 
 let administratorId: string;
+let administratorSessionId: string;
 
 const contractFixtureRoot = resolve("tests/fixtures/listing-import/v1");
 
@@ -123,20 +124,32 @@ beforeAll(async () => {
   });
   if (existing) {
     administratorId = existing.id;
-    return;
+  } else {
+    const email = testEmail("listing-import-admin");
+    const administrator = await prisma.user.create({
+      data: {
+        displayName: "Listing Import Administrator",
+        email,
+        normalizedEmail: email,
+        passwordHash: "integration-test-password-hash",
+        emailVerifiedAt: new Date(),
+        role: "SUPER_ADMIN",
+      },
+    });
+    administratorId = administrator.id;
   }
-  const email = testEmail("listing-import-admin");
-  const administrator = await prisma.user.create({
+  const authenticatedAt = new Date();
+  const session = await prisma.session.create({
     data: {
-      displayName: "Listing Import Administrator",
-      email,
-      normalizedEmail: email,
-      passwordHash: "integration-test-password-hash",
-      emailVerifiedAt: new Date(),
-      role: "SUPER_ADMIN",
+      userId: administratorId,
+      tokenHash: createHash("sha256")
+        .update(identifier("administrator-session"), "utf8")
+        .digest("hex"),
+      expiresAt: new Date(authenticatedAt.getTime() + 60 * 60 * 1_000),
+      passwordAuthenticatedAt: authenticatedAt,
     },
   });
-  administratorId = administrator.id;
+  administratorSessionId = session.id;
 });
 
 afterAll(async () => {
@@ -144,7 +157,7 @@ afterAll(async () => {
 });
 
 describe("listing import persistence and application service", () => {
-  it("applies only the nine bounded tables and fixed source seeds", async () => {
+  it("applies only the bounded listing tables and fixed source seeds", async () => {
     const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
       SELECT "table_name"::text AS "table_name"
       FROM "information_schema"."tables"
@@ -161,9 +174,11 @@ describe("listing import persistence and application service", () => {
       "listing_duplicate_matches",
       "listing_import_batches",
       "listing_import_candidates",
+      "listing_import_idempotency_keys",
       "listing_import_rows",
       "listing_import_sources",
       "listing_ingestion_credentials",
+      "listing_public_id_reservations",
       "listing_source_records",
     ]);
     await expect(
@@ -299,6 +314,7 @@ describe("listing import persistence and application service", () => {
       sourceKey: "fixture",
       name: identifier("credential"),
       actorUserId: administratorId,
+      actorSessionId: administratorSessionId,
       requestId: crypto.randomUUID(),
     });
     expect(created.rawToken).toMatch(/^esb_ing_[A-Za-z0-9_-]{43}$/u);
@@ -367,11 +383,13 @@ describe("listing import persistence and application service", () => {
     const firstRevocation = await credentialService.revoke({
       credentialId: created.credentialId,
       actorUserId: administratorId,
+      actorSessionId: administratorSessionId,
       requestId: crypto.randomUUID(),
     });
     const secondRevocation = await credentialService.revoke({
       credentialId: created.credentialId,
       actorUserId: administratorId,
+      actorSessionId: administratorSessionId,
       requestId: crypto.randomUUID(),
     });
     expect(firstRevocation).toMatchObject({ alreadyRevoked: false });
@@ -405,6 +423,49 @@ describe("listing import persistence and application service", () => {
     expect(auditJson).not.toContain(stored.tokenDigest);
   });
 
+  it("rechecks recent super-admin authority inside credential mutations", async () => {
+    const credential = await credentialService.create({
+      sourceKey: "fixture",
+      name: identifier("demotion-target"),
+      actorUserId: administratorId,
+      actorSessionId: administratorSessionId,
+    });
+
+    await prisma.user.update({
+      where: { id: administratorId },
+      data: { role: "USER" },
+    });
+
+    try {
+      await expect(
+        credentialService.create({
+          sourceKey: "fixture",
+          name: identifier("demoted-create"),
+          actorUserId: administratorId,
+          actorSessionId: administratorSessionId,
+        }),
+      ).rejects.toMatchObject({ code: "ACTOR_NOT_AUTHORIZED" });
+      await expect(
+        credentialService.revoke({
+          credentialId: credential.credentialId,
+          actorUserId: administratorId,
+          actorSessionId: administratorSessionId,
+        }),
+      ).rejects.toMatchObject({ code: "ACTOR_NOT_AUTHORIZED" });
+      await expect(
+        prisma.listingIngestionCredential.findUniqueOrThrow({
+          where: { id: credential.credentialId },
+          select: { revokedAt: true },
+        }),
+      ).resolves.toEqual({ revokedAt: null });
+    } finally {
+      await prisma.user.update({
+        where: { id: administratorId },
+        data: { role: "SUPER_ADMIN" },
+      });
+    }
+  });
+
   it("refuses a production credential for the fixture source", async () => {
     const productionCredentials = new ListingIngestionCredentialService(
       credentialRepository,
@@ -418,11 +479,89 @@ describe("listing import persistence and application service", () => {
         sourceKey: "fixture",
         name: identifier("production-fixture"),
         actorUserId: administratorId,
+        actorSessionId: administratorSessionId,
       }),
     ).rejects.toMatchObject({ code: "SOURCE_NOT_PRODUCTION_ALLOWED" });
     await expect(prisma.listingIngestionCredential.count()).resolves.toBe(
       before,
     );
+  });
+
+  it("rechecks the production source gate inside the persistence transaction", async () => {
+    await prisma.listingImportSource.update({
+      where: { key: "fixture" },
+      data: { productionAllowed: true },
+    });
+    const gatedService = new ListingImportService(
+      {
+        findSourceByKey: (sourceKey) => repository.findSourceByKey(sourceKey),
+        processBatchAtomically: async (input) => {
+          await prisma.listingImportSource.update({
+            where: { id: input.sourceId },
+            data: { productionAllowed: false },
+          });
+          return repository.processBatchAtomically(input);
+        },
+      },
+      "production",
+    );
+    const input = envelope("production-policy-race", [
+      validItem(identifier("production-policy-race-item")),
+    ]);
+
+    try {
+      await expect(
+        gatedService.importBatch(input, manualContext()),
+      ).rejects.toMatchObject({ code: "SOURCE_NOT_PRODUCTION_ALLOWED" });
+      await expect(
+        prisma.listingImportBatch.count({
+          where: {
+            ingestorInstanceId: input.ingestorInstanceId,
+            ingestorRunId: input.ingestorRunId,
+          },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      await prisma.listingImportSource.update({
+        where: { key: "fixture" },
+        data: { productionAllowed: false },
+      });
+    }
+  });
+
+  it("rechecks the source URL policy inside the persistence transaction", async () => {
+    const policyGatedService = new ListingImportService({
+      findSourceByKey: (sourceKey) => repository.findSourceByKey(sourceKey),
+      processBatchAtomically: async (input) => {
+        await prisma.listingImportSource.update({
+          where: { id: input.sourceId },
+          data: { allowedHosts: ["changed.invalid"] },
+        });
+        return repository.processBatchAtomically(input);
+      },
+    });
+    const input = envelope("source-policy-race", [
+      validItem(identifier("source-policy-race-item")),
+    ]);
+
+    try {
+      await expect(
+        policyGatedService.importBatch(input, manualContext()),
+      ).rejects.toMatchObject({ code: "SOURCE_DISABLED" });
+      await expect(
+        prisma.listingImportBatch.count({
+          where: {
+            ingestorInstanceId: input.ingestorInstanceId,
+            ingestorRunId: input.ingestorRunId,
+          },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      await prisma.listingImportSource.update({
+        where: { key: "fixture" },
+        data: { allowedHosts: ["fixture.invalid"] },
+      });
+    }
   });
 
   it("normalizes the canonical JSON, CSV, and authenticated API transports to one replay-safe batch", async () => {
@@ -444,16 +583,18 @@ describe("listing import persistence and application service", () => {
       sourceKey: "fixture",
       name: identifier("transport-credential"),
       actorUserId: administratorId,
+      actorSessionId: administratorSessionId,
     });
     const serialized = JSON.stringify(jsonInput);
+    const idempotencyKeyDigest = createHash("sha256")
+      .update(identifier("transport-key"), "utf8")
+      .digest("hex");
     const fromApi = await service.importBatch(jsonInput, {
       transport: "API",
       actor: {
         kind: "API_CREDENTIAL",
         credentialId: credential.credentialId,
-        idempotencyKeyDigest: createHash("sha256")
-          .update(identifier("transport-key"), "utf8")
-          .digest("hex"),
+        idempotencyKeyDigest,
       },
       requestDigest: createHash("sha256")
         .update(serialized, "utf8")
@@ -469,6 +610,32 @@ describe("listing import persistence and application service", () => {
       batchId: fromJson.batchId,
       replayed: true,
     });
+    await expect(
+      prisma.listingImportIdempotencyKey.findUnique({
+        where: {
+          credentialId_idempotencyKeyDigest: {
+            credentialId: credential.credentialId,
+            idempotencyKeyDigest,
+          },
+        },
+      }),
+    ).resolves.toMatchObject({ batchId: fromJson.batchId });
+    const changedInput = envelope("transport-key-reuse", [
+      validItem(identifier("transport-key-reuse-item")),
+    ]);
+    await expect(
+      service.importBatch(changedInput, {
+        transport: "API",
+        actor: {
+          kind: "API_CREDENTIAL",
+          credentialId: credential.credentialId,
+          idempotencyKeyDigest,
+        },
+        requestDigest: createHash("sha256")
+          .update(JSON.stringify(changedInput), "utf8")
+          .digest("hex"),
+      }),
+    ).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
     await expect(prisma.listingImportBatch.count()).resolves.toBe(
       beforeBatches + 1,
     );
@@ -482,6 +649,7 @@ describe("listing import persistence and application service", () => {
       sourceKey: "fixture",
       name: identifier("http-credential"),
       actorUserId: administratorId,
+      actorSessionId: administratorSessionId,
     });
     const input = envelope("http-ingestion", [
       validItem(identifier("http-listing")),
@@ -552,6 +720,7 @@ describe("listing import persistence and application service", () => {
     await credentialService.revoke({
       credentialId: credential.credentialId,
       actorUserId: administratorId,
+      actorSessionId: administratorSessionId,
     });
     const revoked = await handleListingIngestionRequest(
       httpRequest(body),
@@ -580,10 +749,8 @@ describe("listing import persistence and application service", () => {
     const sourceListingId = identifier("repeat-source");
     const sourceUrl = `https://fixture.invalid/listings/${sourceListingId}`;
     const initial = validItem(sourceListingId, { sourceListingId, sourceUrl });
-    const first = await service.importBatch(
-      envelope("repeat-initial", [initial]),
-      manualContext(),
-    );
+    const initialEnvelope = envelope("repeat-initial", [initial]);
+    const first = await service.importBatch(initialEnvelope, manualContext());
     const repeated = validItem(sourceListingId, {
       sourceListingId,
       sourceUrl,
@@ -627,6 +794,25 @@ describe("listing import persistence and application service", () => {
     });
     expect(candidate.currentPayload).toMatchObject({
       title: "Fixture Estate Sale",
+    });
+    const changedObservation = await prisma.listingImportRow.findFirstOrThrow({
+      where: { batchId: changedResult.batchId, rowNumber: 1 },
+      select: { id: true },
+    });
+    await prisma.listingImportCandidate.update({
+      where: { id: first.rows[0]?.candidateId ?? "" },
+      data: {
+        latestObservationId: changedObservation.id,
+        version: { increment: 1 },
+      },
+    });
+    const initialReplay = await service.importBatch(
+      initialEnvelope,
+      manualContext("MANUAL_CSV"),
+    );
+    expect(initialReplay.rows[0]).toMatchObject({
+      status: "CANDIDATE_CREATED",
+      candidateId: first.rows[0]?.candidateId,
     });
 
     await expect(
@@ -678,6 +864,62 @@ describe("listing import persistence and application service", () => {
     });
     expect(invalid.inputJson).toBeNull();
     expect(invalid.validationFailures).toEqual(["ITEM_INVALID"]);
+  });
+
+  it("can reuse a canonical URL released earlier in the same batch", async () => {
+    const originalSourceId = identifier("moved-url-source");
+    const originalUrl = `https://fixture.invalid/listings/${originalSourceId}`;
+    await service.importBatch(
+      envelope("moved-url-initial", [
+        validItem(originalSourceId, {
+          sourceListingId: originalSourceId,
+          sourceUrl: originalUrl,
+        }),
+      ]),
+      manualContext(),
+    );
+
+    const replacementSourceId = identifier("released-url-source");
+    const movedUrl = `https://fixture.invalid/listings/${originalSourceId}-moved`;
+    const result = await service.importBatch(
+      envelope("released-url-reuse", [
+        validItem(originalSourceId, {
+          sourceListingId: originalSourceId,
+          sourceUrl: movedUrl,
+          retrievedAt: "2026-08-07T16:00:00.000Z",
+        }),
+        validItem(replacementSourceId, {
+          sourceListingId: replacementSourceId,
+          sourceUrl: originalUrl,
+          retrievedAt: "2026-08-07T16:01:00.000Z",
+        }),
+      ]),
+      manualContext(),
+    );
+
+    expect(result.rows.map((row) => row.status)).toEqual([
+      "EXACT_DUPLICATE",
+      "CANDIDATE_CREATED",
+    ]);
+    await expect(
+      prisma.listingSourceRecord.findMany({
+        where: {
+          sourceListingId: { in: [originalSourceId, replacementSourceId] },
+        },
+        orderBy: { sourceListingId: "asc" },
+        select: { sourceListingId: true, canonicalSourceUrl: true },
+      }),
+    ).resolves.toEqual(
+      [
+        { sourceListingId: originalSourceId, canonicalSourceUrl: movedUrl },
+        {
+          sourceListingId: replacementSourceId,
+          canonicalSourceUrl: originalUrl,
+        },
+      ].sort((left, right) =>
+        left.sourceListingId.localeCompare(right.sourceListingId),
+      ),
+    );
   });
 
   it("stores deterministic probable-match warnings without linking or merging", async () => {
@@ -766,6 +1008,61 @@ describe("listing import persistence and application service", () => {
     });
     await expect(prisma.externalListing.count()).resolves.toBe(0);
   });
+
+  it("persists the documented 200-row valid batch within the transaction budget", async () => {
+    const items = Array.from({ length: 200 }, (_, index) => {
+      const sourceListingId = identifier(`maximum-batch-${String(index)}`);
+      return validItem(sourceListingId, { sourceListingId });
+    });
+    const startedAt = performance.now();
+    const result = await service.importBatch(
+      envelope("maximum-valid-batch", items),
+      manualContext(),
+    );
+    const durationMilliseconds = performance.now() - startedAt;
+
+    expect(result).toMatchObject({
+      replayed: false,
+      status: "COMPLETED",
+      counts: {
+        total: 200,
+        candidateCreated: 200,
+        invalid: 0,
+        exactDuplicate: 0,
+        sourceChanged: 0,
+        identityConflict: 0,
+      },
+    });
+    expect(result.rows).toHaveLength(200);
+    expect(durationMilliseconds).toBeLessThan(15_000);
+  }, 30_000);
+
+  it("persists the documented 200-row invalid batch within the transaction budget", async () => {
+    const startedAt = performance.now();
+    const result = await service.importBatch(
+      envelope(
+        "maximum-invalid-batch",
+        Array.from({ length: 200 }, () => ({ title: "No" })),
+      ),
+      manualContext(),
+    );
+    const durationMilliseconds = performance.now() - startedAt;
+
+    expect(result).toMatchObject({
+      replayed: false,
+      status: "REJECTED",
+      counts: {
+        total: 200,
+        candidateCreated: 0,
+        invalid: 200,
+        exactDuplicate: 0,
+        sourceChanged: 0,
+        identityConflict: 0,
+      },
+    });
+    expect(result.rows).toHaveLength(200);
+    expect(durationMilliseconds).toBeLessThan(15_000);
+  }, 30_000);
 
   it("serializes concurrent duplicate submissions into one batch", async () => {
     const sourceId = identifier("concurrent-source");

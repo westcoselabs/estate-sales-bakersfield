@@ -71,6 +71,16 @@ export type PreparedListingImportRow =
 export interface ListingImportTransactionInput {
   readonly sourceId: string;
   readonly sourceKey: string;
+  /**
+   * The source policy used while normalizing the request. Persistence compares
+   * this snapshot with the locked transaction view so a policy change cannot
+   * race an in-flight import.
+   */
+  readonly sourcePolicy: Pick<
+    ListingImportSourceConfiguration,
+    "allowedHosts" | "allowedQueryParameters"
+  >;
+  readonly requireProductionAllowed: boolean;
   readonly transport: ListingImportTransport;
   readonly actor: ListingImportActor;
   readonly contractVersion: "listing-import.v1";

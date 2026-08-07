@@ -1,4 +1,5 @@
 export type ListingIngestionCredentialErrorCode =
+  | "ACTOR_NOT_AUTHORIZED"
   | "INVALID_SOURCE_KEY"
   | "INVALID_CREDENTIAL_NAME"
   | "SOURCE_NOT_FOUND"

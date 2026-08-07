@@ -46,6 +46,7 @@ export async function POST(
       await createConfiguredListingIngestionCredentialService().revoke({
         credentialId,
         actorUserId: session.principal.id,
+        actorSessionId: session.id,
         requestId,
       });
 

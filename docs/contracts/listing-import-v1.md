@@ -68,7 +68,7 @@ All length limits are measured after normalization.
 | `title`           | Required, 3-120 characters.                                                                                                                                                |
 | `description`     | Required, 20-5,000 characters.                                                                                                                                             |
 | `localStartsAt`   | Required local wall time in exact `YYYY-MM-DDTHH:mm` form.                                                                                                                 |
-| `localEndsAt`     | Required local wall time in exact `YYYY-MM-DDTHH:mm` form and must resolve after the start.                                                                                |
+| `localEndsAt`     | Required local wall time in exact `YYYY-MM-DDTHH:mm` form, must resolve after the start, and may be at most 14 elapsed days after it.                                      |
 | `timezone`        | Required valid IANA timezone, 1-64 characters. Missing, ambiguous, or nonexistent local times are invalid.                                                                 |
 | `addressLine1`    | Optional; `null`, omitted, or blank means unknown. Otherwise 3-200 characters.                                                                                             |
 | `addressLine2`    | Optional; `null`, omitted, or blank means absent. Otherwise 1-100 characters.                                                                                              |
@@ -246,6 +246,11 @@ service:
 - Maximum actual body size: 1 MiB (1,048,576 bytes), with both `Content-Length`
   precheck and streamed byte counting.
 - Maximum rows: 200 JSON items or 200 CSV data records.
+- Each JSON item is limited to 1,000 structural nodes and eight levels of
+  nesting. An item over either limit is retained as an `INVALID` row with the
+  safe `ITEM_INVALID` code.
+- Retained invalid input is reduced to contract fields, at most 512 retained
+  nodes, and at most 12 KiB after UTF-8 JSON serialization.
 - Machine API headers:
   `Authorization: Bearer esb_ing_<43-character-base64url>`,
   `Idempotency-Key`, and `Content-Type: application/json`.

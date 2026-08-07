@@ -46,12 +46,7 @@ if (legacy) {
     await prisma.$disconnect();
   }
 } else {
-  await dropIsolatedTestSchema({
-    ...database,
-    pooledUrl: database.basePooledUrl,
-    directUrl: database.baseDirectUrl,
-    schemaName,
-  });
+  await dropIsolatedTestSchema(database, schemaName);
 }
 process.stdout.write(`Removed isolated test schema ${schemaName}.\n`);
 import { PrismaNeon } from "@prisma/adapter-neon";

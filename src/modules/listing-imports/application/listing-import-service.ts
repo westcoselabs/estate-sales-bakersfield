@@ -36,7 +36,12 @@ import {
 
 const SHA_256_DIGEST = /^[0-9a-f]{64}$/u;
 const MAXIMUM_OBSERVATION_STRING_LENGTH = 6_000;
-const MAXIMUM_OBSERVATION_CHARACTER_BUDGET = 9_000;
+const MAXIMUM_OBSERVATION_VALUE_BYTES = 8 * 1_024;
+const MAXIMUM_OBSERVATION_SERIALIZED_BYTES = 12 * 1_024;
+const MAXIMUM_OBSERVATION_NODES = 512;
+const MAXIMUM_INPUT_NODES = 1_000;
+const MAXIMUM_INPUT_DEPTH = 8;
+const MAXIMUM_LISTING_DURATION_MILLISECONDS = 14 * 24 * 60 * 60 * 1_000;
 const ITEM_FIELDS = [
   "sourceListingId",
   "sourceUrl",
@@ -58,7 +63,31 @@ const ITEM_FIELDS = [
 ] as const;
 
 interface ObservationBudget {
-  remainingCharacters: number;
+  remainingBytes: number;
+  remainingNodes: number;
+}
+
+function jsonStringBytes(value: string): number {
+  return Buffer.byteLength(JSON.stringify(value), "utf8") - 2;
+}
+
+function truncateJsonString(value: string, maximumBytes: number): string {
+  const maximumLength = Math.min(
+    value.length,
+    MAXIMUM_OBSERVATION_STRING_LENGTH,
+  );
+  let low = 0;
+  let high = maximumLength;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    const candidate = value.slice(0, middle);
+    if (jsonStringBytes(candidate) <= maximumBytes) low = middle;
+    else high = middle - 1;
+  }
+  // Do not retain half of a UTF-16 surrogate pair at the byte boundary.
+  const codeUnit = value.charCodeAt(low - 1);
+  const safeLength = codeUnit >= 0xd800 && codeUnit <= 0xdbff ? low - 1 : low;
+  return value.slice(0, Math.max(0, safeLength));
 }
 
 function boundedJsonScalar(
@@ -66,23 +95,27 @@ function boundedJsonScalar(
   budget: ObservationBudget,
   depth = 0,
 ): ListingImportJsonValue {
+  if (budget.remainingNodes <= 0) return "[truncated]";
+  budget.remainingNodes -= 1;
   if (value === null) return null;
   if (typeof value === "string") {
-    const maximum = Math.min(
-      MAXIMUM_OBSERVATION_STRING_LENGTH,
-      budget.remainingCharacters,
-    );
-    const result = value.slice(0, maximum);
-    budget.remainingCharacters -= result.length;
+    const result = truncateJsonString(value, budget.remainingBytes);
+    budget.remainingBytes -= jsonStringBytes(result);
     return result;
   }
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "boolean") return value;
   if (Array.isArray(value)) {
     if (depth >= 2) return "[nested-array]";
-    return value
-      .slice(0, 50)
-      .map((entry) => boundedJsonScalar(entry, budget, depth + 1));
+    const result: ListingImportJsonValue[] = [];
+    for (const entry of value.slice(0, 50)) {
+      if (budget.remainingNodes <= 0) {
+        result.push("[truncated]");
+        break;
+      }
+      result.push(boundedJsonScalar(entry, budget, depth + 1));
+    }
+    return result;
   }
   if (typeof value === "object") return "[unsupported-object]";
   return `[${typeof value}]`;
@@ -92,7 +125,8 @@ export function boundedListingImportInput(
   value: unknown,
 ): ListingImportJsonValue {
   const budget: ObservationBudget = {
-    remainingCharacters: MAXIMUM_OBSERVATION_CHARACTER_BUDGET,
+    remainingBytes: MAXIMUM_OBSERVATION_VALUE_BYTES,
+    remainingNodes: MAXIMUM_OBSERVATION_NODES,
   };
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return boundedJsonScalar(value, budget);
@@ -105,7 +139,50 @@ export function boundedListingImportInput(
       output[field] = boundedJsonScalar(input[field], budget);
     }
   }
+  if (
+    Buffer.byteLength(JSON.stringify(output), "utf8") >
+    MAXIMUM_OBSERVATION_SERIALIZED_BYTES
+  ) {
+    const fitted: Record<string, ListingImportJsonValue> = {};
+    for (const field of ITEM_FIELDS) {
+      if (!Object.prototype.hasOwnProperty.call(output, field)) continue;
+      fitted[field] = output[field]!;
+      if (
+        Buffer.byteLength(JSON.stringify(fitted), "utf8") >
+        MAXIMUM_OBSERVATION_SERIALIZED_BYTES
+      ) {
+        delete fitted[field];
+        break;
+      }
+    }
+    return fitted;
+  }
   return output;
+}
+
+function inputExceedsStructuralLimits(value: unknown): boolean {
+  const stack: { readonly value: unknown; readonly depth: number }[] = [
+    { value, depth: 0 },
+  ];
+  const seen = new Set<object>();
+  let nodes = 0;
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    nodes += 1;
+    if (nodes > MAXIMUM_INPUT_NODES || current.depth > MAXIMUM_INPUT_DEPTH) {
+      return true;
+    }
+    if (!current.value || typeof current.value !== "object") continue;
+    if (seen.has(current.value)) return true;
+    seen.add(current.value);
+    const entries = Array.isArray(current.value)
+      ? current.value
+      : Object.values(current.value as Readonly<Record<string, unknown>>);
+    for (const entry of entries) {
+      stack.push({ value: entry, depth: current.depth + 1 });
+    }
+  }
+  return false;
 }
 
 function normalizedJson(
@@ -174,6 +251,9 @@ function prepareRow(
   rowNumber: number,
   source: ListingImportSourceConfiguration,
 ): PreparedListingImportRow {
+  if (inputExceedsStructuralLimits(raw)) {
+    return invalidRow(rowNumber, raw, ["ITEM_INVALID"]);
+  }
   const parsed = listingImportItemSchema.safeParse(raw);
   if (!parsed.success) {
     return invalidRow(rowNumber, raw, itemValidationCodes(parsed.error));
@@ -195,6 +275,12 @@ function prepareRow(
   try {
     assertListingImportTimezone(parsed.data.timezone);
     normalized = normalizeListingContent(parsed.data);
+    if (
+      normalized.endsAt.getTime() - normalized.startsAt.getTime() >
+      MAXIMUM_LISTING_DURATION_MILLISECONDS
+    ) {
+      throw new ListingImportRowError("SCHEDULE_INVALID");
+    }
   } catch (error) {
     codes.push(
       error instanceof ListingImportRowError ? error.code : "SCHEDULE_INVALID",
@@ -339,6 +425,11 @@ export class ListingImportService {
     const result = await this.imports.processBatchAtomically({
       sourceId: source.id,
       sourceKey: source.key,
+      sourcePolicy: {
+        allowedHosts: source.allowedHosts,
+        allowedQueryParameters: source.allowedQueryParameters,
+      },
+      requireProductionAllowed: this.environment === "production",
       transport: context.transport,
       actor: context.actor,
       contractVersion: envelope.contractVersion,
