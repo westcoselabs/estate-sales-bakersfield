@@ -48,6 +48,12 @@ const destinations: ReadonlyArray<{
     icon: "list",
   },
   { href: "/admin/email", label: "Email", segment: "email", icon: "mail" },
+  {
+    href: "/admin/imports",
+    label: "Imports",
+    segment: "imports",
+    icon: "import",
+  },
 ];
 
 export function AdminShell({

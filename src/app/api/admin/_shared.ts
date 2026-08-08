@@ -7,7 +7,12 @@ import {
   ListingImportConflictError,
   ListingImportError,
   ListingIngestionCredentialError,
+  ListingImportReviewError,
 } from "@/modules/listing-imports";
+import {
+  LocationNotFoundError,
+  LocationProviderError,
+} from "@/modules/locations";
 import {
   AuthenticationError,
   AuthenticationServiceUnavailableError,
@@ -157,6 +162,18 @@ export function adminApiError(
       code = error.code;
       message = "Please check the ingestion credential information.";
     }
+  } else if (error instanceof ListingImportReviewError) {
+    status = error.status;
+    code = error.code;
+    message = error.message;
+  } else if (error instanceof LocationNotFoundError) {
+    status = 422;
+    code = "LOCATION_NOT_FOUND";
+    message = "The address could not be confirmed.";
+  } else if (error instanceof LocationProviderError) {
+    status = 503;
+    code = "LOCATION_SERVICE_UNAVAILABLE";
+    message = "Location confirmation is temporarily unavailable.";
   } else if (error instanceof AdminApplicationError) {
     status = error.status;
     code = error.code;

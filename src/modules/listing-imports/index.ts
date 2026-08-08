@@ -3,6 +3,12 @@ export {
   candidateAuditMetadata,
 } from "./application/audit";
 export {
+  decodeListingImportAdminCursor,
+  encodeListingImportAdminCursor,
+  listingImportAdminLandingCriteria,
+} from "./application/admin-criteria";
+export { LISTING_IMPORT_ADMIN_VIEWS } from "./application/admin-query-ports";
+export {
   canonicalListingContent,
   listingContentHash,
   sha256Digest,
@@ -10,10 +16,13 @@ export {
 } from "./application/content-hash";
 export { ListingIngestionCredentialError } from "./application/credential-errors";
 export { ListingIngestionCredentialService } from "./application/credential-service";
+export { ListingImportAdminQueryService } from "./application/listing-import-admin-query-service";
 export {
   boundedListingImportInput,
   ListingImportService,
 } from "./application/listing-import-service";
+export { ListingImportReviewService } from "./application/listing-import-review-service";
+export { ListingImportReviewError } from "./application/review-errors";
 export {
   itemValidationCodes,
   listingImportEnvelopeSchema,
@@ -51,6 +60,8 @@ export {
 export {
   createConfiguredListingImportService,
   createConfiguredListingIngestionCredentialService,
+  createConfiguredListingImportAdminQueryService,
+  createConfiguredListingImportReviewService,
 } from "./infrastructure/configured-listing-imports";
 export { CryptoListingIngestionCredentialProvider } from "./infrastructure/crypto-listing-ingestion-credential-provider";
 export {
@@ -64,6 +75,8 @@ export {
   ListingIngestionRateLimit,
 } from "./infrastructure/ingestion-rate-limit";
 export { PrismaListingImportRepository } from "./infrastructure/prisma-listing-import-repository";
+export { PrismaListingImportAdminQueryRepository } from "./infrastructure/prisma-listing-import-admin-query-repository";
+export { PrismaListingImportReviewRepository } from "./infrastructure/prisma-listing-import-review-repository";
 export { PrismaListingIngestionCredentialRepository } from "./infrastructure/prisma-listing-ingestion-credential-repository";
 export type {
   ListingImportAuditAction,
@@ -89,6 +102,21 @@ export type {
   RevokeListingIngestionCredentialInput,
 } from "./application/credential-service";
 export type {
+  ListingImportAdminAuditEntry,
+  ListingImportAdminBatchDetail,
+  ListingImportAdminBatchRow,
+  ListingImportAdminCandidateDetail,
+  ListingImportAdminCandidatePayload,
+  ListingImportAdminCandidateRow,
+  ListingImportAdminCredentialRow,
+  ListingImportAdminExternalListingDetail,
+  ListingImportAdminExternalListingRow,
+  ListingImportAdminLandingResult,
+  ListingImportAdminSourceSummary,
+  ListingImportAdminView,
+} from "./application/admin-query-ports";
+export type { ListingImportAdminLandingCriteria } from "./application/admin-criteria";
+export type {
   ListingImportActor,
   ListingImportAuditContext,
   ListingImportCommandContext,
@@ -105,6 +133,13 @@ export type {
   ValidPreparedListingImportRow,
 } from "./application/ports";
 export type { ListingImportItemInput } from "./application/schemas";
+export type {
+  ApprovedExternalListingResult,
+  CandidateReviewMutationResult,
+  DuplicateResolutionResult,
+  ExternalListingMutationResult,
+  ListingImportReviewActor,
+} from "./application/review-ports";
 export type {
   CanonicalListingImportContent,
   ListingDuplicateComparable,

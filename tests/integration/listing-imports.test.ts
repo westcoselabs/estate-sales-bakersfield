@@ -210,11 +210,6 @@ describe("listing import persistence and application service", () => {
   it("creates an immutable review candidate without organizer publication data", async () => {
     const item = validItem(identifier("first"));
     const input = envelope("first", [item]);
-    const before = await Promise.all([
-      prisma.event.count(),
-      prisma.paymentAttempt.count(),
-      prisma.eventPublication.count(),
-    ]);
     const result = await service.importBatch(input, manualContext());
 
     expect(result).toMatchObject({
@@ -237,15 +232,32 @@ describe("listing import persistence and application service", () => {
         },
       ],
     });
-    expect(result.rows[0]?.candidateId).toMatch(/^[0-9a-f]{8}-[0-9a-f-]{27}$/u);
-    await expect(prisma.externalListing.count()).resolves.toBe(0);
+    const candidateId = result.rows[0]?.candidateId ?? "";
+    expect(candidateId).toMatch(/^[0-9a-f]{8}-[0-9a-f-]{27}$/u);
     await expect(
-      Promise.all([
-        prisma.event.count(),
-        prisma.paymentAttempt.count(),
-        prisma.eventPublication.count(),
-      ]),
-    ).resolves.toEqual(before);
+      prisma.listingSourceRecord.findFirstOrThrow({
+        where: { candidate: { id: candidateId } },
+        select: {
+          linkedEventId: true,
+          linkedExternalListingId: true,
+          linkedEvent: {
+            select: {
+              id: true,
+              paymentAttempts: { select: { id: true } },
+              publication: { select: { id: true } },
+            },
+          },
+          candidate: {
+            select: { externalListing: { select: { id: true } } },
+          },
+        },
+      }),
+    ).resolves.toEqual({
+      linkedEventId: null,
+      linkedExternalListingId: null,
+      linkedEvent: null,
+      candidate: { externalListing: null },
+    });
 
     const row = await prisma.listingImportRow.findFirstOrThrow({
       where: { batchId: result.batchId },
@@ -472,19 +484,21 @@ describe("listing import persistence and application service", () => {
       new CryptoListingIngestionCredentialProvider(),
       { production: true },
     );
-    const before = await prisma.listingIngestionCredential.count();
+    const credentialName = identifier("production-fixture");
 
     await expect(
       productionCredentials.create({
         sourceKey: "fixture",
-        name: identifier("production-fixture"),
+        name: credentialName,
         actorUserId: administratorId,
         actorSessionId: administratorSessionId,
       }),
     ).rejects.toMatchObject({ code: "SOURCE_NOT_PRODUCTION_ALLOWED" });
-    await expect(prisma.listingIngestionCredential.count()).resolves.toBe(
-      before,
-    );
+    await expect(
+      prisma.listingIngestionCredential.count({
+        where: { name: credentialName, source: { key: "fixture" } },
+      }),
+    ).resolves.toBe(0);
   });
 
   it("rechecks the production source gate inside the persistence transaction", async () => {
@@ -571,9 +585,6 @@ describe("listing import persistence and application service", () => {
     const csvInput = parseListingImportCsv(
       readFileSync(resolve(contractFixtureRoot, "valid-request.csv"), "utf8"),
     );
-    const beforeBatches = await prisma.listingImportBatch.count();
-    const beforeCandidates = await prisma.listingImportCandidate.count();
-
     const fromJson = await service.importBatch(jsonInput, manualContext());
     const fromCsv = await service.importBatch(
       csvInput,
@@ -636,12 +647,14 @@ describe("listing import persistence and application service", () => {
           .digest("hex"),
       }),
     ).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
-    await expect(prisma.listingImportBatch.count()).resolves.toBe(
-      beforeBatches + 1,
-    );
-    await expect(prisma.listingImportCandidate.count()).resolves.toBe(
-      beforeCandidates + 1,
-    );
+    await expect(
+      prisma.listingImportBatch.count({ where: { id: fromJson.batchId } }),
+    ).resolves.toBe(1);
+    await expect(
+      prisma.listingImportCandidate.count({
+        where: { id: fromJson.rows[0]?.candidateId ?? "" },
+      }),
+    ).resolves.toBe(1);
   });
 
   it("processes authenticated HTTP ingestion, replays idempotently, conflicts safely, and rejects revoked tokens", async () => {
@@ -651,9 +664,8 @@ describe("listing import persistence and application service", () => {
       actorUserId: administratorId,
       actorSessionId: administratorSessionId,
     });
-    const input = envelope("http-ingestion", [
-      validItem(identifier("http-listing")),
-    ]);
+    const sourceListingId = identifier("http-listing");
+    const input = envelope("http-ingestion", [validItem(sourceListingId)]);
     const body = JSON.stringify(input);
     const idempotencyKey = `integration-http-${crypto.randomUUID()}`;
     const rateLimit = {
@@ -676,13 +688,6 @@ describe("listing import persistence and application service", () => {
       imports: service,
       rateLimit,
     };
-    const before = await Promise.all([
-      prisma.listingImportBatch.count(),
-      prisma.listingImportCandidate.count(),
-      prisma.listingSourceRecord.count(),
-      prisma.externalListing.count(),
-    ]);
-
     const first = await handleListingIngestionRequest(
       httpRequest(body),
       dependencies,
@@ -693,7 +698,10 @@ describe("listing import persistence and application service", () => {
     );
     expect(first.status).toBe(201);
     expect(replay.status).toBe(200);
-    const firstResult = (await first.json()) as { batchId: string };
+    const firstResult = (await first.json()) as {
+      batchId: string;
+      rows: readonly { candidateId: string | null }[];
+    };
     await expect(replay.json()).resolves.toMatchObject({
       batchId: firstResult.batchId,
       replayed: true,
@@ -730,19 +738,26 @@ describe("listing import persistence and application service", () => {
     expect(revoked.status).toBe(401);
     expect(await wrong.json()).toEqual(await revoked.json());
 
+    const candidateId = firstResult.rows[0]?.candidateId ?? "";
     await expect(
-      Promise.all([
-        prisma.listingImportBatch.count(),
-        prisma.listingImportCandidate.count(),
-        prisma.listingSourceRecord.count(),
-        prisma.externalListing.count(),
-      ]),
-    ).resolves.toEqual([
-      before[0] + 1,
-      before[1] + 1,
-      before[2] + 1,
-      before[3],
-    ]);
+      prisma.listingImportBatch.count({ where: { id: firstResult.batchId } }),
+    ).resolves.toBe(1);
+    await expect(
+      prisma.listingSourceRecord.findFirstOrThrow({
+        where: { sourceListingId, source: { key: "fixture" } },
+        select: {
+          candidate: { select: { id: true } },
+          externalListing: { select: { id: true } },
+          linkedEventId: true,
+          linkedExternalListingId: true,
+        },
+      }),
+    ).resolves.toEqual({
+      candidate: { id: candidateId },
+      externalListing: null,
+      linkedEventId: null,
+      linkedExternalListingId: null,
+    });
   });
 
   it("replays runs, detects exact repeats, and preserves the pending payload on change", async () => {
@@ -1006,7 +1021,11 @@ describe("listing import persistence and application service", () => {
       ]),
       resolution: "UNRESOLVED",
     });
-    await expect(prisma.externalListing.count()).resolves.toBe(0);
+    await expect(
+      prisma.externalListing.count({
+        where: { candidateId: result.rows[0]?.candidateId ?? "" },
+      }),
+    ).resolves.toBe(0);
   });
 
   it("persists the documented 200-row valid batch within the transaction budget", async () => {

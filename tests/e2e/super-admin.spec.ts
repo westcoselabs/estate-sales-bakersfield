@@ -35,7 +35,7 @@ async function registerAndVerify(
 ) {
   await page.goto("/signup");
   await page.getByLabel("Display name").fill(input.name);
-  await page.getByLabel("Email").fill(input.email);
+  await page.getByLabel("Email", { exact: true }).fill(input.email);
   await page.getByLabel("Password", { exact: true }).fill(input.password);
   await page.getByLabel("Confirm password").fill(input.password);
   await page.getByRole("button", { name: "Create account" }).click();
@@ -182,6 +182,7 @@ test("guards and operates the focused owner portal on desktop and mobile", async
   await expect(desktopNavigation).toContainText("Users");
   await expect(desktopNavigation).toContainText("Listings");
   await expect(desktopNavigation).toContainText("Email");
+  await expect(desktopNavigation).toContainText("Imports");
   await page.getByLabel("Date range").selectOption("7d");
   await page.getByRole("button", { name: "Apply range" }).click();
   await expect(page).toHaveURL(/range=7d/);
@@ -249,7 +250,8 @@ test("guards and operates the focused owner portal on desktop and mobile", async
     name: "Mobile admin navigation",
   });
   await expect(mobile).toBeVisible();
-  await expect(mobile.getByRole("link")).toHaveCount(4);
+  await expect(mobile.getByRole("link")).toHaveCount(5);
+  await expect(mobile).toContainText("Imports");
   await mobile.getByRole("link", { name: "Email" }).click();
   await expect(
     page.getByRole("heading", { name: "Email center" }),

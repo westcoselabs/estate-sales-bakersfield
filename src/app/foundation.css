@@ -7398,7 +7398,7 @@ button {
     bottom: 0;
     left: 0;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     border-top: 1px solid var(--color-border);
     background: var(--color-surface-glass);
     padding: var(--space-1) var(--safe-right)
@@ -8858,6 +8858,309 @@ button {
 @media (max-width: 540px) {
   .admin-table--users .admin-table__secondary {
     display: none;
+  }
+}
+
+/* Listing Imports review workspace */
+.admin-import-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--radius-card);
+  background: rgb(255 255 255 / 62%);
+  padding: var(--space-1);
+  box-shadow: var(--shadow-1);
+}
+
+.admin-import-tabs a {
+  display: flex;
+  min-width: 0;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius-card) - 0.25rem);
+  color: var(--color-text-secondary);
+  padding: var(--space-3) var(--space-4);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-decoration: none;
+  transition:
+    background-color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
+}
+
+.admin-import-tabs a:hover {
+  background: rgb(255 255 255 / 72%);
+  color: var(--color-primary);
+}
+
+.admin-import-tabs a[aria-current="page"] {
+  border-color: rgb(23 58 45 / 10%);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 6px 18px rgb(23 58 45 / 9%);
+}
+
+.admin-import-tabs a:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline-offset: 1px;
+}
+
+.admin-import-tabs a > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-import-tabs a > strong {
+  display: inline-grid;
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: rgb(23 58 45 / 7%);
+  padding-inline: var(--space-2);
+  color: inherit;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-import-tabs a[aria-current="page"] > strong {
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+}
+
+.admin-import-tabs--loading {
+  pointer-events: none;
+}
+
+.admin-import-tabs--loading .ui-skeleton {
+  min-height: 3.5rem;
+  border-radius: calc(var(--radius-card) - 0.25rem);
+}
+
+.admin-review-form,
+.admin-import-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.admin-review-form > header,
+.admin-import-form > header {
+  margin-bottom: 0;
+}
+
+.admin-review-form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.admin-review-form__wide {
+  grid-column: 1 / -1;
+}
+
+.admin-review-form textarea.ui-input {
+  min-height: 10rem;
+  resize: vertical;
+}
+
+.admin-import-form .admin-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.admin-import-form__payload {
+  min-height: clamp(16rem, 34vh, 26rem);
+  resize: vertical;
+  font-family:
+    ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+.admin-review-form .ui-input:focus-visible,
+.admin-import-form .ui-input:focus-visible {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 0.2rem rgb(185 121 23 / 12%);
+}
+
+.admin-empty-state {
+  display: grid;
+  min-height: 16rem;
+  place-content: center;
+  gap: var(--space-2);
+  padding: clamp(2rem, 7vw, 5rem);
+  text-align: center;
+}
+
+.admin-empty-state h2,
+.admin-empty-state p {
+  margin: 0;
+}
+
+.admin-empty-state p {
+  max-width: 48ch;
+  color: var(--color-text-secondary);
+}
+
+.admin-duplicate-list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-duplicate-list > li {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: var(--space-4);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--radius-control);
+  background: rgb(247 248 246 / 72%);
+  padding: var(--space-4);
+  transition:
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
+}
+
+.admin-duplicate-list > li:focus-within {
+  border-color: rgb(185 121 23 / 42%);
+  box-shadow: 0 0 0 0.2rem rgb(185 121 23 / 10%);
+}
+
+.admin-duplicate-list > li > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.admin-duplicate-list > li > div:first-child > a {
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-weight: 800;
+  text-underline-offset: 0.2em;
+}
+
+.admin-duplicate-list > li > div:first-child > small {
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
+.admin-duplicate-list__kind {
+  color: var(--color-text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.admin-duplicate-list > li > .ui-alert {
+  grid-column: 1 / -1;
+}
+
+.admin-import-counts {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.admin-import-counts > div {
+  display: grid;
+  align-content: center;
+  gap: var(--space-1);
+  min-height: 6.25rem;
+  border-bottom: 0;
+  text-align: center;
+}
+
+.admin-import-counts dd {
+  color: var(--color-primary);
+  font-size: clamp(1.35rem, 2.2vw, 1.8rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1;
+}
+
+@media (max-width: 1180px) {
+  .admin-import-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-empty-state {
+    border: 1px solid var(--admin-panel-border);
+    border-radius: var(--radius-card);
+    background: rgb(255 255 255 / 92%);
+    box-shadow: var(--shadow-1);
+  }
+
+  .admin-duplicate-list > li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .admin-duplicate-list > li > .admin-actions {
+    grid-column: 1 / -1;
+  }
+
+  .admin-import-counts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .admin-review-form__grid,
+  .admin-import-form .admin-grid--two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-review-form__wide {
+    grid-column: auto;
+  }
+
+  .admin-duplicate-list > li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+
+  .admin-duplicate-list > li > .admin-actions,
+  .admin-duplicate-list > li > .ui-alert {
+    grid-column: auto;
+  }
+
+  .admin-import-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 540px) {
+  .admin-import-tabs {
+    grid-template-columns: none;
+    grid-auto-columns: minmax(11rem, 78vw);
+    grid-auto-flow: column;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+
+  .admin-import-tabs > * {
+    scroll-snap-align: start;
+  }
+
+  .admin-import-counts > div {
+    min-height: 5.5rem;
   }
 }
 

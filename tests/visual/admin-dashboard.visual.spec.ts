@@ -38,6 +38,8 @@ async function renderAdminFixture(
                 <a class="admin-nav-link" aria-current="page" href="#"><span>Overview</span></a>
                 <a class="admin-nav-link" href="#"><span>Users</span></a>
                 <a class="admin-nav-link" href="#"><span>Listings</span></a>
+                <a class="admin-nav-link" href="#"><span>Email</span></a>
+                <a class="admin-nav-link" href="#"><span>Imports</span></a>
               </nav>
             </div>
             <div class="admin-sidebar__secondary">
@@ -180,6 +182,8 @@ async function renderAdminFixture(
             <a class="admin-nav-link" aria-current="page" href="#">Overview</a>
             <a class="admin-nav-link" href="#">Users</a>
             <a class="admin-nav-link" href="#">Listings</a>
+            <a class="admin-nav-link" href="#">Email</a>
+            <a class="admin-nav-link" href="#">Imports</a>
           </nav>
         </div>
       </body>
@@ -195,6 +199,9 @@ test("admin visual system holds at desktop width", async ({
 
   await expect(page.locator(".admin-sidebar")).toBeVisible();
   await expect(page.locator(".admin-bottom-nav")).toBeHidden();
+  await expect(
+    page.locator('.admin-sidebar nav[aria-label="Admin navigation"] a'),
+  ).toHaveCount(5);
   await expect(page.locator(".admin-metric-card")).toHaveCount(4);
   await expect(page.locator(".admin-table tr").first()).toHaveCSS(
     "display",
@@ -230,6 +237,7 @@ test("admin visual system is touch-safe on a small phone", async ({
 
   await expect(page.locator(".admin-sidebar")).toBeHidden();
   await expect(page.locator(".admin-bottom-nav")).toBeVisible();
+  await expect(page.locator(".admin-bottom-nav a")).toHaveCount(5);
   await expect(page.locator(".admin-metric-card")).toHaveCount(4);
 
   const navTargets = await page

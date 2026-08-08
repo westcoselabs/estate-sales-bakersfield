@@ -1,0 +1,47 @@
+import { z } from "zod";
+
+import { createConfiguredListingImportReviewService } from "@/modules/listing-imports";
+import { requestIdFrom } from "@/platform/http/request-context";
+
+import {
+  adminApiError,
+  adminJson,
+  readAdminBoundedJson,
+} from "../../../../../../_shared";
+import { authorizeListingImportReview } from "../../../../../_review-route";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ candidateId: string; matchId: string }> },
+) {
+  const startedAt = performance.now();
+  const requestId = requestIdFrom(request);
+  try {
+    const input = await params;
+    const candidateId = z.string().uuid().parse(input.candidateId);
+    const matchId = z.string().uuid().parse(input.matchId);
+    const actor = await authorizeListingImportReview(request, candidateId);
+    const result =
+      await createConfiguredListingImportReviewService().resolveCandidateDuplicate(
+        actor,
+        candidateId,
+        matchId,
+        await readAdminBoundedJson(request),
+        { requestId },
+      );
+    return adminJson(
+      { schema: "listing-import-duplicate-resolution.v1", result, requestId },
+      { requestId },
+    );
+  } catch (error) {
+    return adminApiError(
+      error,
+      requestId,
+      "admin.imports.candidates.duplicates.resolve",
+      startedAt,
+    );
+  }
+}

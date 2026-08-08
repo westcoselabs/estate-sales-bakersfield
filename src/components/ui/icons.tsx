@@ -29,7 +29,8 @@ export type IconName =
   | "external"
   | "info"
   | "trash"
-  | "mail";
+  | "mail"
+  | "import";
 
 type IconWeight = "regular" | "fill";
 
@@ -173,6 +174,12 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="m4 7 8 6 8-6" />
+    </>
+  ),
+  import: (
+    <>
+      <path d="M12 3.5v10M8.5 10l3.5 3.5 3.5-3.5" />
+      <path d="M4.5 15.5v3A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5v-3" />
     </>
   ),
 };
