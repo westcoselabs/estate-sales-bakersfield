@@ -9,6 +9,7 @@ export interface CredentialManagerSource {
   readonly id: string;
   readonly key: string;
   readonly name: string;
+  readonly productionAllowed: boolean;
 }
 
 export interface CredentialManagerCredential {
@@ -25,6 +26,7 @@ export interface CredentialManagerCredential {
 export interface CredentialManagerProps {
   readonly sources: readonly CredentialManagerSource[];
   readonly credentials: readonly CredentialManagerCredential[];
+  readonly production: boolean;
 }
 
 interface ApiErrorResponse {
@@ -93,6 +95,7 @@ function DateValue({ value }: { readonly value: string | null }) {
 export function CredentialManager({
   sources,
   credentials,
+  production,
 }: CredentialManagerProps) {
   const router = useRouter();
   const createDialog = useRef<HTMLDialogElement>(null);
@@ -109,6 +112,9 @@ export function CredentialManager({
   const [createMessage, setCreateMessage] = useState("");
   const [revokeMessage, setRevokeMessage] = useState("");
   const [notice, setNotice] = useState("");
+  const eligibleSources = production
+    ? sources.filter((source) => source.productionAllowed)
+    : sources;
 
   useEffect(() => {
     if (createdToken) tokenHeading.current?.focus();
@@ -235,7 +241,7 @@ export function CredentialManager({
           </div>
           <button
             className="ui-button ui-button--primary"
-            disabled={sources.length === 0}
+            disabled={eligibleSources.length === 0}
             onClick={openCreateDialog}
             type="button"
           >
@@ -380,7 +386,7 @@ export function CredentialManager({
             <label className="ui-field">
               <span className="ui-field__label">Source</span>
               <select className="ui-input" name="sourceKey" required>
-                {sources.map((source) => (
+                {eligibleSources.map((source) => (
                   <option key={source.id} value={source.key}>
                     {source.name} ({source.key})
                   </option>

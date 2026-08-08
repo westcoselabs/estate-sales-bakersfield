@@ -138,6 +138,38 @@ function nextFixture(label: string): ReviewFixture {
   };
 }
 
+function localDateTime(date: Date): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(date)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+function fixtureWithSchedule(
+  label: string,
+  startsAt: Date,
+  endsAt: Date,
+): ReviewFixture {
+  const fixture = nextFixture(label);
+  const content: FixtureContent = {
+    ...fixture.content,
+    localStartsAt: localDateTime(startsAt),
+    localEndsAt: localDateTime(endsAt),
+  };
+  return { ...fixture, content, normalized: normalizeListingContent(content) };
+}
+
 function candidateEditInput(
   fixture: ReviewFixture,
   expectedVersion: number,
@@ -615,6 +647,120 @@ describe("listing import Phase 4 review lifecycle", () => {
     ).resolves.toBe(1);
   });
 
+  it("requires a fresh NOT_DUPLICATE review after duplicate-affecting content changes", async () => {
+    const fixture = nextFixture("Fresh Duplicate Decision");
+    const event = await createOrganizerEvent(fixture);
+    const candidateId = await createCandidate(fixture);
+    const confirmed = await confirmCandidate(candidateId);
+    const match = await prisma.listingDuplicateMatch.findFirstOrThrow({
+      where: { candidateId, eventId: event.id },
+    });
+    const initiallyResolved = await reviews.resolveCandidateDuplicate(
+      actor(),
+      candidateId,
+      match.id,
+      { expectedVersion: confirmed.version, resolution: "NOT_DUPLICATE" },
+    );
+
+    const edited = await reviews.editCandidate(actor(), candidateId, {
+      ...candidateEditInput(fixture, initiallyResolved.version),
+      title: `${fixture.content.title} Revised`,
+    });
+    expect(edited.unresolvedDuplicateCount).toBe(1);
+    await expect(
+      reviews.approveCandidate(actor(), candidateId, {
+        expectedVersion: edited.version,
+      }),
+    ).rejects.toMatchObject({ code: "UNRESOLVED_DUPLICATES", status: 409 });
+    await expect(
+      reviews.resolveCandidateDuplicate(actor(), candidateId, match.id, {
+        expectedVersion: edited.version,
+        resolution: "LINKED",
+      }),
+    ).rejects.toMatchObject({
+      code: "DUPLICATE_NO_LONGER_CURRENT",
+      status: 409,
+    });
+
+    const reviewedAgain = await reviews.resolveCandidateDuplicate(
+      actor(),
+      candidateId,
+      match.id,
+      { expectedVersion: edited.version, resolution: "NOT_DUPLICATE" },
+    );
+    expect(reviewedAgain).toMatchObject({
+      resolution: "NOT_DUPLICATE",
+      unresolvedDuplicateCount: 0,
+    });
+    await expect(
+      reviews.approveCandidate(actor(), candidateId, {
+        expectedVersion: reviewedAgain.version,
+      }),
+    ).resolves.toMatchObject({ status: "APPROVED" });
+
+    const decisions = await prisma.auditEntry.findMany({
+      where: {
+        targetType: "LISTING_IMPORT_CANDIDATE",
+        targetId: candidateId,
+        action: "LISTING_IMPORT_DUPLICATE_RESOLVED",
+      },
+      orderBy: { id: "asc" },
+      select: { metadata: true },
+    });
+    expect(decisions).toHaveLength(2);
+    expect(
+      decisions.map(
+        (decision) =>
+          (decision.metadata as { candidateDuplicateDigest?: string })
+            .candidateDuplicateDigest,
+      ),
+    ).toEqual([expect.stringMatching(/^[0-9a-f]{64}$/u), expect.any(String)]);
+    expect(
+      (decisions[0]!.metadata as { candidateDuplicateDigest: string })
+        .candidateDuplicateDigest,
+    ).not.toBe(
+      (decisions[1]!.metadata as { candidateDuplicateDigest: string })
+        .candidateDuplicateDigest,
+    );
+  });
+
+  it("keeps NOT_DUPLICATE authorization fresh across editorial-only edits", async () => {
+    const fixture = nextFixture("Editorial Duplicate Decision");
+    const event = await createOrganizerEvent(fixture);
+    const candidateId = await createCandidate(fixture);
+    const confirmed = await confirmCandidate(candidateId);
+    const match = await prisma.listingDuplicateMatch.findFirstOrThrow({
+      where: { candidateId, eventId: event.id },
+    });
+    const resolved = await reviews.resolveCandidateDuplicate(
+      actor(),
+      candidateId,
+      match.id,
+      { expectedVersion: confirmed.version, resolution: "NOT_DUPLICATE" },
+    );
+    const edited = await reviews.editCandidate(actor(), candidateId, {
+      ...candidateEditInput(fixture, resolved.version),
+      description: `${fixture.content.description} Prices are listed on site.`,
+      privacyMode: "EXACT_ADDRESS",
+    });
+
+    expect(edited.unresolvedDuplicateCount).toBe(0);
+    await expect(
+      reviews.approveCandidate(actor(), candidateId, {
+        expectedVersion: edited.version,
+      }),
+    ).resolves.toMatchObject({ status: "APPROVED" });
+    await expect(
+      prisma.auditEntry.count({
+        where: {
+          targetType: "LISTING_IMPORT_CANDIDATE",
+          targetId: candidateId,
+          action: "LISTING_IMPORT_DUPLICATE_RESOLVED",
+        },
+      }),
+    ).resolves.toBe(1);
+  });
+
   it("links to a valid published Event without creating an ExternalListing", async () => {
     const fixture = nextFixture("Published Organizer Duplicate");
     const eventId = await createPublishedOrganizerEvent(fixture);
@@ -698,6 +844,223 @@ describe("listing import Phase 4 review lifecycle", () => {
       linkedExternalListingId: null,
       externalListing: { id: approved.listingId },
     });
+  });
+
+  it("preserves the confirming administrator when a successor administrator approves", async () => {
+    const fixture = nextFixture("Location Confirmer Provenance");
+    const candidateId = await createCandidate(fixture);
+    const confirmerEmail = testEmail("listing-import-location-confirmer");
+    const confirmer = await prisma.user.create({
+      data: {
+        displayName: "Location Confirmer Administrator",
+        email: confirmerEmail,
+        normalizedEmail: confirmerEmail,
+        passwordHash: "integration-test-password-hash",
+        emailVerifiedAt: new Date(),
+      },
+      select: { id: true },
+    });
+    const confirmerSession = await prisma.session.create({
+      data: {
+        userId: confirmer.id,
+        tokenHash: createHash("sha256")
+          .update(identifier("location-confirmer-session"), "utf8")
+          .digest("hex"),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1_000),
+        passwordAuthenticatedAt: new Date(),
+      },
+      select: { id: true },
+    });
+
+    let confirmedVersion: number | null = null;
+    try {
+      await prisma.user.update({
+        where: { id: administratorId },
+        data: { role: "USER" },
+      });
+      await prisma.user.update({
+        where: { id: confirmer.id },
+        data: { role: "SUPER_ADMIN" },
+      });
+      const confirmed = await reviews.confirmCandidateLocation(
+        { userId: confirmer.id, sessionId: confirmerSession.id },
+        candidateId,
+        { expectedVersion: 1 },
+      );
+      confirmedVersion = confirmed.version;
+      await prisma.user.update({
+        where: { id: confirmer.id },
+        data: { role: "USER" },
+      });
+      await prisma.user.update({
+        where: { id: administratorId },
+        data: { role: "SUPER_ADMIN" },
+      });
+    } finally {
+      await prisma.user.updateMany({
+        where: { id: { not: administratorId }, role: "SUPER_ADMIN" },
+        data: { role: "USER" },
+      });
+      await prisma.user.update({
+        where: { id: administratorId },
+        data: { role: "SUPER_ADMIN" },
+      });
+    }
+
+    const candidateConfirmation =
+      await prisma.listingImportCandidate.findUniqueOrThrow({
+        where: { id: candidateId },
+        select: {
+          locationConfirmedByUserId: true,
+          locationConfirmedAt: true,
+        },
+      });
+    if (confirmedVersion === null) {
+      throw new Error("The successor-admin fixture was not confirmed");
+    }
+    const approved = await reviews.approveCandidate(actor(), candidateId, {
+      expectedVersion: confirmedVersion,
+    });
+    const [location, approvalAudit] = await Promise.all([
+      prisma.externalListingLocation.findUniqueOrThrow({
+        where: { listingId: approved.listingId },
+        select: { confirmedByUserId: true, confirmedAt: true },
+      }),
+      prisma.auditEntry.findFirstOrThrow({
+        where: {
+          targetType: "LISTING_IMPORT_CANDIDATE",
+          targetId: candidateId,
+          action: "LISTING_IMPORT_CANDIDATE_APPROVED",
+        },
+        select: { actorUserId: true },
+      }),
+    ]);
+
+    expect(candidateConfirmation).toEqual({
+      locationConfirmedByUserId: confirmer.id,
+      locationConfirmedAt: expect.any(Date),
+    });
+    expect(location).toEqual({
+      confirmedByUserId: confirmer.id,
+      confirmedAt: candidateConfirmation.locationConfirmedAt,
+    });
+    expect(approvalAudit.actorUserId).toBe(administratorId);
+  });
+
+  it("rejects ended candidate schedules at the database-time boundary and allows active or future sales", async () => {
+    const pastFixture = fixtureWithSchedule(
+      "Past Candidate",
+      new Date("2020-01-10T17:00:00.000Z"),
+      new Date("2020-01-10T23:00:00.000Z"),
+    );
+    const pastCandidateId = await createCandidate(pastFixture);
+    const pastConfirmed = await confirmCandidate(pastCandidateId);
+    await expect(
+      reviews.approveCandidate(actor(), pastCandidateId, {
+        expectedVersion: pastConfirmed.version,
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_CANDIDATE_CONTENT",
+      status: 422,
+    });
+
+    const boundaryFixture = fixtureWithSchedule(
+      "Boundary Candidate",
+      new Date(Date.now() + 24 * 60 * 60 * 1_000),
+      new Date(Date.now() + 25 * 60 * 60 * 1_000),
+    );
+    const boundaryCandidateId = await createCandidate(boundaryFixture);
+    const boundaryConfirmed = await confirmCandidate(boundaryCandidateId);
+    const [databaseClock] = await prisma.$queryRaw<{ readonly now: Date }[]>`
+      SELECT date_trunc('minute', CURRENT_TIMESTAMP) AS "now"
+    `;
+    if (!databaseClock) throw new Error("Database clock was unavailable");
+    const boundaryEdited = await reviews.editCandidate(
+      actor(),
+      boundaryCandidateId,
+      {
+        ...candidateEditInput(boundaryFixture, boundaryConfirmed.version),
+        localStartsAt: localDateTime(
+          new Date(databaseClock.now.getTime() - 60 * 60 * 1_000),
+        ),
+        localEndsAt: localDateTime(databaseClock.now),
+      },
+    );
+    await expect(
+      reviews.approveCandidate(actor(), boundaryCandidateId, {
+        expectedVersion: boundaryEdited.version,
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_CANDIDATE_CONTENT",
+      status: 422,
+    });
+
+    const activeFixture = fixtureWithSchedule(
+      "Active Candidate",
+      new Date(Date.now() - 60 * 60 * 1_000),
+      new Date(Date.now() + 60 * 60 * 1_000),
+    );
+    const activeCandidateId = await createCandidate(activeFixture);
+    const activeConfirmed = await confirmCandidate(activeCandidateId);
+    await expect(
+      reviews.approveCandidate(actor(), activeCandidateId, {
+        expectedVersion: activeConfirmed.version,
+      }),
+    ).resolves.toMatchObject({ status: "APPROVED" });
+
+    const futureFixture = fixtureWithSchedule(
+      "Future Candidate",
+      new Date(Date.now() + 2 * 24 * 60 * 60 * 1_000),
+      new Date(Date.now() + 2 * 24 * 60 * 60 * 1_000 + 60 * 60 * 1_000),
+    );
+    const futureCandidateId = await createCandidate(futureFixture);
+    const futureConfirmed = await confirmCandidate(futureCandidateId);
+    await expect(
+      reviews.approveCandidate(actor(), futureCandidateId, {
+        expectedVersion: futureConfirmed.version,
+      }),
+    ).resolves.toMatchObject({ status: "APPROVED" });
+  });
+
+  it("prevents a published listing edit from retaining a fully ended schedule", async () => {
+    const fixture = nextFixture("Published Schedule Invariant");
+    const approved = await createApprovedExternalListing(fixture);
+    const pastFixture = fixtureWithSchedule(
+      "Past Published Edit",
+      new Date("2020-02-10T17:00:00.000Z"),
+      new Date("2020-02-10T23:00:00.000Z"),
+    );
+    await expect(
+      reviews.editExternalListing(
+        actor(),
+        approved.listingId,
+        externalEditInput(
+          pastFixture,
+          approved.listingVersion,
+          "Ended Published Listing",
+        ),
+      ),
+    ).rejects.toMatchObject({
+      code: "INVALID_CANDIDATE_CONTENT",
+      status: 422,
+    });
+
+    const activeFixture = fixtureWithSchedule(
+      "Active Published Edit",
+      new Date(Date.now() - 30 * 60 * 1_000),
+      new Date(Date.now() + 30 * 60 * 1_000),
+    );
+    await expect(
+      reviews.editExternalListing(
+        actor(),
+        approved.listingId,
+        externalEditInput(
+          activeFixture,
+          approved.listingVersion,
+          "Active Published Listing",
+        ),
+      ),
+    ).resolves.toMatchObject({ status: "PUBLISHED", version: 2 });
   });
 
   it("retries Event-reserved public IDs and fails closed after bounded exhaustion", async () => {

@@ -3,6 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
+import {
+  CANDIDATE_DIRTY_MESSAGE,
+  useCandidateReviewState,
+} from "./candidate-review-state";
+
 export interface CandidateReviewContent {
   readonly eventType: "ESTATE_SALE" | "YARD_SALE";
   readonly title: string;
@@ -58,15 +63,21 @@ export function CandidateEditor({
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const [pending, setPending] = useState<"save" | "location" | null>(null);
   const [message, setMessage] = useState("");
   const [stale, setStale] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [discardStatus, setDiscardStatus] = useState("");
+  const { dirty, dirtyMessageId, setDirty } = useCandidateReviewState();
 
   async function mutate(action: "save" | "location") {
     if (!formRef.current) return;
+    if ((action === "save" && !dirty) || (action === "location" && dirty)) {
+      return;
+    }
     setPending(action);
     setMessage("");
+    setDiscardStatus("");
     setStale(false);
     try {
       const data = contentFrom(new FormData(formRef.current));
@@ -94,7 +105,6 @@ export function CandidateEditor({
           ? "Candidate changes saved. Duplicate warnings were refreshed."
           : "The saved address was confirmed by the configured location provider.",
       );
-      setDirty(false);
       router.refresh();
     } catch (error) {
       setMessage(
@@ -107,10 +117,23 @@ export function CandidateEditor({
     }
   }
 
+  function discard() {
+    if (pending !== null) return;
+    formRef.current?.reset();
+    setMessage("");
+    setStale(false);
+    setDirty(false);
+    setDiscardStatus("Persisted candidate values restored.");
+    headingRef.current?.focus();
+  }
+
   return (
     <form
       className="admin-panel admin-review-form"
-      onChange={() => setDirty(true)}
+      onChange={() => {
+        setDiscardStatus("");
+        setDirty(true);
+      }}
       ref={formRef}
       onSubmit={(event) => {
         event.preventDefault();
@@ -120,7 +143,9 @@ export function CandidateEditor({
       <header>
         <div>
           <p className="eyebrow">Public-facing draft</p>
-          <h2>Edit candidate</h2>
+          <h2 ref={headingRef} tabIndex={-1}>
+            Edit candidate
+          </h2>
         </div>
         <span
           className={
@@ -291,15 +316,31 @@ export function CandidateEditor({
           ) : null}
         </p>
       ) : null}
+      {discardStatus ? (
+        <p className="ui-alert ui-alert--info" aria-live="polite" role="status">
+          {discardStatus}
+        </p>
+      ) : null}
       <div className="admin-actions">
         <button
+          aria-describedby={dirty ? dirtyMessageId : undefined}
           className="ui-button ui-button--primary"
-          disabled={pending !== null}
+          disabled={pending !== null || !dirty}
           type="submit"
         >
           {pending === "save" ? "Saving…" : "Save changes"}
         </button>
         <button
+          aria-describedby={dirty ? dirtyMessageId : undefined}
+          className="ui-button ui-button--secondary"
+          disabled={pending !== null || !dirty}
+          onClick={discard}
+          type="button"
+        >
+          Discard changes
+        </button>
+        <button
+          aria-describedby={dirty ? dirtyMessageId : undefined}
           className="ui-button ui-button--secondary"
           disabled={pending !== null || dirty}
           onClick={() => void mutate("location")}
@@ -309,8 +350,13 @@ export function CandidateEditor({
         </button>
       </div>
       {dirty ? (
-        <p className="ui-alert ui-alert--warning" role="status">
-          Save these changes before confirming the location.
+        <p
+          className="ui-alert ui-alert--warning"
+          id={dirtyMessageId}
+          aria-live="polite"
+          role="status"
+        >
+          {CANDIDATE_DIRTY_MESSAGE}
         </p>
       ) : null}
     </form>

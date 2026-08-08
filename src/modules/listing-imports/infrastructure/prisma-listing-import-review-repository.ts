@@ -10,6 +10,7 @@ import {
   ListingImportReviewError,
   reviewStaleVersion,
 } from "../application/review-errors";
+import { duplicateReviewContentDigest } from "../application/duplicate-review-freshness";
 import type {
   ApprovedExternalListingResult,
   CandidateLocationInput,
@@ -42,6 +43,7 @@ type Transaction = Prisma.TransactionClient;
 
 interface CandidateComparableRecord {
   readonly id: string;
+  readonly currentPayload: Prisma.JsonValue;
   readonly normalizedTitle: string;
   readonly normalizedAddress: string | null;
   readonly normalizedPostalCode: string | null;
@@ -50,6 +52,21 @@ interface CandidateComparableRecord {
   readonly latitude: Prisma.Decimal | null;
   readonly longitude: Prisma.Decimal | null;
   readonly locationConfirmationStatus: string;
+}
+
+interface DuplicateSynchronizationResult {
+  readonly unresolvedDuplicateCount: number;
+  readonly probableMatchIds: ReadonlySet<string>;
+}
+
+export type ListingImportApprovalCheckpoint =
+  "CANDIDATE_APPROVED" | "EXTERNAL_LISTING_CREATED" | "LOCATION_CREATED";
+
+export interface ListingImportReviewRepositoryHooks {
+  readonly beforeAdministratorSessionCheck?: () => void | Promise<void>;
+  readonly approvalCheckpoint?: (
+    checkpoint: ListingImportApprovalCheckpoint,
+  ) => void | Promise<void>;
 }
 
 type ApprovalOutcome =
@@ -67,11 +84,30 @@ function reasonDigest(reason: string): string {
   return createHash("sha256").update(reason, "utf8").digest("hex");
 }
 
-function isRetryableTransactionError(error: unknown): boolean {
+function hasPostgresSerializationFailure(value: unknown, depth = 0): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Readonly<Record<string, unknown>>;
+  if (
+    record.kind === "TransactionWriteConflict" ||
+    record.originalCode === "40001" ||
+    record.code === "40001"
+  ) {
+    return true;
+  }
+  if (depth >= 3) return false;
   return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2034"
+    hasPostgresSerializationFailure(record.driverAdapterError, depth + 1) ||
+    hasPostgresSerializationFailure(record.cause, depth + 1)
   );
+}
+
+export function isRetryableListingImportReviewTransactionError(
+  error: unknown,
+): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (error.code === "P2034") return true;
+  if (error.code !== "P2010") return false;
+  return hasPostgresSerializationFailure(error.meta);
 }
 
 function isUniqueConflict(error: unknown): boolean {
@@ -203,6 +239,7 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
     private readonly prisma: PrismaClient,
     private readonly publicIdFactory: () => string = () =>
       randomBytes(6).toString("hex"),
+    private readonly hooks: ListingImportReviewRepositoryHooks = {},
   ) {}
 
   private async serializable<T>(
@@ -217,7 +254,7 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
       } catch (error) {
         if (
           attempt < MAX_TRANSACTION_ATTEMPTS &&
-          isRetryableTransactionError(error)
+          isRetryableListingImportReviewTransactionError(error)
         ) {
           continue;
         }
@@ -230,48 +267,49 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
   private async assertAdministrator(
     transaction: Transaction,
     authorization: ListingImportReviewAuthorization,
-  ): Promise<void> {
+  ): Promise<Date> {
+    await this.hooks.beforeAdministratorSessionCheck?.();
     const actor = authorization.actor;
-    if (authorization.requireRecentSession) {
-      if (!actor.sessionId) {
-        throw new ListingImportReviewError(
-          "ACTOR_NOT_AUTHORIZED",
-          403,
-          "Recent administrator authorization is required.",
-        );
-      }
-      const recentPasswordCutoff = new Date(
-        authorization.authorizationAt.getTime() - RECENT_PASSWORD_TTL_MS,
+    if (
+      !actor.sessionId ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+        actor.sessionId,
+      )
+    ) {
+      throw new ListingImportReviewError(
+        "ACTOR_NOT_AUTHORIZED",
+        403,
+        authorization.requireRecentSession
+          ? "Recent administrator authorization is required."
+          : "An active administrator session is required.",
       );
-      const session = await transaction.session.findFirst({
-        where: {
-          id: actor.sessionId,
-          userId: actor.userId,
-          expiresAt: { gt: authorization.authorizationAt },
-          passwordAuthenticatedAt: { gte: recentPasswordCutoff },
-          user: {
-            is: {
-              role: "SUPER_ADMIN",
-              status: "ACTIVE",
-              emailVerifiedAt: { not: null },
-            },
-          },
-        },
-        select: { id: true },
-      });
-      if (session) return;
-    } else {
-      const administrator = await transaction.user.findFirst({
-        where: {
-          id: actor.userId,
-          role: "SUPER_ADMIN",
-          status: "ACTIVE",
-          emailVerifiedAt: { not: null },
-        },
-        select: { id: true },
-      });
-      if (administrator) return;
     }
+
+    const recentSessionPredicate = authorization.requireRecentSession
+      ? Prisma.sql`
+          AND session."password_authenticated_at" >=
+            CURRENT_TIMESTAMP - (${RECENT_PASSWORD_TTL_MS} * INTERVAL '1 millisecond')
+        `
+      : Prisma.empty;
+    const sessions = await transaction.$queryRaw<
+      { readonly authorizedAt: Date }[]
+    >(Prisma.sql`
+      SELECT CURRENT_TIMESTAMP AS "authorizedAt"
+      FROM "sessions" session
+      JOIN "users" administrator
+        ON administrator."id" = session."user_id"
+      WHERE session."id" = ${actor.sessionId}::uuid
+        AND session."user_id" = ${actor.userId}::uuid
+        AND session."expires_at" > CURRENT_TIMESTAMP
+        AND administrator."role" = 'SUPER_ADMIN'::"user_role"
+        AND administrator."status" = 'ACTIVE'::"account_status"
+        AND administrator."email_verified_at" IS NOT NULL
+        ${recentSessionPredicate}
+      FOR SHARE OF session, administrator
+    `);
+    const session = sessions[0];
+    if (session) return session.authorizedAt;
+
     throw new ListingImportReviewError(
       "ACTOR_NOT_AUTHORIZED",
       403,
@@ -321,10 +359,68 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
     return candidate;
   }
 
+  private duplicateReviewDigest(candidate: CandidateComparableRecord): string {
+    const payload = parsedPayload(candidate.currentPayload);
+    return duplicateReviewContentDigest({
+      title: payload.title,
+      addressLine1: payload.addressLine1,
+      addressLine2: payload.addressLine2,
+      city: payload.city,
+      region: payload.region,
+      postalCode: payload.postalCode,
+      countryCode: payload.countryCode,
+      localStartsAt: payload.localStartsAt,
+      localEndsAt: payload.localEndsAt,
+      startsAt: payload.startsAt,
+      endsAt: payload.endsAt,
+      timezone: payload.timezone,
+      normalizedTitle: payload.normalizedTitle,
+      normalizedAddress: payload.normalizedAddress,
+      normalizedCity: payload.normalizedCity,
+      normalizedPostalCode: payload.normalizedPostalCode,
+      locationConfirmationStatus: candidate.locationConfirmationStatus,
+      latitude: candidate.latitude,
+      longitude: candidate.longitude,
+    });
+  }
+
+  private async freshNotDuplicateMatchIds(
+    transaction: Transaction,
+    candidateId: string,
+    candidateDuplicateDigest: string,
+  ): Promise<ReadonlySet<string>> {
+    const rows = await transaction.$queryRaw<{ readonly matchId: string }[]>(
+      Prisma.sql`
+        SELECT DISTINCT audit."metadata" ->> 'matchId' AS "matchId"
+        FROM "audit_entries" audit
+        WHERE audit."target_type" = 'LISTING_IMPORT_CANDIDATE'
+          AND audit."target_id" = ${candidateId}
+          AND audit."action" = 'LISTING_IMPORT_DUPLICATE_RESOLVED'
+          AND audit."metadata" ->> 'resolution' = 'NOT_DUPLICATE'
+          AND audit."metadata" ->> 'candidateDuplicateDigest' = ${candidateDuplicateDigest}
+          AND audit."metadata" ->> 'matchId' IS NOT NULL
+      `,
+    );
+    return new Set(rows.map((row) => row.matchId));
+  }
+
+  private async hasFreshNotDuplicateDecision(
+    transaction: Transaction,
+    candidate: CandidateComparableRecord,
+    matchId: string,
+  ): Promise<boolean> {
+    const fresh = await this.freshNotDuplicateMatchIds(
+      transaction,
+      candidate.id,
+      this.duplicateReviewDigest(candidate),
+    );
+    return fresh.has(matchId);
+  }
+
   private async synchronizeDuplicateMatches(
     transaction: Transaction,
     candidate: CandidateComparableRecord,
-  ): Promise<number> {
+  ): Promise<DuplicateSynchronizationResult> {
     const probable =
       (
         await findPrismaDuplicateTargets(transaction, [
@@ -391,9 +487,33 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
         });
       }
     }
-    return transaction.listingDuplicateMatch.count({
-      where: { candidateId: candidate.id, resolution: "UNRESOLVED" },
+    const synchronized = await transaction.listingDuplicateMatch.findMany({
+      where: { candidateId: candidate.id },
+      select: {
+        id: true,
+        eventId: true,
+        externalListingId: true,
+        resolution: true,
+      },
     });
+    const probableMatchIds = new Set(
+      synchronized
+        .filter((match) => probableByTarget.has(targetKey(match)))
+        .map((match) => match.id),
+    );
+    const freshNotDuplicateMatchIds = await this.freshNotDuplicateMatchIds(
+      transaction,
+      candidate.id,
+      this.duplicateReviewDigest(candidate),
+    );
+    const unresolvedDuplicateCount = synchronized.filter(
+      (match) =>
+        probableMatchIds.has(match.id) &&
+        (match.resolution === "UNRESOLVED" ||
+          (match.resolution === "NOT_DUPLICATE" &&
+            !freshNotDuplicateMatchIds.has(match.id))),
+    ).length;
+    return { unresolvedDuplicateCount, probableMatchIds };
   }
 
   private async assertLinkTargetCurrent(
@@ -471,14 +591,6 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
         currentPayload,
         nextPayload,
       );
-      const shouldRecompute =
-        locationChanged ||
-        currentPayload.normalizedTitle !== nextPayload.normalizedTitle ||
-        currentPayload.normalizedPostalCode !==
-          nextPayload.normalizedPostalCode ||
-        currentPayload.startsAt !== nextPayload.startsAt ||
-        currentPayload.endsAt !== nextPayload.endsAt;
-
       if (locationChanged) {
         const resetPayload = { ...nextPayload, locationResolution: null };
         await transaction.$executeRaw(Prisma.sql`
@@ -526,11 +638,8 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
         await transaction.listingImportCandidate.findUniqueOrThrow({
           where: { id: candidate.id },
         });
-      const unresolvedDuplicateCount = shouldRecompute
-        ? await this.synchronizeDuplicateMatches(transaction, updated)
-        : await transaction.listingDuplicateMatch.count({
-            where: { candidateId: candidate.id, resolution: "UNRESOLVED" },
-          });
+      const { unresolvedDuplicateCount } =
+        await this.synchronizeDuplicateMatches(transaction, updated);
       await transaction.auditEntry.create({
         data: {
           actorUserId: input.authorization.actor.userId,
@@ -650,10 +759,8 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
         await transaction.listingImportCandidate.findUniqueOrThrow({
           where: { id: candidate.id },
         });
-      const unresolvedDuplicateCount = await this.synchronizeDuplicateMatches(
-        transaction,
-        updated,
-      );
+      const { unresolvedDuplicateCount } =
+        await this.synchronizeDuplicateMatches(transaction, updated);
       await transaction.auditEntry.create({
         data: {
           actorUserId: input.authorization.actor.userId,
@@ -693,10 +800,8 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
         input.candidateId,
         input.expectedVersion,
       );
-      const unresolvedDuplicateCount = await this.synchronizeDuplicateMatches(
-        transaction,
-        candidate,
-      );
+      const { unresolvedDuplicateCount } =
+        await this.synchronizeDuplicateMatches(transaction, candidate);
       const updated = await transaction.listingImportCandidate.update({
         where: { id: candidate.id },
         data: { version: { increment: 1 }, updatedAt: input.now },
@@ -737,18 +842,44 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
       );
       const requestedMatch = await transaction.listingDuplicateMatch.findFirst({
         where: { id: input.matchId, candidateId: candidate.id },
-        select: { id: true },
+        select: {
+          id: true,
+          eventId: true,
+          externalListingId: true,
+          resolution: true,
+        },
       });
-      await this.synchronizeDuplicateMatches(transaction, candidate);
+      const synchronization = await this.synchronizeDuplicateMatches(
+        transaction,
+        candidate,
+      );
       const match = await transaction.listingDuplicateMatch.findFirst({
         where: {
           id: input.matchId,
           candidateId: candidate.id,
-          resolution: "UNRESOLVED",
         },
-        select: { id: true, eventId: true, externalListingId: true },
+        select: {
+          id: true,
+          eventId: true,
+          externalListingId: true,
+          resolution: true,
+        },
       });
-      if (!match) {
+      const staleNotDuplicateDecision = Boolean(
+        match &&
+        match.resolution === "NOT_DUPLICATE" &&
+        !(await this.hasFreshNotDuplicateDecision(
+          transaction,
+          candidate,
+          match.id,
+        )),
+      );
+      if (
+        !match ||
+        !synchronization.probableMatchIds.has(match.id) ||
+        (match.resolution !== "UNRESOLVED" &&
+          !(staleNotDuplicateDecision && input.resolution === "NOT_DUPLICATE"))
+      ) {
         throw new ListingImportReviewError(
           requestedMatch
             ? "DUPLICATE_NO_LONGER_CURRENT"
@@ -762,14 +893,16 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
       if (input.resolution === "LINKED") {
         await this.assertLinkTargetCurrent(transaction, match);
       }
-      await transaction.listingDuplicateMatch.update({
-        where: { id: match.id },
-        data: {
-          resolution: input.resolution,
-          resolvedByUserId: input.authorization.actor.userId,
-          resolvedAt: input.now,
-        },
-      });
+      if (match.resolution === "UNRESOLVED") {
+        await transaction.listingDuplicateMatch.update({
+          where: { id: match.id },
+          data: {
+            resolution: input.resolution,
+            resolvedByUserId: input.authorization.actor.userId,
+            resolvedAt: input.now,
+          },
+        });
+      }
 
       let updated;
       if (input.resolution === "LINKED") {
@@ -805,10 +938,7 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
           data: { version: { increment: 1 }, updatedAt: input.now },
         });
       }
-      const unresolvedDuplicateCount =
-        await transaction.listingDuplicateMatch.count({
-          where: { candidateId: candidate.id, resolution: "UNRESOLVED" },
-        });
+      const candidateDuplicateDigest = this.duplicateReviewDigest(candidate);
       await transaction.auditEntry.create({
         data: {
           actorUserId: input.authorization.actor.userId,
@@ -823,9 +953,16 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
             targetType: match.eventId ? "EVENT" : "EXTERNAL_LISTING",
             targetId: match.eventId ?? match.externalListingId,
             version: updated.version,
+            candidateDuplicateDigest,
+            repeatedCurrentStateReview: staleNotDuplicateDecision,
           },
         },
       });
+      const unresolvedDuplicateCount =
+        input.resolution === "LINKED"
+          ? 0
+          : (await this.synchronizeDuplicateMatches(transaction, updated))
+              .unresolvedDuplicateCount;
       return {
         candidateId: candidate.id,
         matchId: match.id,
@@ -872,7 +1009,8 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
       } catch (error) {
         if (
           attempt < MAX_PUBLIC_ID_ATTEMPTS &&
-          (isRetryableTransactionError(error) || isUniqueConflict(error))
+          (isRetryableListingImportReviewTransactionError(error) ||
+            isUniqueConflict(error))
         ) {
           continue;
         }
@@ -905,7 +1043,10 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
     },
     publicId: string,
   ): Promise<ApprovalOutcome> {
-    await this.assertAdministrator(transaction, input.authorization);
+    const transactionNow = await this.assertAdministrator(
+      transaction,
+      input.authorization,
+    );
     const candidate = await this.requirePendingCandidate(
       transaction,
       input.candidateId,
@@ -944,6 +1085,8 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
       candidate.locationConfirmationStatus !== "CONFIRMED" ||
       candidate.latitude === null ||
       candidate.longitude === null ||
+      candidate.locationConfirmedByUserId === null ||
+      candidate.locationConfirmedAt === null ||
       !candidate.locationProviderPlaceId ||
       !candidate.locationProviderName ||
       !payload.addressLine1 ||
@@ -957,7 +1100,14 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
         "The candidate requires valid content and a confirmed location.",
       );
     }
-    const unresolvedDuplicateCount = await this.synchronizeDuplicateMatches(
+    if (candidate.endsAt.getTime() <= transactionNow.getTime()) {
+      throw new ListingImportReviewError(
+        "INVALID_CANDIDATE_CONTENT",
+        422,
+        "A listing cannot be published after its sale has ended.",
+      );
+    }
+    const { unresolvedDuplicateCount } = await this.synchronizeDuplicateMatches(
       transaction,
       candidate,
     );
@@ -978,11 +1128,12 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
         status: "APPROVED",
         version: { increment: 1 },
         reviewedByUserId: input.authorization.actor.userId,
-        reviewedAt: input.now,
+        reviewedAt: transactionNow,
         reviewReason: null,
-        updatedAt: input.now,
+        updatedAt: transactionNow,
       },
     });
+    await this.hooks.approvalCheckpoint?.("CANDIDATE_APPROVED");
     const listing = await transaction.externalListing.create({
       data: {
         id: listingId,
@@ -1010,11 +1161,12 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
           sourceListingId: candidate.sourceRecord.sourceListingId,
           sourceUrl: candidate.sourceRecord.canonicalSourceUrl,
         },
-        publishedAt: input.now,
-        createdAt: input.now,
-        updatedAt: input.now,
+        publishedAt: transactionNow,
+        createdAt: transactionNow,
+        updatedAt: transactionNow,
       },
     });
+    await this.hooks.approvalCheckpoint?.("EXTERNAL_LISTING_CREATED");
     await transaction.$executeRaw(Prisma.sql`
       INSERT INTO "external_listing_locations" (
         "id", "listing_id", "address_line_1", "address_line_2", "city",
@@ -1047,16 +1199,17 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
         ${candidate.locationProviderAttribution},
         'ADMIN_GEOCODING',
         'CONFIRMED',
-        ${input.authorization.actor.userId}::uuid,
-        ${candidate.locationConfirmedAt ?? input.now},
+        ${candidate.locationConfirmedByUserId}::uuid,
+        ${candidate.locationConfirmedAt},
         'bakersfield',
         ${payload.locationResolution.precision},
         ${payload.locationResolution.confidence},
         CAST(${payload.locationResolution.validationStatus} AS "location_validation_status"),
-        ${input.now},
-        ${input.now}
+        ${transactionNow},
+        ${transactionNow}
       )
     `);
+    await this.hooks.approvalCheckpoint?.("LOCATION_CREATED");
     await transaction.auditEntry.create({
       data: {
         actorUserId: input.authorization.actor.userId,
@@ -1180,7 +1333,10 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
     input: ExternalListingEditCommand,
   ): Promise<ExternalListingMutationResult> {
     return this.serializable(async (transaction) => {
-      await this.assertAdministrator(transaction, input.authorization);
+      const transactionNow = await this.assertAdministrator(
+        transaction,
+        input.authorization,
+      );
       await transaction.$queryRaw(Prisma.sql`
         SELECT "id"
         FROM "external_listings"
@@ -1206,6 +1362,13 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
         );
       }
       if (listing.version !== input.expectedVersion) throw reviewStaleVersion();
+      if (input.content.endsAt.getTime() <= transactionNow.getTime()) {
+        throw new ListingImportReviewError(
+          "INVALID_CANDIDATE_CONTENT",
+          422,
+          "A published listing must have a sale that has not ended.",
+        );
+      }
       if (
         !listing.location ||
         listing.location.timezone !== input.content.timezone
@@ -1248,7 +1411,7 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
           slug,
           canonicalPath,
           version: { increment: 1 },
-          updatedAt: input.now,
+          updatedAt: transactionNow,
         },
       });
       await transaction.auditEntry.create({

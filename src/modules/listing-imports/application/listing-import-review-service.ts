@@ -44,11 +44,13 @@ export class ListingImportReviewService {
     actor: ListingImportReviewActor,
     requireRecentSession: boolean,
   ): ListingImportReviewAuthorization {
-    if (requireRecentSession && !actor.sessionId) {
+    if (!actor.sessionId) {
       throw new ListingImportReviewError(
         "ACTOR_NOT_AUTHORIZED",
         403,
-        "Recent administrator authorization is required.",
+        requireRecentSession
+          ? "Recent administrator authorization is required."
+          : "An active administrator session is required.",
       );
     }
     return {

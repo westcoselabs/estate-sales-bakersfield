@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
+import { useCandidateReviewState } from "./candidate-review-state";
+
 type ReviewAction = "approve" | "reject" | "delete";
 
 export function CandidateActions({
@@ -23,8 +25,10 @@ export function CandidateActions({
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [stale, setStale] = useState(false);
+  const { dirty, dirtyMessageId } = useCandidateReviewState();
 
   function open(next: ReviewAction) {
+    if (dirty) return;
     setAction(next);
     setMessage("");
     setStale(false);
@@ -48,6 +52,7 @@ export function CandidateActions({
   }
 
   async function recompute() {
+    if (dirty) return;
     setPending(true);
     setMessage("");
     setStale(false);
@@ -81,6 +86,7 @@ export function CandidateActions({
   }
 
   async function submit(form: FormData) {
+    if (dirty) return;
     setPending(true);
     setMessage("");
     setStale(false);
@@ -140,32 +146,42 @@ export function CandidateActions({
     <>
       <div className="admin-actions">
         <button
+          aria-describedby={
+            dirty
+              ? dirtyMessageId
+              : approvalBlockedReason
+                ? "candidate-approval-blocked-reason"
+                : undefined
+          }
           className="ui-button ui-button--primary"
-          disabled={pending || Boolean(approvalBlockedReason)}
+          disabled={pending || dirty || Boolean(approvalBlockedReason)}
           onClick={() => open("approve")}
           type="button"
         >
           Approve listing
         </button>
         <button
+          aria-describedby={dirty ? dirtyMessageId : undefined}
           className="ui-button ui-button--secondary"
-          disabled={pending}
+          disabled={pending || dirty}
           onClick={() => void recompute()}
           type="button"
         >
           Refresh duplicates
         </button>
         <button
+          aria-describedby={dirty ? dirtyMessageId : undefined}
           className="ui-button ui-button--secondary"
-          disabled={pending}
+          disabled={pending || dirty}
           onClick={() => open("reject")}
           type="button"
         >
           Reject
         </button>
         <button
+          aria-describedby={dirty ? dirtyMessageId : undefined}
           className="ui-button ui-button--danger"
-          disabled={pending}
+          disabled={pending || dirty}
           onClick={() => open("delete")}
           type="button"
         >
@@ -173,7 +189,12 @@ export function CandidateActions({
         </button>
       </div>
       {approvalBlockedReason ? (
-        <p className="ui-alert ui-alert--warning">{approvalBlockedReason}</p>
+        <p
+          className="ui-alert ui-alert--warning"
+          id="candidate-approval-blocked-reason"
+        >
+          {approvalBlockedReason}
+        </p>
       ) : null}
       {message ? (
         <div
@@ -288,7 +309,7 @@ export function CandidateActions({
                   ? "ui-button ui-button--danger"
                   : "ui-button ui-button--primary"
               }
-              disabled={pending || stale}
+              disabled={pending || stale || dirty}
             >
               {pending ? "Working…" : "Confirm"}
             </button>

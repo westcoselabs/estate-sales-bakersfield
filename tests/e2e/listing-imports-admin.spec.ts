@@ -157,11 +157,42 @@ test("reviews a manual listing import and manages a one-time ingestion credentia
       page.getByRole("heading", { name: "No pending candidates" }),
     ).toBeVisible();
 
-    await page
-      .getByRole("navigation", { name: "Listing import views" })
-      .getByRole("link", { name: /Credentials/u })
-      .click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/admin/imports?view=credentials");
     await expect(page).toHaveURL(/view=credentials/u);
+    const mobileNavigation = page.getByRole("navigation", {
+      name: "Mobile admin navigation",
+    });
+    await expect(mobileNavigation).toBeVisible();
+    await expect(mobileNavigation.getByRole("link")).toHaveCount(5);
+    await expect(mobileNavigation).toContainText("Imports");
+    const importViews = page.getByRole("navigation", {
+      name: "Listing import views",
+    });
+    const activeCredentialTab = importViews.getByRole("link", {
+      name: /Credentials/u,
+    });
+    await expect(activeCredentialTab).toHaveAttribute("aria-current", "page");
+    await expect
+      .poll(async () =>
+        activeCredentialTab.evaluate((activeTab) => {
+          const navigation = activeTab.parentElement;
+          if (!navigation) return false;
+          const navigationRect = navigation.getBoundingClientRect();
+          const activeRect = activeTab.getBoundingClientRect();
+          return (
+            activeRect.left >= navigationRect.left &&
+            activeRect.right <= navigationRect.right
+          );
+        }),
+      )
+      .toBe(true);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.setViewportSize({ width: 1280, height: 720 });
     await expect(
       page.getByText("No ingestion credentials have been created."),
     ).toBeVisible();
@@ -245,16 +276,58 @@ test("reviews a manual listing import and manages a one-time ingestion credentia
       page.getByRole("button", { name: "Approve listing" }),
     ).toBeDisabled();
 
-    await page.getByLabel("Title").fill(reviewedTitle);
+    const candidateTitle = page.getByLabel("Title");
+    const approveButton = page.getByRole("button", {
+      name: "Approve listing",
+    });
+    const refreshDuplicatesButton = page.getByRole("button", {
+      name: "Refresh duplicates",
+    });
+    const rejectButton = page.getByRole("button", { name: "Reject" });
+    const deleteButton = page.getByRole("button", {
+      name: "Delete candidate",
+    });
+    const confirmLocationButton = page.getByRole("button", {
+      name: "Confirm saved location",
+    });
+    await confirmLocationButton.click();
+    await expect(page.getByText("Location confirmed")).toBeVisible();
+    await expect(approveButton).toBeEnabled();
+
+    await candidateTitle.fill(`${reviewedTitle} unsaved`);
+    await expect(
+      page.getByText("Save or discard your changes before continuing review."),
+    ).toBeVisible();
+    for (const control of [
+      approveButton,
+      refreshDuplicatesButton,
+      rejectButton,
+      deleteButton,
+      confirmLocationButton,
+    ]) {
+      await expect(control).toBeDisabled();
+    }
+    await page.getByRole("button", { name: "Discard changes" }).click();
+    await expect(candidateTitle).toHaveValue("E2E Fixture Estate Sale");
+    await expect(
+      page.getByRole("heading", { name: "Edit candidate" }),
+    ).toBeFocused();
+    await expect(approveButton).toBeEnabled();
+    await expect(refreshDuplicatesButton).toBeEnabled();
+    await expect(rejectButton).toBeEnabled();
+    await expect(deleteButton).toBeEnabled();
+    await expect(confirmLocationButton).toBeEnabled();
+
+    await candidateTitle.fill(reviewedTitle);
+    await expect(approveButton).toBeDisabled();
+    await expect(refreshDuplicatesButton).toBeDisabled();
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(
       page.getByRole("heading", { name: reviewedTitle, exact: true }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Confirm saved location" }).click();
-    await expect(page.getByText("Location confirmed")).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Approve listing" }),
-    ).toBeEnabled();
+    await expect(candidateTitle).toHaveValue(reviewedTitle);
+    await expect(approveButton).toBeEnabled();
+    await expect(refreshDuplicatesButton).toBeEnabled();
 
     await page.getByRole("button", { name: "Approve listing" }).click();
     const approveDialog = page.getByRole("dialog", {
@@ -334,20 +407,6 @@ test("reviews a manual listing import and manages a one-time ingestion credentia
         }),
       )
       .toEqual({ status: "REMOVED" });
-
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/admin/imports");
-    const mobileNavigation = page.getByRole("navigation", {
-      name: "Mobile admin navigation",
-    });
-    await expect(mobileNavigation).toBeVisible();
-    await expect(mobileNavigation.getByRole("link")).toHaveCount(5);
-    await expect(mobileNavigation).toContainText("Imports");
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
-      ),
-    ).toBe(true);
   } finally {
     await prisma.$disconnect();
   }

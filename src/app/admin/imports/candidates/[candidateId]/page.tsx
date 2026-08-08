@@ -8,6 +8,7 @@ import { createConfiguredListingImportAdminQueryService } from "@/modules/listin
 import { CopyId } from "../../../_components/copy-id";
 import { CandidateActions } from "../../_components/candidate-actions";
 import { CandidateEditor } from "../../_components/candidate-editor";
+import { CandidateReviewStateProvider } from "../../_components/candidate-review-state";
 import {
   DuplicateReview,
   type CandidateDuplicateView,
@@ -56,6 +57,7 @@ export default async function ListingImportCandidatePage({
       return {
         id: match.id,
         resolution: match.resolution,
+        recheckOnly: match.recheckOnly,
         reasons: match.reasons,
         targetKind: target.kind,
         targetId: target.id,
@@ -110,124 +112,127 @@ export default async function ListingImportCandidatePage({
         ) : null}
       </div>
 
-      {!candidate.payloadValid || !candidate.payload ? (
-        <section className="admin-panel">
-          <h2>Candidate payload needs investigation</h2>
-          <p className="ui-alert ui-alert--error">
-            The retained payload no longer satisfies the audited review
-            contract. Approval is unavailable.
-          </p>
-        </section>
-      ) : pending ? (
-        <CandidateEditor
-          key={candidate.version}
-          candidateId={candidate.id}
-          content={candidate.payload}
-          locationConfirmed={locationConfirmed}
-          version={candidate.version}
-        />
-      ) : (
-        <section className="admin-panel">
-          <h2>Review completed</h2>
-          <p>
-            This candidate is terminal in version 1. Import observations and
-            provenance remain retained.
-          </p>
-          {candidate.reviewReason ? (
-            <p>
-              <strong>Reason:</strong> {candidate.reviewReason}
-            </p>
-          ) : null}
-        </section>
-      )}
-
-      <section
-        className="admin-panel"
-        aria-labelledby="candidate-provenance-title"
+      <CandidateReviewStateProvider
+        key={`${candidate.id}:${candidate.version}`}
       >
-        <header>
-          <h2 id="candidate-provenance-title">Provenance and location</h2>
-        </header>
-        <dl className="admin-detail-list">
-          <div>
-            <dt>Candidate ID</dt>
-            <dd>
-              <CopyId label="candidate ID" value={candidate.id} />
-            </dd>
-          </div>
-          <div>
-            <dt>Source listing ID</dt>
-            <dd>{candidate.provenance.sourceListingId}</dd>
-          </div>
-          <div>
-            <dt>Original source</dt>
-            <dd>
-              <a
-                href={candidate.provenance.canonicalSourceUrl}
-                rel="noreferrer"
-                target="_blank"
-              >
-                {sourceHost(candidate.provenance.canonicalSourceUrl)}
-              </a>
-            </dd>
-          </div>
-          <div>
-            <dt>First / last seen</dt>
-            <dd>
-              {formatDate(candidate.provenance.firstSeenAt)} /{" "}
-              {formatDate(candidate.provenance.lastSeenAt)}
-            </dd>
-          </div>
-          <div>
-            <dt>Location</dt>
-            <dd>
-              <ImportStatus value={candidate.location.confirmationStatus} />
-            </dd>
-          </div>
-          <div>
-            <dt>Resolution source</dt>
-            <dd>{importLabel(candidate.location.resolutionSource)}</dd>
-          </div>
-          <div>
-            <dt>Confirmed</dt>
-            <dd>{formatDate(candidate.location.confirmedAt)}</dd>
-          </div>
-          <div>
-            <dt>Reviewed</dt>
-            <dd>{formatDate(candidate.reviewedAt)}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <DuplicateReview
-        candidateId={candidate.id}
-        duplicates={duplicates}
-        duplicatesTruncated={candidate.duplicatesTruncated}
-        editable={pending}
-        unresolvedDuplicateCount={candidate.unresolvedDuplicateCount}
-        version={candidate.version}
-      />
-
-      {pending && candidate.payloadValid && candidate.payload ? (
-        <section
-          className="admin-panel"
-          aria-labelledby="candidate-actions-title"
-        >
-          <header>
-            <h2 id="candidate-actions-title">Review decision</h2>
-          </header>
-          <p>
-            Approval revalidates the candidate, confirmed location, and
-            duplicate state before creating a separate external listing.
-          </p>
-          <CandidateActions
-            {...(approvalBlockedReason ? { approvalBlockedReason } : {})}
+        {!candidate.payloadValid || !candidate.payload ? (
+          <section className="admin-panel">
+            <h2>Candidate payload needs investigation</h2>
+            <p className="ui-alert ui-alert--error">
+              The retained payload no longer satisfies the audited review
+              contract. Approval is unavailable.
+            </p>
+          </section>
+        ) : pending ? (
+          <CandidateEditor
             candidateId={candidate.id}
-            title={candidate.payload.title}
+            content={candidate.payload}
+            locationConfirmed={locationConfirmed}
             version={candidate.version}
           />
+        ) : (
+          <section className="admin-panel">
+            <h2>Review completed</h2>
+            <p>
+              This candidate is terminal in version 1. Import observations and
+              provenance remain retained.
+            </p>
+            {candidate.reviewReason ? (
+              <p>
+                <strong>Reason:</strong> {candidate.reviewReason}
+              </p>
+            ) : null}
+          </section>
+        )}
+
+        <section
+          className="admin-panel"
+          aria-labelledby="candidate-provenance-title"
+        >
+          <header>
+            <h2 id="candidate-provenance-title">Provenance and location</h2>
+          </header>
+          <dl className="admin-detail-list">
+            <div>
+              <dt>Candidate ID</dt>
+              <dd>
+                <CopyId label="candidate ID" value={candidate.id} />
+              </dd>
+            </div>
+            <div>
+              <dt>Source listing ID</dt>
+              <dd>{candidate.provenance.sourceListingId}</dd>
+            </div>
+            <div>
+              <dt>Original source</dt>
+              <dd>
+                <a
+                  href={candidate.provenance.canonicalSourceUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {sourceHost(candidate.provenance.canonicalSourceUrl)}
+                </a>
+              </dd>
+            </div>
+            <div>
+              <dt>First / last seen</dt>
+              <dd>
+                {formatDate(candidate.provenance.firstSeenAt)} /{" "}
+                {formatDate(candidate.provenance.lastSeenAt)}
+              </dd>
+            </div>
+            <div>
+              <dt>Location</dt>
+              <dd>
+                <ImportStatus value={candidate.location.confirmationStatus} />
+              </dd>
+            </div>
+            <div>
+              <dt>Resolution source</dt>
+              <dd>{importLabel(candidate.location.resolutionSource)}</dd>
+            </div>
+            <div>
+              <dt>Confirmed</dt>
+              <dd>{formatDate(candidate.location.confirmedAt)}</dd>
+            </div>
+            <div>
+              <dt>Reviewed</dt>
+              <dd>{formatDate(candidate.reviewedAt)}</dd>
+            </div>
+          </dl>
         </section>
-      ) : null}
+
+        <DuplicateReview
+          candidateId={candidate.id}
+          duplicates={duplicates}
+          duplicatesTruncated={candidate.duplicatesTruncated}
+          editable={pending && candidate.payloadValid}
+          unresolvedDuplicateCount={candidate.unresolvedDuplicateCount}
+          version={candidate.version}
+        />
+
+        {pending && candidate.payloadValid && candidate.payload ? (
+          <section
+            className="admin-panel"
+            aria-labelledby="candidate-actions-title"
+          >
+            <header>
+              <h2 id="candidate-actions-title">Review decision</h2>
+            </header>
+            <p>
+              Approval revalidates the candidate, confirmed location, and
+              duplicate state before creating a separate external listing.
+            </p>
+            <CandidateActions
+              {...(approvalBlockedReason ? { approvalBlockedReason } : {})}
+              candidateId={candidate.id}
+              title={candidate.payload.title}
+              version={candidate.version}
+            />
+          </section>
+        ) : null}
+      </CandidateReviewStateProvider>
 
       <section className="admin-panel" aria-labelledby="candidate-audit-title">
         <header>

@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
+import { useCandidateReviewState } from "./candidate-review-state";
 import { ImportStatus, importLabel } from "./import-status";
 
 export interface CandidateDuplicateView {
   readonly id: string;
   readonly resolution: "UNRESOLVED" | "NOT_DUPLICATE" | "LINKED";
+  readonly recheckOnly: boolean;
   readonly reasons: readonly string[];
   readonly targetKind: "EVENT" | "EXTERNAL_LISTING";
   readonly targetId: string;
@@ -39,6 +41,7 @@ export function DuplicateReview({
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [stale, setStale] = useState(false);
+  const { dirty, dirtyMessageId } = useCandidateReviewState();
 
   function close() {
     dialog.current?.close();
@@ -61,6 +64,7 @@ export function DuplicateReview({
     resolution: "NOT_DUPLICATE" | "LINKED",
     password?: string,
   ) {
+    if (dirty) return;
     setPending(true);
     setMessage("");
     setStale(false);
@@ -134,28 +138,41 @@ export function DuplicateReview({
               {editable && duplicate.resolution === "UNRESOLVED" ? (
                 <div className="admin-actions">
                   <button
+                    aria-describedby={dirty ? dirtyMessageId : undefined}
                     className="ui-button ui-button--secondary"
-                    disabled={pending}
+                    disabled={pending || dirty}
                     onClick={() => void resolve(duplicate, "NOT_DUPLICATE")}
                     type="button"
                   >
-                    Not a duplicate
+                    {duplicate.recheckOnly
+                      ? "Reconfirm not duplicate"
+                      : "Not a duplicate"}
                   </button>
-                  <button
-                    className="ui-button ui-button--primary"
-                    disabled={pending || !duplicate.linkAvailable}
-                    onClick={() => {
-                      setSelected(duplicate);
-                      setMessage("");
-                      setStale(false);
-                      form.current?.reset();
-                      dialog.current?.showModal();
-                    }}
-                    type="button"
-                  >
-                    Link existing
-                  </button>
+                  {!duplicate.recheckOnly ? (
+                    <button
+                      aria-describedby={dirty ? dirtyMessageId : undefined}
+                      className="ui-button ui-button--primary"
+                      disabled={pending || dirty || !duplicate.linkAvailable}
+                      onClick={() => {
+                        if (dirty) return;
+                        setSelected(duplicate);
+                        setMessage("");
+                        setStale(false);
+                        form.current?.reset();
+                        dialog.current?.showModal();
+                      }}
+                      type="button"
+                    >
+                      Link existing
+                    </button>
+                  ) : null}
                 </div>
+              ) : null}
+              {editable && duplicate.recheckOnly ? (
+                <p className="ui-alert ui-alert--warning">
+                  Candidate details changed. Reconfirm this target before
+                  approval.
+                </p>
               ) : null}
               {editable &&
               !duplicate.linkAvailable &&
@@ -259,7 +276,7 @@ export function DuplicateReview({
           <div className="admin-actions">
             <button
               className="ui-button ui-button--primary"
-              disabled={pending || stale}
+              disabled={pending || stale || dirty}
             >
               {pending ? "Linking…" : "Confirm link"}
             </button>

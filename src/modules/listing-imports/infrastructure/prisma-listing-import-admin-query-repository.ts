@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { PrismaClient } from "@/generated/prisma/client";
+import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 
 import type {
   ListingImportAdminAuditEntry,
@@ -19,7 +19,15 @@ import type {
   ListingImportAdminRepositoryLandingResult,
   ListingImportAdminSourceSummary,
 } from "../application/admin-query-ports";
+import {
+  DUPLICATE_REVIEW_DIGEST_METADATA_KEY,
+  duplicateReviewContentDigest,
+} from "../application/duplicate-review-freshness";
+import { reviewedCandidatePayloadSchema } from "../application/review-schemas";
+import { probableDuplicateReasons } from "../domain/duplicates";
+import { normalizeComparableText } from "../domain/normalization";
 import type {
+  ListingDuplicateComparable,
   ListingImportValidationCode,
   ListingProbableDuplicateReason,
 } from "../domain/types";
@@ -106,6 +114,137 @@ function titleFromPayload(payload: unknown, fallback: string): string {
   return fallback;
 }
 
+function payloadLocationPart(
+  payload: unknown,
+  key: "city" | "region" | "postalCode",
+  maximum: number,
+): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+  const value = (payload as Readonly<Record<string, unknown>>)[key];
+  if (typeof value !== "string") return null;
+  const part = value.trim();
+  return part.length > 0 && part.length <= maximum ? part : null;
+}
+
+function candidateLocationSummary(
+  payload: unknown,
+  fallbackCity: string,
+  fallbackPostalCode: string | null,
+): string | null {
+  const city = payloadLocationPart(payload, "city", 100) ?? fallbackCity;
+  const region = payloadLocationPart(payload, "region", 100);
+  const postalCode =
+    payloadLocationPart(payload, "postalCode", 20) ?? fallbackPostalCode;
+  const locality = [city, region].filter(Boolean).join(", ");
+  return [locality, postalCode].filter(Boolean).join(" ") || null;
+}
+
+interface DuplicateTargetLocationProjection {
+  readonly normalizedAddress: string;
+  readonly postalCode: string;
+  readonly latitude: Prisma.Decimal | null;
+  readonly longitude: Prisma.Decimal | null;
+  readonly confirmationStatus: string;
+}
+
+function confirmedPoint(
+  location: DuplicateTargetLocationProjection | null,
+): ListingDuplicateComparable["confirmedPoint"] {
+  return location?.confirmationStatus === "CONFIRMED" &&
+    location.latitude !== null &&
+    location.longitude !== null
+    ? {
+        latitude: Number(location.latitude),
+        longitude: Number(location.longitude),
+      }
+    : null;
+}
+
+function duplicateTargetComparable(target: {
+  readonly title: string | null;
+  readonly startsAt: Date | null;
+  readonly endsAt: Date | null;
+  readonly location: DuplicateTargetLocationProjection | null;
+}): ListingDuplicateComparable | null {
+  if (!target.title || !target.startsAt || !target.endsAt) return null;
+  return {
+    normalizedTitle: normalizeComparableText(target.title),
+    normalizedAddress: normalizeComparableText(
+      target.location?.normalizedAddress ?? "",
+    ),
+    normalizedPostalCode: normalizeComparableText(
+      target.location?.postalCode ?? "",
+    ),
+    startsAt: target.startsAt,
+    endsAt: target.endsAt,
+    confirmedPoint: confirmedPoint(target.location),
+  };
+}
+
+function candidateDuplicateComparable(candidate: {
+  readonly normalizedTitle: string;
+  readonly normalizedAddress: string | null;
+  readonly normalizedPostalCode: string | null;
+  readonly startsAt: Date;
+  readonly endsAt: Date;
+  readonly latitude: Prisma.Decimal | null;
+  readonly longitude: Prisma.Decimal | null;
+  readonly locationConfirmationStatus: string;
+}): ListingDuplicateComparable {
+  const confirmed =
+    candidate.locationConfirmationStatus === "CONFIRMED" &&
+    candidate.latitude !== null &&
+    candidate.longitude !== null;
+  return {
+    normalizedTitle: candidate.normalizedTitle,
+    normalizedAddress: candidate.normalizedAddress ?? "",
+    normalizedPostalCode: candidate.normalizedPostalCode ?? "",
+    startsAt: candidate.startsAt,
+    endsAt: candidate.endsAt,
+    confirmedPoint: confirmed
+      ? {
+          latitude: Number(candidate.latitude),
+          longitude: Number(candidate.longitude),
+        }
+      : null,
+  };
+}
+
+function candidateDuplicateReviewDigest(candidate: {
+  readonly currentPayload: unknown;
+  readonly latitude: Prisma.Decimal | null;
+  readonly longitude: Prisma.Decimal | null;
+  readonly locationConfirmationStatus: string;
+}): string | null {
+  const payload = reviewedCandidatePayloadSchema.safeParse(
+    candidate.currentPayload,
+  );
+  if (!payload.success) return null;
+  return duplicateReviewContentDigest({
+    title: payload.data.title,
+    addressLine1: payload.data.addressLine1,
+    addressLine2: payload.data.addressLine2,
+    city: payload.data.city,
+    region: payload.data.region,
+    postalCode: payload.data.postalCode,
+    countryCode: payload.data.countryCode,
+    localStartsAt: payload.data.localStartsAt,
+    localEndsAt: payload.data.localEndsAt,
+    startsAt: payload.data.startsAt,
+    endsAt: payload.data.endsAt,
+    timezone: payload.data.timezone,
+    normalizedTitle: payload.data.normalizedTitle,
+    normalizedAddress: payload.data.normalizedAddress,
+    normalizedCity: payload.data.normalizedCity,
+    normalizedPostalCode: payload.data.normalizedPostalCode,
+    locationConfirmationStatus: candidate.locationConfirmationStatus,
+    latitude: candidate.latitude,
+    longitude: candidate.longitude,
+  });
+}
+
 function safeValidationCodes(value: unknown): ListingImportValidationCode[] {
   return Array.isArray(value)
     ? value.filter(
@@ -178,6 +317,28 @@ function mapAudit(
 
 export class PrismaListingImportAdminQueryRepository implements ListingImportAdminQueryRepository {
   constructor(private readonly prisma: PrismaClient) {}
+
+  private async freshNotDuplicateMatchIds(
+    candidateId: string,
+    digest: string | null,
+    matchIds: readonly string[],
+  ): Promise<ReadonlySet<string>> {
+    if (!digest || matchIds.length === 0) return new Set();
+    const rows = await this.prisma.$queryRaw<
+      { readonly matchId: string }[]
+    >(Prisma.sql`
+      SELECT DISTINCT audit."metadata" ->> 'matchId' AS "matchId"
+      FROM "audit_entries" audit
+      WHERE audit."target_type" = 'LISTING_IMPORT_CANDIDATE'
+        AND audit."target_id" = ${candidateId}
+        AND audit."action" = 'LISTING_IMPORT_DUPLICATE_RESOLVED'
+        AND audit."metadata" ->> 'resolution' = 'NOT_DUPLICATE'
+        AND audit."metadata" ->> ${DUPLICATE_REVIEW_DIGEST_METADATA_KEY} = ${digest}
+        AND audit."metadata" ->> 'matchId' IN (${Prisma.join(matchIds)})
+      LIMIT ${matchIds.length}
+    `);
+    return new Set(rows.map((row) => row.matchId));
+  }
 
   async landing(
     query: ListingImportAdminLandingQuery,
@@ -350,10 +511,20 @@ export class PrismaListingImportAdminQueryRepository implements ListingImportAdm
                   id: true,
                   publicId: true,
                   title: true,
+                  startsAt: true,
                   endsAt: true,
                   deletedAt: true,
                   canceledAt: true,
                   removedAt: true,
+                  location: {
+                    select: {
+                      normalizedAddress: true,
+                      postalCode: true,
+                      latitude: true,
+                      longitude: true,
+                      confirmationStatus: true,
+                    },
+                  },
                   publication: {
                     select: { canonicalPath: true, snapshot: true },
                   },
@@ -366,7 +537,17 @@ export class PrismaListingImportAdminQueryRepository implements ListingImportAdm
                   title: true,
                   canonicalPath: true,
                   status: true,
+                  startsAt: true,
                   endsAt: true,
+                  location: {
+                    select: {
+                      normalizedAddress: true,
+                      postalCode: true,
+                      latitude: true,
+                      longitude: true,
+                      confirmationStatus: true,
+                    },
+                  },
                 },
               },
             },
@@ -406,16 +587,72 @@ export class PrismaListingImportAdminQueryRepository implements ListingImportAdm
     ]);
     if (!candidate) return null;
 
+    const currentReasonsByMatchId = new Map<
+      string,
+      readonly ListingProbableDuplicateReason[]
+    >();
+    if (candidate.status === "PENDING_REVIEW") {
+      const comparableCandidate = candidateDuplicateComparable(candidate);
+      for (const match of candidate.duplicateMatches.slice(
+        0,
+        MAXIMUM_DETAIL_DUPLICATES,
+      )) {
+        const comparableTarget = match.event
+          ? match.event.deletedAt ||
+            match.event.canceledAt ||
+            match.event.removedAt
+            ? null
+            : duplicateTargetComparable(match.event)
+          : match.externalListing?.status === "REMOVED"
+            ? null
+            : match.externalListing
+              ? duplicateTargetComparable(match.externalListing)
+              : null;
+        currentReasonsByMatchId.set(
+          match.id,
+          comparableTarget
+            ? probableDuplicateReasons(comparableCandidate, comparableTarget)
+            : [],
+        );
+      }
+    }
+    const currentlyProbableNotDuplicateMatchIds = candidate.duplicateMatches
+      .slice(0, MAXIMUM_DETAIL_DUPLICATES)
+      .filter(
+        (match) =>
+          match.resolution === "NOT_DUPLICATE" &&
+          (currentReasonsByMatchId.get(match.id)?.length ?? 0) > 0,
+      )
+      .map((match) => match.id);
+    const freshNotDuplicateMatchIds = await this.freshNotDuplicateMatchIds(
+      candidate.id,
+      candidate.status === "PENDING_REVIEW"
+        ? candidateDuplicateReviewDigest(candidate)
+        : null,
+      currentlyProbableNotDuplicateMatchIds,
+    );
+
     const duplicates: ListingImportAdminDuplicateMatch[] = [];
+    let staleStillProbableCount = 0;
     const queriedAt = new Date();
     for (const match of candidate.duplicateMatches.slice(
       0,
       MAXIMUM_DETAIL_DUPLICATES,
     )) {
+      const currentReasons = currentReasonsByMatchId.get(match.id) ?? [];
+      const recheckOnly =
+        match.resolution === "NOT_DUPLICATE" &&
+        currentReasons.length > 0 &&
+        !freshNotDuplicateMatchIds.has(match.id);
+      if (recheckOnly) staleStillProbableCount += 1;
       const shared = {
         id: match.id,
-        resolution: match.resolution,
-        reasons: safeDuplicateReasons(match.reasons),
+        resolution: recheckOnly ? ("UNRESOLVED" as const) : match.resolution,
+        recheckOnly,
+        reasons:
+          currentReasons.length > 0
+            ? currentReasons
+            : safeDuplicateReasons(match.reasons),
         resolvedByUserId: match.resolvedByUserId,
         resolvedAt: match.resolvedAt,
         createdAt: match.createdAt,
@@ -512,7 +749,8 @@ export class PrismaListingImportAdminQueryRepository implements ListingImportAdm
       duplicates,
       duplicatesTruncated:
         candidate.duplicateMatches.length > MAXIMUM_DETAIL_DUPLICATES,
-      unresolvedDuplicateCount: candidate._count.duplicateMatches,
+      unresolvedDuplicateCount:
+        candidate._count.duplicateMatches + staleStillProbableCount,
       audit: mapAudit(audit),
       auditTruncated: audit.length > MAXIMUM_DETAIL_AUDIT_ENTRIES,
       externalListingId: candidate.externalListing?.id ?? null,
@@ -690,8 +928,8 @@ export class PrismaListingImportAdminQueryRepository implements ListingImportAdm
         id: true,
         currentPayload: true,
         normalizedTitle: true,
-        normalizedAddress: true,
         normalizedCity: true,
+        normalizedPostalCode: true,
         startsAt: true,
         endsAt: true,
         createdAt: true,
@@ -712,7 +950,11 @@ export class PrismaListingImportAdminQueryRepository implements ListingImportAdm
       startsAt: row.startsAt,
       endsAt: row.endsAt,
       city: row.normalizedCity,
-      locationSummary: row.normalizedAddress,
+      locationSummary: candidateLocationSummary(
+        row.currentPayload,
+        row.normalizedCity,
+        row.normalizedPostalCode,
+      ),
       unresolvedDuplicateCount: row._count.duplicateMatches,
       importedAt: row.createdAt,
       status: row.status,

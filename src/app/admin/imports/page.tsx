@@ -6,6 +6,7 @@ import {
   listingImportAdminLandingCriteria,
   type ListingImportAdminLandingResult,
 } from "@/modules/listing-imports";
+import { getServerEnvironment } from "@/platform/config/env";
 
 import { CredentialManager } from "./_components/credential-manager";
 import { ImportNavigation } from "./_components/import-navigation";
@@ -230,6 +231,10 @@ export default async function ListingImportsPage({
     principal,
     criteria,
   );
+  const production = getServerEnvironment().APP_ENV === "production";
+  const credentialSources = production
+    ? result.sources.filter((source) => source.productionAllowed)
+    : result.sources;
   const counts = {
     candidates: result.summary.pendingCandidates,
     batches: result.summary.batches,
@@ -261,6 +266,7 @@ export default async function ListingImportsPage({
 
       {result.active.view === "credentials" ? (
         <CredentialManager
+          production={production}
           credentials={result.active.page.rows.map((credential) => ({
             id: credential.id,
             name: credential.name,
@@ -271,10 +277,11 @@ export default async function ListingImportsPage({
             lastUsedAt: credential.lastUsedAt?.toISOString() ?? null,
             revokedAt: credential.revokedAt?.toISOString() ?? null,
           }))}
-          sources={result.sources.map((source) => ({
+          sources={credentialSources.map((source) => ({
             id: source.id,
             key: source.key,
             name: source.name,
+            productionAllowed: source.productionAllowed,
           }))}
         />
       ) : (

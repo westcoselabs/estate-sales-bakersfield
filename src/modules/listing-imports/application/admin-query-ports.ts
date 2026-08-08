@@ -244,6 +244,7 @@ export type ListingImportAdminDuplicateTarget =
 export interface ListingImportAdminDuplicateMatch {
   readonly id: string;
   readonly resolution: ListingDuplicateResolution;
+  readonly recheckOnly: boolean;
   readonly reasons: readonly ListingProbableDuplicateReason[];
   readonly resolvedByUserId: string | null;
   readonly resolvedAt: Date | null;

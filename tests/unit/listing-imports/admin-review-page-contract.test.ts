@@ -112,6 +112,38 @@ describe("listing import Phase 4 admin page and route contract", () => {
     expect(errors).toContain("code = error.code");
   });
 
+  it("shares unsaved candidate state across every persisted review action", () => {
+    const candidatePage = source(pageFiles.candidate);
+    const editor = source(
+      "src/app/admin/imports/_components/candidate-editor.tsx",
+    );
+    const actions = source(
+      "src/app/admin/imports/_components/candidate-actions.tsx",
+    );
+    const duplicates = source(
+      "src/app/admin/imports/_components/duplicate-review.tsx",
+    );
+    const state = source(
+      "src/app/admin/imports/_components/candidate-review-state.tsx",
+    );
+
+    expect(candidatePage).toContain("<CandidateReviewStateProvider");
+    expect(candidatePage).toContain("candidate.id}:${candidate.version}");
+    expect(state).toContain(
+      "Save or discard your changes before continuing review.",
+    );
+    expect(editor).toContain("formRef.current?.reset()");
+    expect(editor).toContain("headingRef.current?.focus()");
+    expect(editor).toContain("Discard changes");
+    expect(editor).toContain("pending !== null || !dirty");
+    expect(editor).toContain("pending !== null || dirty");
+    expect(actions).toContain("pending || dirty");
+    expect(actions).toContain("if (dirty) return");
+    expect(duplicates).toContain("pending || dirty");
+    expect(duplicates).toContain("if (dirty) return");
+    expect(duplicates).toContain("duplicate.recheckOnly");
+  });
+
   it("does not add Phase 5 cover/public-search work or organizer/payment mutations", () => {
     const implementation = [
       ...Object.values(pageFiles),

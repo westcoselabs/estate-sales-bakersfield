@@ -20,8 +20,10 @@ describe("CredentialManager", () => {
             id: "50000000-0000-4000-8000-000000000001",
             key: "fixture",
             name: "Fixture source",
+            productionAllowed: false,
           },
         ],
+        production: false,
         credentials: [
           {
             id: "40000000-0000-4000-8000-000000000001",
@@ -56,6 +58,32 @@ describe("CredentialManager", () => {
     expect(html).toContain("Revoked");
     expect(html).not.toContain(`esb_ing_${"Z".repeat(43)}`);
     expect(html).not.toContain("tokenDigest");
+  });
+
+  it("omits production-ineligible sources from the creation dialog", () => {
+    const html = renderToStaticMarkup(
+      createElement(CredentialManager, {
+        sources: [
+          {
+            id: "50000000-0000-4000-8000-000000000001",
+            key: "fixture",
+            name: "Fixture source",
+            productionAllowed: false,
+          },
+          {
+            id: "50000000-0000-4000-8000-000000000002",
+            key: "trusted",
+            name: "Trusted source",
+            productionAllowed: true,
+          },
+        ],
+        credentials: [],
+        production: true,
+      }),
+    );
+
+    expect(html).toContain('value="trusted"');
+    expect(html).not.toContain('value="fixture"');
   });
 
   it("keeps the one-time token flow in memory and uses the guarded APIs", async () => {

@@ -177,21 +177,17 @@ describe("ListingImportReviewService", () => {
       () => now,
     );
 
-    await service.editExternalListing(
-      { userId: actor.userId },
-      listingResult.listingId,
-      {
-        expectedVersion: 1,
-        eventType: "YARD_SALE",
-        title: "  Updated   Yard Sale  ",
-        description:
-          "Updated furniture, tools, artwork, and household goods listing.",
-        localStartsAt: "2026-08-09T08:00",
-        localEndsAt: "2026-08-09T14:00",
-        timezone: "America/Los_Angeles",
-        privacyMode: "EXACT_ADDRESS",
-      },
-    );
+    await service.editExternalListing(actor, listingResult.listingId, {
+      expectedVersion: 1,
+      eventType: "YARD_SALE",
+      title: "  Updated   Yard Sale  ",
+      description:
+        "Updated furniture, tools, artwork, and household goods listing.",
+      localStartsAt: "2026-08-09T08:00",
+      localEndsAt: "2026-08-09T14:00",
+      timezone: "America/Los_Angeles",
+      privacyMode: "EXACT_ADDRESS",
+    });
 
     expect(reviews.editExternalListing).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -210,6 +206,79 @@ describe("ListingImportReviewService", () => {
       }),
     );
   });
+
+  it.each([
+    [
+      "candidate edit",
+      (service: ListingImportReviewService) =>
+        service.editCandidate(
+          { userId: actor.userId },
+          candidateResult.candidateId,
+          candidateEdit(),
+        ),
+    ],
+    [
+      "location confirmation",
+      (service: ListingImportReviewService) =>
+        service.confirmCandidateLocation(
+          { userId: actor.userId },
+          candidateResult.candidateId,
+          { expectedVersion: 3 },
+        ),
+    ],
+    [
+      "duplicate recomputation",
+      (service: ListingImportReviewService) =>
+        service.recomputeCandidateDuplicates(
+          { userId: actor.userId },
+          candidateResult.candidateId,
+          { expectedVersion: 3 },
+        ),
+    ],
+    [
+      "NOT_DUPLICATE resolution",
+      (service: ListingImportReviewService) =>
+        service.resolveCandidateDuplicate(
+          { userId: actor.userId },
+          candidateResult.candidateId,
+          "50000000-0000-4000-8000-000000000001",
+          { expectedVersion: 3, resolution: "NOT_DUPLICATE" },
+        ),
+    ],
+    [
+      "external listing edit",
+      (service: ListingImportReviewService) =>
+        service.editExternalListing(
+          { userId: actor.userId },
+          listingResult.listingId,
+          {
+            expectedVersion: 1,
+            eventType: "YARD_SALE",
+            title: "Updated Yard Sale",
+            description:
+              "Updated furniture, tools, artwork, and household goods listing.",
+            localStartsAt: "2026-08-09T08:00",
+            localEndsAt: "2026-08-09T14:00",
+            timezone: "America/Los_Angeles",
+            privacyMode: "EXACT_ADDRESS",
+          },
+        ),
+    ],
+  ])(
+    "requires exact session context for ordinary %s",
+    async (_name, invoke) => {
+      const reviews = repository();
+      const service = new ListingImportReviewService(
+        reviews,
+        locationProvider(),
+        () => now,
+      );
+      await expect(invoke(service)).rejects.toMatchObject({
+        code: "ACTOR_NOT_AUTHORIZED",
+        status: 403,
+      });
+    },
+  );
 
   it.each([
     [
@@ -269,7 +338,7 @@ describe("ListingImportReviewService", () => {
     });
   });
 
-  it("requires recent authorization only for the terminal LINKED resolution", async () => {
+  it("requires an active session for every duplicate resolution and recent authorization for LINKED", async () => {
     const reviews = repository();
     const service = new ListingImportReviewService(
       reviews,
@@ -278,12 +347,14 @@ describe("ListingImportReviewService", () => {
     );
     const actorWithoutSession = { userId: actor.userId };
 
-    await service.resolveCandidateDuplicate(
-      actorWithoutSession,
-      candidateResult.candidateId,
-      "50000000-0000-4000-8000-000000000001",
-      { expectedVersion: 3, resolution: "NOT_DUPLICATE" },
-    );
+    await expect(
+      service.resolveCandidateDuplicate(
+        actorWithoutSession,
+        candidateResult.candidateId,
+        "50000000-0000-4000-8000-000000000001",
+        { expectedVersion: 3, resolution: "NOT_DUPLICATE" },
+      ),
+    ).rejects.toMatchObject({ code: "ACTOR_NOT_AUTHORIZED" });
     await expect(
       service.resolveCandidateDuplicate(
         actorWithoutSession,
@@ -293,6 +364,30 @@ describe("ListingImportReviewService", () => {
       ),
     ).rejects.toMatchObject({ code: "ACTOR_NOT_AUTHORIZED" });
 
-    expect(reviews.resolveCandidateDuplicate).toHaveBeenCalledOnce();
+    await service.resolveCandidateDuplicate(
+      actor,
+      candidateResult.candidateId,
+      "50000000-0000-4000-8000-000000000001",
+      { expectedVersion: 3, resolution: "NOT_DUPLICATE" },
+    );
+    await service.resolveCandidateDuplicate(
+      actor,
+      candidateResult.candidateId,
+      "50000000-0000-4000-8000-000000000001",
+      { expectedVersion: 3, resolution: "LINKED" },
+    );
+
+    expect(reviews.resolveCandidateDuplicate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        authorization: expect.objectContaining({ requireRecentSession: false }),
+      }),
+    );
+    expect(reviews.resolveCandidateDuplicate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        authorization: expect.objectContaining({ requireRecentSession: true }),
+      }),
+    );
   });
 });
