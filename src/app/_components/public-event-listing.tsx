@@ -5,14 +5,16 @@ import { Icon } from "@/components/ui/icons";
 import type { PublishedListing } from "@/modules/payments";
 import { getServerApplicationUrl } from "@/platform/config/application-url";
 
+import type { PublicListingDetail } from "./published-listing-loader";
+import { toOrganizerPublicListing } from "./published-listing-loader";
 import { PublicListingActions } from "./public-listing-actions";
 import { PublicListingDetailTabs } from "./public-listing-detail-tabs";
 
-function locationLabel(listing: PublishedListing): string {
+function locationLabel(listing: PublicListingDetail): string {
   return `${listing.projection.address.city}, ${listing.projection.address.region}`;
 }
 
-export function publicListingMetadata(listing: PublishedListing): Metadata {
+export function publicListingMetadata(listing: PublicListingDetail): Metadata {
   const projection = listing.projection;
   const location = locationLabel(listing);
   const kind =
@@ -31,7 +33,7 @@ export function publicListingMetadata(listing: PublishedListing): Metadata {
   };
 }
 
-function structuredAddress(listing: PublishedListing) {
+function structuredAddress(listing: PublicListingDetail) {
   const address = listing.projection.address;
   return address.kind === "EXACT"
     ? {
@@ -52,7 +54,7 @@ function structuredAddress(listing: PublishedListing) {
       };
 }
 
-function visibleAddress(listing: PublishedListing): {
+function visibleAddress(listing: PublicListingDetail): {
   readonly primary: string;
   readonly secondary: string;
   readonly directionsQuery: string;
@@ -83,14 +85,49 @@ function visibleAddress(listing: PublishedListing): {
   };
 }
 
-export function PublicEventListing({
+function ExternalListingContent({
+  listing,
+}: {
+  readonly listing: Extract<PublicListingDetail, { sourceKind: "EXTERNAL" }>;
+}) {
+  const projection = listing.projection;
+  return (
+    <>
+      <div
+        className="public-listing-external-placeholder"
+        aria-label="External listing image placeholder"
+        data-external-listing-placeholder="true"
+      >
+        {/* External source images are intentionally neither fetched nor hotlinked. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={projection.coverPhotoUrl}
+          alt={`Marketplace placeholder for ${projection.title}`}
+        />
+      </div>
+      <section
+        className="public-listing-about"
+        aria-labelledby="about-sale-title"
+      >
+        <h2 id="about-sale-title">About this sale</h2>
+        <p className="preserve-lines">{projection.description}</p>
+      </section>
+    </>
+  );
+}
+
+export function PublicListing({
   listing,
   revisionNote,
 }: {
-  readonly listing: PublishedListing;
+  readonly listing: PublicListingDetail;
   readonly revisionNote?: string;
 }) {
   const projection = listing.projection;
+  const organizer =
+    listing.sourceKind === "ORGANIZER" ? listing.projection.organizer : null;
+  const verifiedEmail =
+    listing.sourceKind === "ORGANIZER" ? listing.verifiedEmail : null;
   const format = new Intl.DateTimeFormat("en-US", {
     dateStyle: "full",
     timeStyle: "short",
@@ -102,13 +139,11 @@ export function PublicEventListing({
     projection.eventType === "ESTATE_SALE" ? "/estate-sales" : "/yard-sales";
   const address = visibleAddress(listing);
   const directionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address.directionsQuery)}`;
-  const emailHref = listing.verifiedEmail
-    ? `mailto:${encodeURIComponent(listing.verifiedEmail)}`
+  const emailHref = verifiedEmail
+    ? `mailto:${encodeURIComponent(verifiedEmail)}`
     : null;
   const hasContactDetails = Boolean(
-    listing.verifiedEmail ||
-    projection.organizer.displayName ||
-    projection.organizer.websiteUrl,
+    verifiedEmail || organizer?.displayName || organizer?.websiteUrl,
   );
   const applicationUrl = getServerApplicationUrl();
   const structuredData = {
@@ -127,22 +162,18 @@ export function PublicEventListing({
       name: locationLabel(listing),
       address: structuredAddress(listing),
     },
-    ...(hasContactDetails
-      ? {
-          organizer: {
-            "@type": projection.organizer.displayName
-              ? "Organization"
-              : "Person",
-            ...(projection.organizer.displayName
-              ? { name: projection.organizer.displayName }
-              : {}),
-            ...(listing.verifiedEmail ? { email: listing.verifiedEmail } : {}),
-            ...(projection.organizer.websiteUrl
-              ? { url: projection.organizer.websiteUrl }
-              : {}),
-          },
-        }
-      : {}),
+    ...(listing.sourceKind === "EXTERNAL"
+      ? { sameAs: listing.sourceUrl }
+      : hasContactDetails && organizer
+        ? {
+            organizer: {
+              "@type": organizer.displayName ? "Organization" : "Person",
+              ...(organizer.displayName ? { name: organizer.displayName } : {}),
+              ...(verifiedEmail ? { email: verifiedEmail } : {}),
+              ...(organizer.websiteUrl ? { url: organizer.websiteUrl } : {}),
+            },
+          }
+        : {}),
   };
 
   return (
@@ -159,7 +190,7 @@ export function PublicEventListing({
         <span>{projection.title}</span>
       </nav>
 
-      <article className="public-listing">
+      <article className="public-listing" data-source-kind={listing.sourceKind}>
         <header className="public-listing-hero">
           <div className="public-listing-hero__glow" aria-hidden="true" />
           <div className="public-listing-hero__panel">
@@ -189,24 +220,41 @@ export function PublicEventListing({
                   <span>{address.secondary}</span>
                 </p>
               </div>
-              {hasContactDetails ? (
+              {listing.sourceKind === "EXTERNAL" ? (
+                <div>
+                  <span aria-hidden="true">
+                    <Icon name="external" size={24} />
+                  </span>
+                  <p>
+                    <strong>Unclaimed / External listing</strong>
+                    <span>Source: {listing.sourceLabel}</span>
+                    <a
+                      href={listing.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer nofollow external"
+                    >
+                      View original listing
+                    </a>
+                  </p>
+                </div>
+              ) : hasContactDetails && organizer ? (
                 <div>
                   <span aria-hidden="true">
                     <Icon name="user" size={24} />
                   </span>
                   <p>
                     <span>Contact</span>
-                    {listing.verifiedEmail && emailHref ? (
+                    {verifiedEmail && emailHref ? (
                       <strong>
-                        <a href={emailHref}>{listing.verifiedEmail}</a>
+                        <a href={emailHref}>{verifiedEmail}</a>
                       </strong>
                     ) : null}
-                    {projection.organizer.displayName ? (
-                      <span>Listed by {projection.organizer.displayName}</span>
+                    {organizer.displayName ? (
+                      <span>Listed by {organizer.displayName}</span>
                     ) : null}
-                    {projection.organizer.websiteUrl ? (
+                    {organizer.websiteUrl ? (
                       <a
-                        href={projection.organizer.websiteUrl}
+                        href={organizer.websiteUrl}
                         rel="noopener noreferrer nofollow"
                       >
                         Website
@@ -225,11 +273,15 @@ export function PublicEventListing({
         </header>
 
         <div className="public-listing-content">
-          <PublicListingDetailTabs
-            description={projection.description}
-            photos={projection.gallery}
-            title={projection.title}
-          />
+          {listing.sourceKind === "EXTERNAL" ? (
+            <ExternalListingContent listing={listing} />
+          ) : (
+            <PublicListingDetailTabs
+              description={projection.description}
+              photos={projection.gallery}
+              title={projection.title}
+            />
+          )}
 
           <section
             className="public-listing-trust"
@@ -238,8 +290,17 @@ export function PublicEventListing({
             <div>
               <Icon name="status" size={24} />
               <p>
-                <strong>Quality finds</strong>
-                <span>Preview items before you visit</span>
+                {listing.sourceKind === "EXTERNAL" ? (
+                  <>
+                    <strong>Source transparency</strong>
+                    <span>Original listing clearly identified</span>
+                  </>
+                ) : (
+                  <>
+                    <strong>Quality finds</strong>
+                    <span>Preview items before you visit</span>
+                  </>
+                )}
               </p>
             </div>
             <div>
@@ -266,8 +327,10 @@ export function PublicEventListing({
           </section>
 
           <p className="publication-proof">
-            {revisionNote ??
-              `Published from approved revision ${String(listing.approvedRevision)}.`}
+            {listing.sourceKind === "EXTERNAL"
+              ? `External listing attributed to ${listing.sourceLabel}. Estate Sales Bakersfield is not the organizer.`
+              : (revisionNote ??
+                `Published from approved revision ${String(listing.approvedRevision)}.`)}
           </p>
         </div>
       </article>
@@ -279,5 +342,21 @@ export function PublicEventListing({
         }}
       />
     </div>
+  );
+}
+
+/** Organizer previews retain their established component contract. */
+export function PublicEventListing({
+  listing,
+  revisionNote,
+}: {
+  readonly listing: PublishedListing;
+  readonly revisionNote?: string;
+}) {
+  return (
+    <PublicListing
+      listing={toOrganizerPublicListing(listing)}
+      {...(revisionNote === undefined ? {} : { revisionNote })}
+    />
   );
 }

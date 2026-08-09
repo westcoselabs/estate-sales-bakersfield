@@ -18,6 +18,12 @@ export { ListingIngestionCredentialError } from "./application/credential-errors
 export { ListingIngestionCredentialService } from "./application/credential-service";
 export { ListingImportAdminQueryService } from "./application/listing-import-admin-query-service";
 export {
+  EXTERNAL_LISTING_EXPIRATION_JOB_TYPE,
+  ExternalListingLifecycleService,
+  externalListingExpirationPayloadSchema,
+  externalListingRevalidationPaths,
+} from "./application/external-listing-lifecycle";
+export {
   boundedListingImportInput,
   ListingImportService,
 } from "./application/listing-import-service";
@@ -61,6 +67,7 @@ export {
   createConfiguredListingImportService,
   createConfiguredListingIngestionCredentialService,
   createConfiguredListingImportAdminQueryService,
+  createConfiguredExternalListingLifecycleService,
   createConfiguredListingImportReviewService,
 } from "./infrastructure/configured-listing-imports";
 export { CryptoListingIngestionCredentialProvider } from "./infrastructure/crypto-listing-ingestion-credential-provider";
@@ -78,6 +85,13 @@ export { PrismaListingImportRepository } from "./infrastructure/prisma-listing-i
 export { PrismaListingImportAdminQueryRepository } from "./infrastructure/prisma-listing-import-admin-query-repository";
 export { PrismaListingImportReviewRepository } from "./infrastructure/prisma-listing-import-review-repository";
 export { PrismaListingIngestionCredentialRepository } from "./infrastructure/prisma-listing-ingestion-credential-repository";
+export type {
+  ExternalListingExpirationDisposition,
+  ExternalListingExpirationPayload,
+  ExternalListingExpirationRepository,
+  ExternalListingExpirationResult,
+  ExternalListingRevalidator,
+} from "./application/external-listing-lifecycle";
 export type {
   ListingImportAuditAction,
   ListingImportBatchAuditMetadata,

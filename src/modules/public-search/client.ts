@@ -6,6 +6,7 @@ export {
 export type {
   PublicDateFilter,
   PublicListingCardProjection,
+  PublicListingSourceKind,
   PublicMapMarkerProjection,
   PublicSaleFilter,
   PublicSearchCriteria,

@@ -23,9 +23,9 @@ function MapResults({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedMarker =
-    result.markers?.find((marker) => marker.id === selectedId) ?? null;
+    result.markers?.find((marker) => marker.resultKey === selectedId) ?? null;
   const selectedListing =
-    result.items.find((listing) => listing.id === selectedId) ?? null;
+    result.items.find((listing) => listing.resultKey === selectedId) ?? null;
   const effectiveSelectedId = selectedMarker ? selectedId : null;
 
   return (
@@ -157,10 +157,10 @@ export function SearchResults({
           <div className="explore-list" aria-label="Sale results">
             {result.items.map((listing, index) => (
               <ListingCard
-                key={listing.id}
+                key={listing.resultKey}
                 listing={listing}
                 marker={result.markers?.find(
-                  (marker) => marker.id === listing.id,
+                  (marker) => marker.resultKey === listing.resultKey,
                 )}
                 priority={index === 0}
               />

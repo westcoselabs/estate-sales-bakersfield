@@ -4216,6 +4216,21 @@
   padding: clamp(1.35rem, 5vw, 2rem);
 }
 
+.public-listing-external-placeholder {
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  margin-bottom: 1.35rem;
+  border-radius: 1rem;
+  background: var(--color-surface-muted);
+}
+
+.public-listing-external-placeholder img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .public-listing-detail-tabs__toggle {
   display: none;
 }

@@ -34,6 +34,7 @@ function source(input: {
   addressKind?: "EXACT" | "APPROXIMATE";
   latitude?: number | null;
   longitude?: number | null;
+  publicZone?: string;
 }): PublicSearchSourceRecord {
   const eventType = input.eventType ?? "ESTATE_SALE";
   const segment = eventType === "ESTATE_SALE" ? "estate-sales" : "yard-sales";
@@ -60,6 +61,8 @@ function source(input: {
         };
 
   return {
+    sourceKind: "ORGANIZER",
+    sourceLabel: null,
     publicId: input.publicId,
     canonicalPath: path,
     eventType,
@@ -69,7 +72,7 @@ function source(input: {
       latitude: input.latitude ?? 35.373292,
       longitude: input.longitude ?? -119.018712,
       confirmationStatus: "CONFIRMED",
-      publicZone: "bakersfield",
+      publicZone: input.publicZone ?? "bakersfield",
     },
     snapshot: {
       schema: "estate-sales-publication-v1",
@@ -103,6 +106,43 @@ function source(input: {
   };
 }
 
+function externalSource(input: {
+  publicId: string;
+  startsAt: string;
+  sourceLabel?: string;
+  privacyMode?: "EXACT_ADDRESS" | "APPROXIMATE_LOCATION" | "HIDDEN_UNTIL_START";
+  latitude?: number | null;
+  longitude?: number | null;
+}): PublicSearchSourceRecord {
+  const startsAt = new Date(input.startsAt);
+  const endsAt = new Date(startsAt.getTime() + 6 * 60 * 60 * 1000);
+  return {
+    sourceKind: "EXTERNAL",
+    sourceLabel: input.sourceLabel ?? "Fixture Directory",
+    publicId: input.publicId,
+    canonicalPath: `/estate-sales/external-${input.publicId}`,
+    eventType: "ESTATE_SALE",
+    startsAt,
+    endsAt,
+    location: {
+      latitude: input.latitude ?? 35.373292,
+      longitude: input.longitude ?? -119.018712,
+      confirmationStatus: "CONFIRMED",
+      publicZone: "bakersfield",
+    },
+    content: {
+      title: `External sale ${input.publicId}`,
+      localStartsAt: "2026-08-01T09:00",
+      localEndsAt: "2026-08-01T15:00",
+      timezone: "America/Los_Angeles",
+      privacyMode: input.privacyMode ?? "APPROXIMATE_LOCATION",
+      city: "Bakersfield",
+      region: "CA",
+      coverPhotoUrl: null,
+    },
+  };
+}
+
 class InMemoryPublicSearchRepository implements PublicSearchRepository {
   readonly search = vi.fn(
     async (input: Parameters<PublicSearchRepository["search"]>[0]) => {
@@ -118,6 +158,7 @@ class InMemoryPublicSearchRepository implements PublicSearchRepository {
         .sort(
           (left, right) =>
             left.startsAt.getTime() - right.startsAt.getTime() ||
+            left.sourceKind.localeCompare(right.sourceKind) ||
             left.publicId.localeCompare(right.publicId),
         )
         .filter((row) => isAfterCursor(row, input.cursor));
@@ -134,7 +175,12 @@ function isAfterCursor(
 ): boolean {
   if (!cursor) return true;
   const difference = row.startsAt.getTime() - cursor.startsAt.getTime();
-  return difference > 0 || (difference === 0 && row.publicId > cursor.publicId);
+  if (difference !== 0) return difference > 0;
+  const sourceDifference = row.sourceKind.localeCompare(cursor.sourceKind);
+  return (
+    sourceDifference > 0 ||
+    (sourceDifference === 0 && row.publicId > cursor.publicId)
+  );
 }
 
 describe("PublicSearchService", () => {
@@ -182,6 +228,7 @@ describe("PublicSearchService", () => {
       expect.objectContaining({
         cursor: {
           startsAt: new Date("2026-08-01T16:00:00.000Z"),
+          sourceKind: "ORGANIZER",
           publicId: "000000000002",
         },
         limit: 3,
@@ -232,6 +279,10 @@ describe("PublicSearchService", () => {
 
     expect(page.items[0]).toEqual({
       id: "abc123def456",
+      sourceKind: "ORGANIZER",
+      resultKey: "event:abc123def456",
+      sourceLabel: null,
+      unclaimed: false,
       href: "/estate-sales/fixture-abc123def456",
       saleType: "estate",
       title: "Public sale abc123def456",
@@ -341,6 +392,7 @@ describe("PublicSearchService", () => {
     );
     expect(mapPage.markers?.[0]).toMatchObject({
       id: "111111111111",
+      resultKey: "event:111111111111",
       markerKind: "exact",
       geometry: { coordinates: [-118.82, 35.22] },
     });
@@ -369,6 +421,27 @@ describe("PublicSearchService", () => {
     );
   });
 
+  it("omits a protected marker when its public zone is unknown", async () => {
+    const protectedSource = source({
+      publicId: "444444444444",
+      startsAt: "2026-08-01T16:00:00.000Z",
+      privacyMode: "APPROXIMATE_LOCATION",
+      addressKind: "APPROXIMATE",
+      latitude: 35.55,
+      longitude: -119.25,
+      publicZone: "unknown-zone",
+    });
+
+    const page = await new PublicSearchService(
+      new InMemoryPublicSearchRepository([protectedSource]),
+    ).search(criteria({ view: "map" }), now);
+
+    expect(page.items).toHaveLength(1);
+    expect(page.markers).toEqual([]);
+    expect(JSON.stringify(page)).not.toContain("35.55");
+    expect(JSON.stringify(page)).not.toContain("-119.25");
+  });
+
   it("rejects a snapshot whose path or type disagrees with publication authority", async () => {
     const row = source({
       publicId: "123456abcdef",
@@ -382,6 +455,124 @@ describe("PublicSearchService", () => {
       new PublicSearchService(repository).search(criteria(), now),
     ).rejects.toThrow(
       "The publication projection does not match its authority",
+    );
+  });
+
+  it("normalizes external listings with attribution and the local cover fallback", async () => {
+    const repository = new InMemoryPublicSearchRepository([
+      externalSource({
+        publicId: "eee111fff222",
+        startsAt: "2026-08-01T16:00:00.000Z",
+        sourceLabel: "EstateSales.org",
+      }),
+    ]);
+
+    const page = await new PublicSearchService(repository).search(
+      criteria(),
+      now,
+    );
+
+    expect(page.items[0]).toMatchObject({
+      id: "eee111fff222",
+      sourceKind: "EXTERNAL",
+      resultKey: "external:eee111fff222",
+      sourceLabel: "EstateSales.org",
+      unclaimed: true,
+      title: "External sale eee111fff222",
+      coverPhotoUrl: "/images/marketplace-hero.webp",
+      location: {
+        kind: "approximate",
+        label: "Bakersfield area",
+      },
+    });
+    expect(page.markers?.[0]).toMatchObject({
+      sourceKind: "EXTERNAL",
+      resultKey: "external:eee111fff222",
+      unclaimed: true,
+      markerKind: "approximate",
+      geometry: { coordinates: [-119.018712, 35.373292] },
+    });
+  });
+
+  it("keeps organizer and external results distinct when raw public IDs collide", async () => {
+    const publicId = "abcabcabcabc";
+    const startsAt = "2026-08-01T16:00:00.000Z";
+    const repository = new InMemoryPublicSearchRepository([
+      source({ publicId, startsAt }),
+      externalSource({ publicId, startsAt }),
+    ]);
+
+    const page = await new PublicSearchService(repository).search(
+      criteria(),
+      now,
+    );
+
+    expect(page.items.map((item) => item.id)).toEqual([publicId, publicId]);
+    expect(page.items.map((item) => item.resultKey)).toEqual([
+      `external:${publicId}`,
+      `event:${publicId}`,
+    ]);
+    expect(new Set(page.items.map((item) => item.resultKey))).toHaveLength(2);
+  });
+
+  it("emits only v2 cursors and accepts legacy organizer cursors", async () => {
+    const firstSource = source({
+      publicId: "000000000001",
+      startsAt: "2026-08-01T16:00:00.000Z",
+    });
+    const secondSource = source({
+      publicId: "000000000002",
+      startsAt: "2026-08-02T16:00:00.000Z",
+    });
+    const repository = new InMemoryPublicSearchRepository([
+      firstSource,
+      secondSource,
+    ]);
+    const service = new PublicSearchService(repository);
+    const activeCriteria = criteria();
+    const first = await service.search(activeCriteria, now, 1);
+    const decoded: unknown = JSON.parse(
+      Buffer.from(first.pageInfo.nextCursor!, "base64url").toString("utf8"),
+    );
+    expect(decoded).toEqual([
+      "v2",
+      firstSource.startsAt.toISOString(),
+      "ORGANIZER",
+      firstSource.publicId,
+      expect.any(String),
+    ]);
+
+    const fingerprint = JSON.stringify({
+      sale: activeCriteria.sale,
+      date: activeCriteria.date,
+      from: activeCriteria.from,
+      to: activeCriteria.to,
+      location: activeCriteria.location,
+      sort: activeCriteria.sort,
+      bounds: activeCriteria.bounds,
+    });
+    const legacyCursor = Buffer.from(
+      JSON.stringify([
+        firstSource.startsAt.toISOString(),
+        firstSource.publicId,
+        fingerprint,
+      ]),
+      "utf8",
+    ).toString("base64url");
+
+    await expect(
+      service.search(criteria({ cursor: legacyCursor }), now, 1),
+    ).resolves.toMatchObject({
+      items: [{ resultKey: "event:000000000002" }],
+    });
+    expect(repository.search).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        cursor: {
+          startsAt: firstSource.startsAt,
+          sourceKind: "ORGANIZER",
+          publicId: firstSource.publicId,
+        },
+      }),
     );
   });
 

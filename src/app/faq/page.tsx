@@ -13,7 +13,7 @@ const questions = [
   {
     question: "What kinds of sales can I find here?",
     answer:
-      "The current marketplace supports estate sales and yard sales. Public results come from paid, published listings that remain eligible for the upcoming search.",
+      "The marketplace supports estate sales and yard sales. Public results include organizer-published listings and reviewed external listings that remain active and eligible for search.",
   },
   {
     question: "How does This Weekend work?",

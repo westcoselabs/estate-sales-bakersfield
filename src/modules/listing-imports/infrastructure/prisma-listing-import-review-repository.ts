@@ -7,6 +7,10 @@ import { RECENT_PASSWORD_TTL_MS } from "@/modules/auth";
 
 import { eventSlug, futurePublicPath } from "../../events/domain/slug";
 import {
+  EXTERNAL_LISTING_EXPIRATION_JOB_TYPE,
+  type ExternalListingExpirationRepository,
+} from "../application/external-listing-lifecycle";
+import {
   ListingImportReviewError,
   reviewStaleVersion,
 } from "../application/review-errors";
@@ -82,6 +86,32 @@ function jsonDocument(value: unknown): Prisma.InputJsonValue {
 
 function reasonDigest(reason: string): string {
   return createHash("sha256").update(reason, "utf8").digest("hex");
+}
+
+async function enqueueExternalListingExpiration(
+  transaction: Transaction,
+  input: {
+    readonly listingId: string;
+    readonly version: number;
+    readonly endsAt: Date;
+  },
+): Promise<void> {
+  const payload = JSON.stringify({
+    listingId: input.listingId,
+    version: input.version,
+    endsAt: input.endsAt.toISOString(),
+  });
+  const deduplicationKey = `external-listing-expire:${input.listingId}:${input.version}`;
+  await transaction.$executeRaw(Prisma.sql`
+    INSERT INTO "durable_jobs" (
+      "queue", "type", "payload", "deduplication_key", "run_at", "max_attempts"
+    ) VALUES (
+      'default', ${EXTERNAL_LISTING_EXPIRATION_JOB_TYPE}, ${payload}::jsonb,
+      ${deduplicationKey}, ${input.endsAt}, 10
+    )
+    ON CONFLICT ("queue", "type", "deduplication_key")
+    DO NOTHING
+  `);
 }
 
 function hasPostgresSerializationFailure(value: unknown, depth = 0): boolean {
@@ -234,7 +264,9 @@ function candidateComparable(
   };
 }
 
-export class PrismaListingImportReviewRepository implements ListingImportReviewRepository {
+export class PrismaListingImportReviewRepository
+  implements ListingImportReviewRepository, ExternalListingExpirationRepository
+{
   constructor(
     private readonly prisma: PrismaClient,
     private readonly publicIdFactory: () => string = () =>
@@ -1210,6 +1242,11 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
       )
     `);
     await this.hooks.approvalCheckpoint?.("LOCATION_CREATED");
+    await enqueueExternalListingExpiration(transaction, {
+      listingId: listing.id,
+      version: listing.version,
+      endsAt: listing.endsAt,
+    });
     await transaction.auditEntry.create({
       data: {
         actorUserId: input.authorization.actor.userId,
@@ -1414,6 +1451,11 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
           updatedAt: transactionNow,
         },
       });
+      await enqueueExternalListingExpiration(transaction, {
+        listingId: updated.id,
+        version: updated.version,
+        endsAt: updated.endsAt,
+      });
       await transaction.auditEntry.create({
         data: {
           actorUserId: input.authorization.actor.userId,
@@ -1519,6 +1561,112 @@ export class PrismaListingImportReviewRepository implements ListingImportReviewR
         canonicalPath: updated.canonicalPath,
         previousCanonicalPath: listing.canonicalPath,
         idempotent: false,
+      };
+    });
+  }
+
+  async expireExternalListing(
+    input: Parameters<
+      ExternalListingExpirationRepository["expireExternalListing"]
+    >[0],
+  ) {
+    return this.serializable(async (transaction) => {
+      await transaction.$queryRaw(Prisma.sql`
+        SELECT "id"
+        FROM "external_listings"
+        WHERE "id" = ${input.listingId}::uuid
+        FOR UPDATE
+      `);
+      const listing = await transaction.externalListing.findUnique({
+        where: { id: input.listingId },
+        select: {
+          id: true,
+          status: true,
+          version: true,
+          endsAt: true,
+          canonicalPath: true,
+        },
+      });
+      if (!listing) {
+        return {
+          disposition: "NOT_FOUND" as const,
+          listingId: input.listingId,
+        };
+      }
+      if (listing.status === "EXPIRED") {
+        return {
+          disposition: "ALREADY_EXPIRED" as const,
+          listingId: listing.id,
+          version: listing.version,
+          canonicalPath: listing.canonicalPath,
+        };
+      }
+      if (listing.status === "REMOVED") {
+        return {
+          disposition: "REMOVED" as const,
+          listingId: listing.id,
+          version: listing.version,
+        };
+      }
+      if (listing.version !== input.expectedVersion) {
+        return {
+          disposition: "STALE_VERSION" as const,
+          listingId: listing.id,
+          version: listing.version,
+        };
+      }
+      if (listing.endsAt.getTime() !== input.expectedEndsAt.getTime()) {
+        return {
+          disposition: "END_DATE_CHANGED" as const,
+          listingId: listing.id,
+          version: listing.version,
+        };
+      }
+      const clocks = await transaction.$queryRaw<
+        { readonly transactionNow: Date }[]
+      >(Prisma.sql`SELECT CURRENT_TIMESTAMP AS "transactionNow"`);
+      const transactionNow = clocks[0]?.transactionNow;
+      if (!transactionNow) {
+        throw new Error("The database transaction clock was unavailable.");
+      }
+      if (listing.endsAt.getTime() > transactionNow.getTime()) {
+        return {
+          disposition: "NOT_DUE" as const,
+          listingId: listing.id,
+          version: listing.version,
+        };
+      }
+      const updated = await transaction.externalListing.update({
+        where: { id: listing.id },
+        data: {
+          status: "EXPIRED",
+          expiredAt: transactionNow,
+          removedAt: null,
+          removalReason: null,
+          version: { increment: 1 },
+          updatedAt: transactionNow,
+        },
+      });
+      await transaction.auditEntry.create({
+        data: {
+          actorUserId: null,
+          action: "EXTERNAL_LISTING_EXPIRED",
+          targetType: "EXTERNAL_LISTING",
+          targetId: listing.id,
+          requestId: null,
+          metadata: {
+            externalListingId: listing.id,
+            previousVersion: listing.version,
+            version: updated.version,
+            ...(input.jobId ? { jobId: input.jobId } : {}),
+          },
+        },
+      });
+      return {
+        disposition: "EXPIRED" as const,
+        listingId: listing.id,
+        version: updated.version,
+        canonicalPath: listing.canonicalPath,
       };
     });
   }

@@ -99,6 +99,12 @@ export function ListingCard({
         <h3 className="market-listing-card__title">
           <Link href={listing.href}>{listing.title}</Link>
         </h3>
+        {listing.unclaimed ? (
+          <p className="market-listing-card__privacy">
+            Unclaimed external listing
+            {listing.sourceLabel ? ` · ${listing.sourceLabel}` : ""}
+          </p>
+        ) : null}
         <p className="market-listing-card__location">
           <Icon name="pin" size={17} />
           <span>{listing.location.label}</span>

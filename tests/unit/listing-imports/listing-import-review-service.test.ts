@@ -390,4 +390,174 @@ describe("ListingImportReviewService", () => {
       }),
     );
   });
+
+  it("revalidates public collection and canonical paths after approval, edit, and removal", async () => {
+    const revalidate = vi.fn();
+    const service = new ListingImportReviewService(
+      repository(),
+      locationProvider(),
+      () => now,
+      { revalidate },
+    );
+
+    await service.approveCandidate(actor, candidateResult.candidateId, {
+      expectedVersion: 3,
+    });
+    await service.editExternalListing(actor, listingResult.listingId, {
+      expectedVersion: 1,
+      eventType: "YARD_SALE",
+      title: "Updated Yard Sale",
+      description:
+        "Updated furniture, tools, artwork, and household goods listing.",
+      localStartsAt: "2026-08-09T08:00",
+      localEndsAt: "2026-08-09T14:00",
+      timezone: "America/Los_Angeles",
+      privacyMode: "EXACT_ADDRESS",
+    });
+    await service.removeExternalListing(actor, listingResult.listingId, {
+      expectedVersion: 2,
+      reason: "The sale is no longer available.",
+      confirmation: "REMOVE",
+    });
+
+    expect(revalidate).toHaveBeenNthCalledWith(1, [
+      "/",
+      "/estate-sales",
+      "/yard-sales",
+      "/search",
+      listingResult.canonicalPath,
+    ]);
+    expect(revalidate).toHaveBeenNthCalledWith(2, [
+      "/",
+      "/estate-sales",
+      "/yard-sales",
+      "/search",
+      listingResult.previousCanonicalPath,
+      listingResult.canonicalPath,
+    ]);
+    expect(revalidate).toHaveBeenNthCalledWith(3, [
+      "/",
+      "/estate-sales",
+      "/yard-sales",
+      "/search",
+      listingResult.canonicalPath,
+    ]);
+  });
+
+  it.each([
+    [
+      "approval",
+      "CANDIDATE_APPROVAL",
+      "APPROVED",
+      [
+        "/",
+        "/estate-sales",
+        "/yard-sales",
+        "/search",
+        listingResult.canonicalPath,
+      ],
+      (service: ListingImportReviewService) =>
+        service.approveCandidate(actor, candidateResult.candidateId, {
+          expectedVersion: 3,
+        }),
+    ],
+    [
+      "edit",
+      "EXTERNAL_LISTING_EDIT",
+      "PUBLISHED",
+      [
+        "/",
+        "/estate-sales",
+        "/yard-sales",
+        "/search",
+        listingResult.previousCanonicalPath,
+        listingResult.canonicalPath,
+      ],
+      (service: ListingImportReviewService) =>
+        service.editExternalListing(actor, listingResult.listingId, {
+          expectedVersion: 1,
+          eventType: "YARD_SALE",
+          title: "Updated Yard Sale",
+          description:
+            "Updated furniture, tools, artwork, and household goods listing.",
+          localStartsAt: "2026-08-09T08:00",
+          localEndsAt: "2026-08-09T14:00",
+          timezone: "America/Los_Angeles",
+          privacyMode: "EXACT_ADDRESS",
+        }),
+    ],
+    [
+      "removal",
+      "EXTERNAL_LISTING_REMOVAL",
+      "REMOVED",
+      [
+        "/",
+        "/estate-sales",
+        "/yard-sales",
+        "/search",
+        listingResult.canonicalPath,
+      ],
+      (service: ListingImportReviewService) =>
+        service.removeExternalListing(actor, listingResult.listingId, {
+          expectedVersion: 2,
+          reason: "The sale is no longer available.",
+          confirmation: "REMOVE",
+        }),
+    ],
+  ] as const)(
+    "keeps a committed %s successful when cache revalidation fails",
+    async (_name, operation, status, paths, invoke) => {
+      const revalidationError = new Error("Injected cache failure");
+      const revalidate = vi.fn(async () => {
+        throw revalidationError;
+      });
+      const reportFailure = vi.fn();
+      const service = new ListingImportReviewService(
+        repository(),
+        locationProvider(),
+        () => now,
+        { revalidate },
+        reportFailure,
+      );
+
+      await expect(invoke(service)).resolves.toMatchObject({
+        listingId: listingResult.listingId,
+        status,
+      });
+      expect(revalidate).toHaveBeenCalledOnce();
+      expect(reportFailure).toHaveBeenCalledWith({
+        operation,
+        listingId: listingResult.listingId,
+        paths,
+        errorType: "Error",
+      });
+    },
+  );
+
+  it("does not mask a committed mutation when failure reporting also throws", async () => {
+    const service = new ListingImportReviewService(
+      repository(),
+      locationProvider(),
+      () => now,
+      {
+        revalidate: async () => {
+          throw new Error("Injected cache failure");
+        },
+      },
+      () => {
+        throw new Error("Injected logger failure");
+      },
+    );
+
+    await expect(
+      service.removeExternalListing(actor, listingResult.listingId, {
+        expectedVersion: 2,
+        reason: "The sale is no longer available.",
+        confirmation: "REMOVE",
+      }),
+    ).resolves.toMatchObject({
+      listingId: listingResult.listingId,
+      status: "REMOVED",
+    });
+  });
 });

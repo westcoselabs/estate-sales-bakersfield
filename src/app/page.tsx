@@ -204,10 +204,10 @@ export default function HomePage() {
               <span className="home-journey__icon" aria-hidden="true">
                 <Icon name="photo" size={22} />
               </span>
-              <h3>Scan the real photos</h3>
+              <h3>Scan the key details</h3>
               <p>
-                Every listing shows the organizer&apos;s own photos, the
-                schedule, and a privacy-safe location before you commit.
+                Every listing shows its schedule, description, source, and a
+                privacy-safe location before you commit.
               </p>
             </li>
             <li data-reveal="">
@@ -234,8 +234,9 @@ export default function HomePage() {
                 You only ever see what is genuinely ready
               </h2>
               <p>
-                Nothing reaches this page early. Every listing has been
-                completed, approved, paid for, and confirmed published.
+                Nothing reaches this page early. Every listing is either
+                published by its organizer or explicitly reviewed before it
+                appears here.
               </p>
             </div>
           </div>
@@ -247,11 +248,11 @@ export default function HomePage() {
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="shield" />
               </span>
-              <h3>Your address stays yours until you say otherwise</h3>
+              <h3>Public locations stay privacy-safe</h3>
               <p>
-                Organizers choose an exact address, an approximate area, or an
-                address that stays hidden until the sale opens. Public cards and
-                maps honor that choice everywhere, with no exceptions.
+                Organizer choices and reviewed external-listing defaults keep
+                exact addresses, approximate areas, and start-time-hidden
+                locations consistent across cards, maps, and details.
               </p>
             </article>
             <article
@@ -263,7 +264,8 @@ export default function HomePage() {
               </span>
               <h3>Published only</h3>
               <p>
-                Private drafts never surface in public search or on this page.
+                Private drafts and unreviewed imports never surface in public
+                search or on this page.
               </p>
             </article>
             <article
@@ -275,8 +277,8 @@ export default function HomePage() {
               </span>
               <h3>Confirmed, not assumed</h3>
               <p>
-                A sale appears once the server confirms publication — never on a
-                payment redirect alone.
+                A sale appears only after confirmed organizer publication or
+                explicit external-listing review.
               </p>
             </article>
           </div>
@@ -365,8 +367,9 @@ export default function HomePage() {
               <div className="content-faq__answer">
                 <div>
                   <p>
-                    Only after it is complete, approved, paid for, and the
-                    server confirms publication.
+                    Organizer listings appear after approval, payment, and
+                    confirmed publication. Reviewed external listings appear
+                    only after explicit super-admin approval.
                   </p>
                 </div>
               </div>

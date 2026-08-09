@@ -1,15 +1,16 @@
 export interface PublicSearchCursor {
   readonly startsAt: Date;
+  readonly sourceKind: "ORGANIZER" | "EXTERNAL";
   readonly publicId: string;
 }
 
-export interface PublicSearchSourceRecord {
+interface PublicSearchSourceRecordBase {
   readonly publicId: string;
   readonly canonicalPath: string;
   readonly eventType: "ESTATE_SALE" | "YARD_SALE";
+  readonly sourceLabel: string | null;
   readonly startsAt: Date;
   readonly endsAt: Date;
-  readonly snapshot: unknown;
   readonly location: {
     readonly latitude: number | null;
     readonly longitude: number | null;
@@ -17,6 +18,31 @@ export interface PublicSearchSourceRecord {
     readonly publicZone: string;
   };
 }
+
+export interface OrganizerPublicSearchSourceRecord extends PublicSearchSourceRecordBase {
+  readonly sourceKind: "ORGANIZER";
+  readonly sourceLabel: null;
+  readonly snapshot: unknown;
+}
+
+export interface ExternalPublicSearchSourceRecord extends PublicSearchSourceRecordBase {
+  readonly sourceKind: "EXTERNAL";
+  readonly sourceLabel: string;
+  readonly content: {
+    readonly title: string;
+    readonly localStartsAt: string;
+    readonly localEndsAt: string;
+    readonly timezone: string;
+    readonly privacyMode:
+      "EXACT_ADDRESS" | "APPROXIMATE_LOCATION" | "HIDDEN_UNTIL_START";
+    readonly city: string;
+    readonly region: string;
+    readonly coverPhotoUrl: string | null;
+  };
+}
+
+export type PublicSearchSourceRecord =
+  OrganizerPublicSearchSourceRecord | ExternalPublicSearchSourceRecord;
 
 export interface PublicSearchRepository {
   search(input: {

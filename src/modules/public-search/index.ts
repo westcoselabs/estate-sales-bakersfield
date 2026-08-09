@@ -26,6 +26,8 @@ export type {
   PublicSearchRawQuery,
 } from "./application/criteria";
 export type {
+  ExternalPublicSearchSourceRecord,
+  OrganizerPublicSearchSourceRecord,
   PublicSearchCursor,
   PublicSearchRepository,
   PublicSearchSourceRecord,
@@ -33,6 +35,7 @@ export type {
 export type {
   PublicDateFilter,
   PublicListingCardProjection,
+  PublicListingSourceKind,
   PublicMapMarkerProjection,
   PublicSaleFilter,
   PublicSearchCriteria,

@@ -15,6 +15,7 @@ import type {
 } from "@/modules/locations/domain/types";
 import type { LocationProvider } from "@/modules/locations/application/location-provider";
 import { listingContentHash } from "@/modules/listing-imports/application/content-hash";
+import { ExternalListingLifecycleService } from "@/modules/listing-imports/application/external-listing-lifecycle";
 import { ListingImportService } from "@/modules/listing-imports/application/listing-import-service";
 import { ListingImportReviewService } from "@/modules/listing-imports/application/listing-import-review-service";
 import type { ListingImportReviewActor } from "@/modules/listing-imports/application/review-ports";
@@ -1213,5 +1214,220 @@ describe("listing import Phase 4 review lifecycle", () => {
         },
       }),
     ).resolves.toBe(1);
+  });
+
+  it("transactionally enqueues versioned expiration jobs on approval and edits", async () => {
+    const fixture = nextFixture("Expiration Enqueue");
+    const approved = await createApprovedExternalListing(fixture);
+    const firstListing = await prisma.externalListing.findUniqueOrThrow({
+      where: { id: approved.listingId },
+      select: { endsAt: true },
+    });
+    const firstKey = `external-listing-expire:${approved.listingId}:1`;
+    const firstJob = await prisma.durableJob.findUniqueOrThrow({
+      where: {
+        queue_type_deduplicationKey: {
+          queue: "default",
+          type: "EXTERNAL_LISTING_EXPIRE",
+          deduplicationKey: firstKey,
+        },
+      },
+    });
+    expect(firstJob).toMatchObject({
+      status: "PENDING",
+      type: "EXTERNAL_LISTING_EXPIRE",
+      deduplicationKey: firstKey,
+      runAt: firstListing.endsAt,
+      payload: {
+        listingId: approved.listingId,
+        version: 1,
+        endsAt: firstListing.endsAt.toISOString(),
+      },
+    });
+
+    const editedFixture = fixtureWithSchedule(
+      "Expiration Enqueue Revised",
+      new Date(firstListing.endsAt.getTime() + 24 * 60 * 60 * 1_000),
+      new Date(firstListing.endsAt.getTime() + 30 * 60 * 60 * 1_000),
+    );
+    const edited = await reviews.editExternalListing(
+      actor(),
+      approved.listingId,
+      externalEditInput(
+        editedFixture,
+        approved.listingVersion,
+        `${fixture.content.title} Revised`,
+      ),
+    );
+    const secondListing = await prisma.externalListing.findUniqueOrThrow({
+      where: { id: approved.listingId },
+      select: { endsAt: true },
+    });
+    const secondKey = `external-listing-expire:${approved.listingId}:2`;
+    const secondJob = await prisma.durableJob.findUniqueOrThrow({
+      where: {
+        queue_type_deduplicationKey: {
+          queue: "default",
+          type: "EXTERNAL_LISTING_EXPIRE",
+          deduplicationKey: secondKey,
+        },
+      },
+    });
+    expect(edited.version).toBe(2);
+    expect(secondJob).toMatchObject({
+      status: "PENDING",
+      deduplicationKey: secondKey,
+      runAt: secondListing.endsAt,
+      payload: {
+        listingId: approved.listingId,
+        version: 2,
+        endsAt: secondListing.endsAt.toISOString(),
+      },
+    });
+    await expect(
+      prisma.durableJob.count({
+        where: {
+          type: "EXTERNAL_LISTING_EXPIRE",
+          deduplicationKey: { in: [firstKey, secondKey] },
+        },
+      }),
+    ).resolves.toBe(2);
+  });
+
+  it("expires a due listing once, audits it, and safely replays the job", async () => {
+    const fixture = nextFixture("Due Expiration");
+    const approved = await createApprovedExternalListing(fixture);
+    const expectedEndsAt = new Date(Date.now() - 60_000);
+    await prisma.externalListing.update({
+      where: { id: approved.listingId },
+      data: {
+        startsAt: new Date(expectedEndsAt.getTime() - 60 * 60 * 1_000),
+        endsAt: expectedEndsAt,
+        version: { increment: 1 },
+      },
+    });
+    const revalidate = vi.fn();
+    const lifecycle = new ExternalListingLifecycleService(
+      new PrismaListingImportReviewRepository(prisma),
+      { revalidate },
+    );
+    const expirationPayload = {
+      listingId: approved.listingId,
+      version: approved.listingVersion + 1,
+      endsAt: expectedEndsAt.toISOString(),
+    };
+    const jobId = randomUUID();
+
+    await expect(
+      lifecycle.expire(expirationPayload, { jobId }),
+    ).resolves.toMatchObject({ disposition: "EXPIRED", version: 3 });
+    await expect(lifecycle.expire(expirationPayload)).resolves.toMatchObject({
+      disposition: "ALREADY_EXPIRED",
+      version: 3,
+    });
+
+    const [listing, audits] = await Promise.all([
+      prisma.externalListing.findUniqueOrThrow({
+        where: { id: approved.listingId },
+        select: {
+          status: true,
+          version: true,
+          expiredAt: true,
+          removedAt: true,
+        },
+      }),
+      prisma.auditEntry.findMany({
+        where: {
+          targetType: "EXTERNAL_LISTING",
+          targetId: approved.listingId,
+          action: "EXTERNAL_LISTING_EXPIRED",
+        },
+        select: { actorUserId: true, metadata: true },
+      }),
+    ]);
+    expect(listing).toEqual({
+      status: "EXPIRED",
+      version: 3,
+      expiredAt: expect.any(Date),
+      removedAt: null,
+    });
+    expect(audits).toEqual([
+      {
+        actorUserId: null,
+        metadata: {
+          externalListingId: approved.listingId,
+          previousVersion: 2,
+          version: 3,
+          jobId,
+        },
+      },
+    ]);
+    expect(revalidate).toHaveBeenCalledTimes(2);
+  });
+
+  it("no-ops stale-version and changed-end-date expiration jobs", async () => {
+    const staleFixture = nextFixture("Stale Expiration");
+    const staleApproved = await createApprovedExternalListing(staleFixture);
+    const staleListing = await prisma.externalListing.findUniqueOrThrow({
+      where: { id: staleApproved.listingId },
+      select: { endsAt: true },
+    });
+    const edited = await reviews.editExternalListing(
+      actor(),
+      staleApproved.listingId,
+      externalEditInput(
+        staleFixture,
+        staleApproved.listingVersion,
+        `${staleFixture.content.title} Revised`,
+      ),
+    );
+    const revalidate = vi.fn();
+    const lifecycle = new ExternalListingLifecycleService(
+      new PrismaListingImportReviewRepository(prisma),
+      { revalidate },
+    );
+    await expect(
+      lifecycle.expire({
+        listingId: staleApproved.listingId,
+        version: staleApproved.listingVersion,
+        endsAt: staleListing.endsAt.toISOString(),
+      }),
+    ).resolves.toMatchObject({
+      disposition: "STALE_VERSION",
+      version: edited.version,
+    });
+
+    const changedFixture = nextFixture("Changed End Expiration");
+    const changedApproved = await createApprovedExternalListing(changedFixture);
+    const changedListing = await prisma.externalListing.findUniqueOrThrow({
+      where: { id: changedApproved.listingId },
+      select: { endsAt: true },
+    });
+    await prisma.externalListing.update({
+      where: { id: changedApproved.listingId },
+      data: {
+        endsAt: new Date(changedListing.endsAt.getTime() + 60 * 60 * 1_000),
+        version: { increment: 1 },
+      },
+    });
+    await expect(
+      lifecycle.expire({
+        listingId: changedApproved.listingId,
+        version: changedApproved.listingVersion + 1,
+        endsAt: changedListing.endsAt.toISOString(),
+      }),
+    ).resolves.toMatchObject({ disposition: "END_DATE_CHANGED" });
+    expect(revalidate).not.toHaveBeenCalled();
+    await expect(
+      prisma.auditEntry.count({
+        where: {
+          targetType: "EXTERNAL_LISTING",
+          targetId: {
+            in: [staleApproved.listingId, changedApproved.listingId],
+          },
+          action: "EXTERNAL_LISTING_EXPIRED",
+        },
+      }),
+    ).resolves.toBe(0);
   });
 });

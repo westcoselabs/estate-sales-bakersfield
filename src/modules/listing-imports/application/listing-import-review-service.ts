@@ -1,5 +1,9 @@
 import type { LocationProvider } from "@/modules/locations";
 
+import {
+  externalListingRevalidationPaths,
+  type ExternalListingRevalidator,
+} from "./external-listing-lifecycle";
 import { ListingImportReviewError } from "./review-errors";
 import type {
   ListingImportReviewActor,
@@ -33,12 +37,56 @@ function normalizedContent<T>(operation: () => T): T {
   }
 }
 
+type ExternalListingRevalidationOperation =
+  "CANDIDATE_APPROVAL" | "EXTERNAL_LISTING_EDIT" | "EXTERNAL_LISTING_REMOVAL";
+
+export interface ExternalListingRevalidationFailure {
+  readonly operation: ExternalListingRevalidationOperation;
+  readonly listingId: string;
+  readonly paths: readonly string[];
+  readonly errorType: string;
+}
+
+export type ExternalListingRevalidationFailureReporter = (
+  failure: ExternalListingRevalidationFailure,
+) => void;
+
 export class ListingImportReviewService {
   constructor(
     private readonly reviews: ListingImportReviewRepository,
     private readonly locations: LocationProvider,
     private readonly clock: () => Date = () => new Date(),
+    private readonly revalidator: ExternalListingRevalidator = {
+      revalidate: () => undefined,
+    },
+    private readonly reportRevalidationFailure: ExternalListingRevalidationFailureReporter = () =>
+      undefined,
   ) {}
+
+  private async revalidateCommittedListing(
+    operation: ExternalListingRevalidationOperation,
+    listingId: string,
+    ...canonicalPaths: readonly (string | null | undefined)[]
+  ): Promise<void> {
+    const paths = externalListingRevalidationPaths(...canonicalPaths);
+    try {
+      await this.revalidator.revalidate(paths);
+    } catch (error) {
+      try {
+        this.reportRevalidationFailure({
+          operation,
+          listingId,
+          paths,
+          errorType:
+            error instanceof Error
+              ? error.name.slice(0, 100) || "Error"
+              : "UnknownError",
+        });
+      } catch {
+        // Cache and reporting failures must not mask an already committed mutation.
+      }
+    }
+  }
 
   private authorization(
     actor: ListingImportReviewActor,
@@ -153,13 +201,19 @@ export class ListingImportReviewService {
   ) {
     const { expectedVersion } = expectedReviewVersionSchema.parse(value);
     const now = this.clock();
-    return this.reviews.approveCandidate({
+    const result = await this.reviews.approveCandidate({
       candidateId,
       expectedVersion,
       authorization: this.authorization(actor, true),
       now,
       audit,
     });
+    await this.revalidateCommittedListing(
+      "CANDIDATE_APPROVAL",
+      result.listingId,
+      result.canonicalPath,
+    );
+    return result;
   }
 
   async rejectCandidate(
@@ -208,7 +262,7 @@ export class ListingImportReviewService {
       normalizeExternalListingContent(contentInput),
     );
     const now = this.clock();
-    return this.reviews.editExternalListing({
+    const result = await this.reviews.editExternalListing({
       listingId,
       expectedVersion,
       content,
@@ -216,6 +270,13 @@ export class ListingImportReviewService {
       now,
       audit,
     });
+    await this.revalidateCommittedListing(
+      "EXTERNAL_LISTING_EDIT",
+      result.listingId,
+      result.previousCanonicalPath,
+      result.canonicalPath,
+    );
+    return result;
   }
 
   async removeExternalListing(
@@ -226,12 +287,18 @@ export class ListingImportReviewService {
   ) {
     const input = externalListingRemovalSchema.parse(value);
     const now = this.clock();
-    return this.reviews.removeExternalListing({
+    const result = await this.reviews.removeExternalListing({
       listingId,
       ...input,
       authorization: this.authorization(actor, true),
       now,
       audit,
     });
+    await this.revalidateCommittedListing(
+      "EXTERNAL_LISTING_REMOVAL",
+      result.listingId,
+      result.canonicalPath,
+    );
+    return result;
   }
 }

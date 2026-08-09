@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { PrismaClient } from "@/generated/prisma/client";
 import { listingContentHash } from "@/modules/listing-imports/application/content-hash";
@@ -64,6 +64,31 @@ async function login(page: Page, email: string, password: string) {
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
+function externalListingCard(parent: Locator | Page, title: string) {
+  return parent.locator('[data-result-card="true"]').filter({
+    hasText: title,
+  });
+}
+
+async function expectExternalListingCard(
+  parent: Locator | Page,
+  title: string,
+  canonicalPath: string,
+) {
+  const card = externalListingCard(parent, title);
+  await expect(card).toHaveCount(1);
+  await expect(card).toBeVisible();
+  await expect(card).toContainText("Unclaimed external listing");
+  await expect(card).toContainText("Fixture");
+  await expect(
+    card.getByRole("link", { name: "View details", exact: true }),
+  ).toHaveAttribute("href", canonicalPath);
+  await expect(card.locator("img")).toHaveAttribute(
+    "src",
+    "/images/marketplace-hero.webp",
+  );
+}
+
 function manualImportEnvelope(suffix: string) {
   const item = {
     sourceListingId: `e2e-${suffix}`,
@@ -99,7 +124,7 @@ function manualImportEnvelope(suffix: string) {
 test("reviews a manual listing import and manages a one-time ingestion credential", async ({
   page,
 }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
   const suffix = crypto.randomUUID().replaceAll("-", "").slice(0, 20);
   const email = `${runId}-imports-${suffix}@example.test`;
   const password = "listing-imports-browser-password";
@@ -349,8 +374,12 @@ test("reviews a manual listing import and manages a one-time ingestion credentia
       where: { id: listingId },
       select: {
         candidateId: true,
+        canonicalPath: true,
         publicId: true,
         status: true,
+        primarySourceRecord: {
+          select: { canonicalSourceUrl: true },
+        },
         location: { select: { confirmationStatus: true } },
       },
     });
@@ -375,11 +404,146 @@ test("reviews a manual listing import and manages a one-time ingestion credentia
       )
       .toEqual([0, 0, 0, 0]);
 
+    await page.goto("/");
+    await expectExternalListingCard(
+      page,
+      reviewedTitle,
+      published.canonicalPath,
+    );
+
+    await page.goto("/estate-sales");
+    await expectExternalListingCard(
+      page,
+      reviewedTitle,
+      published.canonicalPath,
+    );
+
+    await page.goto("/search?sale=estate&view=list");
+    await expectExternalListingCard(
+      page,
+      reviewedTitle,
+      published.canonicalPath,
+    );
+
+    await page.goto("/search?sale=estate");
+    const mapProjection = page.getByRole("button", {
+      name: `Show ${reviewedTitle} on the map`,
+      exact: true,
+    });
+    await expect(mapProjection).toHaveCount(1);
+    await mapProjection.focus();
+    await expect(mapProjection).toBeVisible();
+    await mapProjection.click();
+    const mapPreview = page.locator(".explore-map-preview");
+    await expectExternalListingCard(
+      mapPreview,
+      reviewedTitle,
+      published.canonicalPath,
+    );
+
+    const publicResponse = await page.goto(published.canonicalPath);
+    expect(publicResponse?.ok()).toBe(true);
+    const publicListing = page.locator(
+      'article.public-listing[data-source-kind="EXTERNAL"]',
+    );
+    await expect(publicListing).toBeVisible();
+    await expect(
+      publicListing.getByRole("heading", { name: reviewedTitle, exact: true }),
+    ).toBeVisible();
+    await expect(
+      publicListing.getByText("Unclaimed / External listing", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      publicListing.getByText("Source: Fixture", { exact: true }),
+    ).toBeVisible();
+    const originalListingLink = publicListing.getByRole("link", {
+      name: "View original listing",
+      exact: true,
+    });
+    await expect(originalListingLink).toHaveAttribute(
+      "href",
+      published.primarySourceRecord.canonicalSourceUrl,
+    );
+    const originalHref = await originalListingLink.getAttribute("href");
+    expect(originalHref).not.toBeNull();
+    expect(new URL(originalHref!).protocol).toBe("https:");
+    await expect(originalListingLink).toHaveAttribute(
+      "rel",
+      "noopener noreferrer nofollow external",
+    );
+    const placeholder = publicListing.locator(
+      '[data-external-listing-placeholder="true"]',
+    );
+    await expect(placeholder).toBeVisible();
+    await expect(placeholder.locator("img")).toHaveAttribute(
+      "src",
+      "/images/marketplace-hero.webp",
+    );
+    await expect(publicListing.locator("img")).toHaveCount(1);
+    await expect(
+      publicListing.locator(".public-listing-detail-tabs"),
+    ).toHaveCount(0);
+    await expect(publicListing.locator(".public-gallery-section")).toHaveCount(
+      0,
+    );
+    await expect(publicListing.getByText(/^Listed by /u)).toHaveCount(0);
+    await expect(
+      publicListing.getByText("Contact", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      publicListing.getByText(
+        "Estate Sales Bakersfield is not the organizer.",
+        { exact: false },
+      ),
+    ).toBeVisible();
+
+    await page.goto(`/admin/imports/listings/${listingId}`);
+
+    await page.getByLabel("Sale type").selectOption("YARD_SALE");
     await page.getByLabel("Title").fill(publishedTitle);
     await page.getByRole("button", { name: "Save listing" }).click();
     await expect(
       page.getByRole("heading", { name: publishedTitle, exact: true }),
     ).toBeVisible();
+
+    const editedListing = await prisma.externalListing.findUniqueOrThrow({
+      where: { id: listingId },
+      select: { canonicalPath: true, eventType: true },
+    });
+    expect(editedListing).toMatchObject({ eventType: "YARD_SALE" });
+    expect(editedListing.canonicalPath).toMatch(
+      /^\/yard-sales\/[a-z0-9-]+-[0-9a-f]{12}$/u,
+    );
+    await page.goto(published.canonicalPath);
+    await expect(page).toHaveURL(editedListing.canonicalPath);
+    await expect(
+      page.getByRole("heading", { name: publishedTitle, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.locator('article.public-listing[data-source-kind="EXTERNAL"]'),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("navigation", { name: "Breadcrumb" })
+        .getByRole("link", { name: "Yard sales", exact: true }),
+    ).toBeVisible();
+
+    await page.goto("/estate-sales");
+    await expect(externalListingCard(page, publishedTitle)).toHaveCount(0);
+    await page.goto("/yard-sales");
+    await expectExternalListingCard(
+      page,
+      publishedTitle,
+      editedListing.canonicalPath,
+    );
+    await page.goto("/search?sale=yard&view=list");
+    await expectExternalListingCard(
+      page,
+      publishedTitle,
+      editedListing.canonicalPath,
+    );
+
+    await page.goto(`/admin/imports/listings/${listingId}`);
 
     await page.getByRole("button", { name: "Remove listing" }).click();
     const removeDialog = page.getByRole("dialog", {
@@ -407,6 +571,22 @@ test("reviews a manual listing import and manages a one-time ingestion credentia
         }),
       )
       .toEqual({ status: "REMOVED" });
+
+    const removedDetailResponse = await page.goto(editedListing.canonicalPath);
+    expect(removedDetailResponse?.status()).toBe(404);
+    await expect(page.locator("article.public-listing")).toHaveCount(0);
+
+    for (const route of ["/", "/yard-sales", "/search?sale=yard&view=list"]) {
+      await page.goto(route);
+      await expect(externalListingCard(page, publishedTitle)).toHaveCount(0);
+    }
+    await page.goto("/search?sale=yard");
+    await expect(
+      page.getByRole("button", {
+        name: `Show ${publishedTitle} on the map`,
+        exact: true,
+      }),
+    ).toHaveCount(0);
   } finally {
     await prisma.$disconnect();
   }

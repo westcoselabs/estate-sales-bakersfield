@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { notFound, permanentRedirect } from "next/navigation";
+import { notFound, permanentRedirect, redirect } from "next/navigation";
 
 import {
-  PublicEventListing,
+  PublicListing,
   publicListingMetadata,
 } from "@/app/_components/public-event-listing";
 import { loadPublishedListing } from "@/app/_components/published-listing-loader";
@@ -27,11 +27,12 @@ export default async function YardSaleListingPage({ params }: Props) {
   const listing = await loadPublishedListing("YARD_SALE", value);
   if (!listing) notFound();
   if (listing.canonicalPath !== `/yard-sales/${value}`) {
+    if (listing.sourceKind === "EXTERNAL") redirect(listing.canonicalPath);
     permanentRedirect(listing.canonicalPath);
   }
   return (
     <PublicShell>
-      <PublicEventListing listing={listing} />
+      <PublicListing listing={listing} />
     </PublicShell>
   );
 }

@@ -1,4 +1,5 @@
 export type PublicSaleFilter = "all" | "estate" | "yard";
+export type PublicListingSourceKind = "ORGANIZER" | "EXTERNAL";
 export type PublicDateFilter =
   "all" | "today" | "tomorrow" | "weekend" | "next-7-days" | "custom";
 export type PublicSearchView = "list" | "map";
@@ -29,6 +30,10 @@ export interface PublicSearchIssue {
 
 export interface PublicListingCardProjection {
   readonly id: string;
+  readonly sourceKind: PublicListingSourceKind;
+  readonly resultKey: `event:${string}` | `external:${string}`;
+  readonly sourceLabel: string | null;
+  readonly unclaimed: boolean;
   readonly href: string;
   readonly saleType: "estate" | "yard";
   readonly title: string;
@@ -48,6 +53,10 @@ export interface PublicListingCardProjection {
 
 export interface PublicMapMarkerProjection {
   readonly id: string;
+  readonly sourceKind: PublicListingSourceKind;
+  readonly resultKey: `event:${string}` | `external:${string}`;
+  readonly sourceLabel: string | null;
+  readonly unclaimed: boolean;
   readonly href: string;
   readonly saleType: "estate" | "yard";
   readonly title: string;

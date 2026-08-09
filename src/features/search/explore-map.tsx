@@ -43,9 +43,9 @@ export default function ExploreMap({
       type: "FeatureCollection",
       features: markers.map((marker) => ({
         type: "Feature",
-        id: marker.id,
+        id: marker.resultKey,
         properties: {
-          id: marker.id,
+          id: marker.resultKey,
           markerKind: marker.markerKind,
         },
         geometry: {
@@ -252,10 +252,10 @@ export default function ExploreMap({
       <div className="explore-map__keyboard-markers" aria-label="Map results">
         {markers.map((marker) => (
           <button
-            key={marker.id}
+            key={marker.resultKey}
             type="button"
-            aria-pressed={selectedId === marker.id}
-            onClick={() => onSelect(marker.id)}
+            aria-pressed={selectedId === marker.resultKey}
+            onClick={() => onSelect(marker.resultKey)}
           >
             Show {marker.title} on the map
           </button>

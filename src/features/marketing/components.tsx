@@ -32,7 +32,7 @@ type SelectedListingsProps = {
 function SelectedListingsSection({
   children,
   title = "Upcoming sales in Bakersfield",
-  description = "Paid published listings appear here in soonest-first order.",
+  description = "Published local listings appear here in soonest-first order.",
   moreHref = "/search",
 }: SelectedListingsProps & { readonly children: ReactNode }) {
   return (
@@ -83,8 +83,9 @@ function SelectedListingsResults({
           <div>
             <h3>No upcoming published sales yet</h3>
             <p>
-              New listings will appear here as organizers publish them. You can
-              still explore sale guides or prepare your own listing.
+              New listings will appear here as organizers publish them and
+              reviewed external listings become available. You can still
+              explore sale guides or prepare your own listing.
             </p>
             <div className="marketing-actions">
               <Link className="ui-button ui-button--primary" href={moreHref}>
@@ -103,7 +104,7 @@ function SelectedListingsResults({
         <div className="market-listing-grid">
           {result.items.map((listing, index) => (
             <ListingCard
-              key={listing.id}
+              key={listing.resultKey}
               listing={listing}
               priority={index === 0}
             />
@@ -118,7 +119,7 @@ export async function SelectedListings({
   criteria,
   limit,
   title = "Upcoming sales in Bakersfield",
-  description = "Paid published listings appear here in soonest-first order.",
+  description = "Published local listings appear here in soonest-first order.",
   moreHref = "/search",
 }: SelectedListingsProps & {
   readonly criteria: PublicSearchCriteria;
@@ -149,7 +150,7 @@ export async function SelectedListings({
 export function SelectedListingsSkeleton({
   count,
   title = "Upcoming sales in Bakersfield",
-  description = "Paid published listings appear here in soonest-first order.",
+  description = "Published local listings appear here in soonest-first order.",
   moreHref = "/search",
 }: SelectedListingsProps & { readonly count: number }) {
   return (

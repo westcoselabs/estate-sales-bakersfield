@@ -5,6 +5,10 @@ import { randomUUID } from "node:crypto";
 import { cleanupConfiguredAuthenticationRateLimits } from "@/modules/auth";
 import { createConfiguredEventService } from "@/modules/events";
 import { PrismaDurableJobRepository, runJobBatch } from "@/modules/jobs";
+import {
+  createConfiguredExternalListingLifecycleService,
+  EXTERNAL_LISTING_EXPIRATION_JOB_TYPE,
+} from "@/modules/listing-imports";
 import { createConfiguredPaymentService } from "@/modules/payments";
 import { getPrismaClient } from "@/platform/database/client";
 
@@ -13,6 +17,8 @@ export async function runConfiguredJobBatch(limit = 10) {
     await cleanupConfiguredAuthenticationRateLimits();
   const paymentService = createConfiguredPaymentService();
   const eventService = createConfiguredEventService();
+  const externalListingLifecycle =
+    createConfiguredExternalListingLifecycleService();
   const reconciliationCandidatesEnqueued =
     await paymentService.enqueueReconciliationCandidates(50);
   const jobs = await runJobBatch(
@@ -39,6 +45,11 @@ export async function runConfiguredJobBatch(limit = 10) {
           throw new Error("INVALID_EVENT_MEDIA_PURGE_PAYLOAD");
         }
         await eventService.purgeLifecycleMedia(payload.eventId);
+      },
+      [EXTERNAL_LISTING_EXPIRATION_JOB_TYPE]: async (payload, context) => {
+        await externalListingLifecycle.expire(payload, {
+          jobId: context.jobId,
+        });
       },
     },
     {
