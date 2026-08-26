@@ -39,6 +39,18 @@ database URL, Blob token, email credential, or server provider credential.
 Stripe-hosted Checkout and the signed webhook remain authoritative; the
 success redirect cannot publish.
 
+## Scheduled work on Hobby
+
+The checked-in Vercel schedules run `/api/internal/jobs/run` daily during the
+09:00 UTC hour and `/api/internal/email-jobs/run` daily during the 10:00 UTC
+hour. Vercel Hobby does not guarantee a precise minute within either hour.
+Normal signed Stripe webhooks still fulfill immediately; the maintenance cron
+is the fallback for missing/delayed webhook reconciliation and also processes
+cleanup and media jobs. Queued receipts and contact synchronization may wait
+roughly one day, and a queue larger than the worker's ten-job batch can carry
+into later days. Treat sustained backlog as a stop condition and revisit the
+scheduling plan before higher-volume launch.
+
 ## Migration gate
 
 Load Production Neon variables without displaying them. Confirm the

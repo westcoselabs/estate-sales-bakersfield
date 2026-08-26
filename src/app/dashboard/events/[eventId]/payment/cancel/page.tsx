@@ -35,24 +35,14 @@ export default async function PaymentCancelPage({
         displayName: user.displayName,
         isSuperAdmin: user.role === "SUPER_ADMIN",
       }}
-      eyebrow="Checkout canceled"
-      title={event.title ?? "Payment canceled"}
+      eyebrow="Checkout return"
+      title={event.title ?? "Payment status"}
     >
       <PaymentCancelRecorder eventId={eventId} attemptId={attemptId} />
       <PaymentPanel
         eventId={eventId}
         expectedVersion={event.version}
-        initialStatus={{
-          ...payment,
-          displayState:
-            payment.displayState === "PUBLISHED"
-              ? "PUBLISHED"
-              : "PAYMENT_CANCELED",
-          message:
-            payment.displayState === "PUBLISHED"
-              ? payment.message
-              : "Checkout was canceled before payment confirmation.",
-        }}
+        initialStatus={payment}
         returnContext="cancel"
       />
     </BuilderShell>

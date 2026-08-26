@@ -81,6 +81,17 @@ export interface EventRepository {
   >;
   findLifecycleMediaKeys(eventId: string): Promise<readonly string[]>;
   clearLifecycleMediaKeys(eventId: string): Promise<void>;
+  findExpiredPhotoReservation(input: {
+    readonly reservationId: string;
+    readonly now: Date;
+  }): Promise<{
+    readonly photoId: string;
+    readonly stagingObjectKey: string;
+  } | null>;
+  deleteExpiredPhotoReservation(input: {
+    readonly reservationId: string;
+    readonly now: Date;
+  }): Promise<void>;
   updateDetails(input: {
     readonly eventId: string;
     readonly userId: string;
@@ -178,11 +189,11 @@ export interface EventRepository {
     readonly userId: string;
     readonly expectedVersion: number;
     readonly workflowState: "INCOMPLETE_DRAFT" | "PREVIEW_READY";
+    readonly now: Date;
     readonly audit: EventAuditContext;
-  }): Promise<{
-    readonly event: EventRecord;
-    readonly objectKeys: readonly string[];
-  } | null>;
+  }): Promise<EventRecord | null>;
+  findDeletedPhotoObjectKeys(photoId: string): Promise<readonly string[]>;
+  deletePurgedPhoto(photoId: string): Promise<void>;
   approve(input: {
     readonly eventId: string;
     readonly principal: AuthPrincipal;
@@ -198,9 +209,11 @@ export interface EventRepository {
     readonly variant: "thumbnail" | "card" | "gallery" | "cover";
     readonly userId: string | null;
     readonly administrator: boolean;
+    readonly now: Date;
   }): Promise<{
     readonly objectKey: string;
     readonly contentType: string;
     readonly public: boolean;
+    readonly publicUntil: Date | null;
   } | null>;
 }

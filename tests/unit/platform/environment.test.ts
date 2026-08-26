@@ -9,6 +9,16 @@ const base = {
   LOG_LEVEL: "silent",
 };
 
+const productionCoreProviders = {
+  AUTH_FINGERPRINT_SECRET: "fingerprint-secret-at-least-32-characters",
+  BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_production_fixture",
+  BLOB_RESOURCE_ENV: "production",
+  RESEND_API_KEY: "re_production_fixture",
+  RESEND_FROM: "Estate Sales Bakersfield <accounts@example.test>",
+  RESEND_RESOURCE_ENV: "production",
+  RESEND_WEBHOOK_SECRET: "resend-webhook-secret-fixture",
+};
+
 describe("server environment validation", () => {
   it("allows credential-free local and test configuration", () => {
     expect(parseServerEnvironment(base)).toMatchObject(base);
@@ -96,22 +106,57 @@ describe("server environment validation", () => {
         APP_ENV: "production",
       }),
     ).toThrow();
-    expect(
-      parseServerEnvironment({
-        ...base,
-        NODE_ENV: "production",
-        APP_ENV: "production",
-        VERCEL_ENV: "production",
-        APP_URL: "https://production.example.test",
-        DATABASE_URL: "postgresql://example.test/database",
-        DIRECT_URL: "postgresql://example.test/database",
-        DATABASE_RESOURCE_ENV: "production",
-        CRON_SECRET: "a".repeat(32),
-        GEOAPIFY_API_KEY: "g".repeat(32),
-        NEXT_PUBLIC_MAP_STYLE_URL:
-          "https://tiles.openfreemap.org/styles/liberty",
-      }),
-    ).toMatchObject({ APP_ENV: "production" });
+    const productionEnvironment = {
+      ...base,
+      NODE_ENV: "production",
+      APP_ENV: "production",
+      VERCEL_ENV: "production",
+      PRODUCTION_BETA_MODE: "true",
+      APP_URL: "https://production.example.test",
+      DATABASE_URL: "postgresql://example.test/database",
+      DIRECT_URL: "postgresql://example.test/database",
+      DATABASE_RESOURCE_ENV: "production",
+      CRON_SECRET: "a".repeat(32),
+      GEOAPIFY_API_KEY: "g".repeat(32),
+      NEXT_PUBLIC_MAP_STYLE_URL: "https://tiles.openfreemap.org/styles/liberty",
+      ...productionCoreProviders,
+      STRIPE_SECRET_KEY: `sk_test_${"x".repeat(24)}`,
+      STRIPE_WEBHOOK_SECRET: `whsec_${"y".repeat(24)}`,
+      STRIPE_PRICE_ID: "price_production_beta",
+      STRIPE_EXPECTED_AMOUNT: "2000",
+      STRIPE_EXPECTED_CURRENCY: "usd",
+      STRIPE_MODE: "test",
+      STRIPE_RESOURCE_ENV: "production",
+    };
+    expect(parseServerEnvironment(productionEnvironment)).toMatchObject({
+      APP_ENV: "production",
+    });
+
+    for (const key of [
+      "AUTH_FINGERPRINT_SECRET",
+      "BLOB_READ_WRITE_TOKEN",
+      "BLOB_RESOURCE_ENV",
+      "RESEND_API_KEY",
+      "RESEND_FROM",
+      "RESEND_RESOURCE_ENV",
+      "RESEND_WEBHOOK_SECRET",
+      "GEOAPIFY_API_KEY",
+      "NEXT_PUBLIC_MAP_STYLE_URL",
+      "STRIPE_SECRET_KEY",
+      "STRIPE_WEBHOOK_SECRET",
+      "STRIPE_PRICE_ID",
+      "STRIPE_EXPECTED_AMOUNT",
+      "STRIPE_EXPECTED_CURRENCY",
+      "STRIPE_MODE",
+      "STRIPE_RESOURCE_ENV",
+    ] as const) {
+      expect(() =>
+        parseServerEnvironment({
+          ...productionEnvironment,
+          [key]: undefined,
+        }),
+      ).toThrow(new RegExp(`${key} is required in production`));
+    }
     expect(() =>
       parseServerEnvironment({
         ...base,
@@ -323,6 +368,7 @@ describe("server environment validation", () => {
       STRIPE_RESOURCE_ENV: "production",
       GEOAPIFY_API_KEY: "geoapify-production-beta-key",
       NEXT_PUBLIC_MAP_STYLE_URL: "https://tiles.openfreemap.org/styles/liberty",
+      ...productionCoreProviders,
     };
 
     expect(parseServerEnvironment(productionBeta)).toMatchObject({
@@ -365,6 +411,7 @@ describe("server environment validation", () => {
       STRIPE_RESOURCE_ENV: "production",
       GEOAPIFY_API_KEY: "geoapify-production-live-key",
       NEXT_PUBLIC_MAP_STYLE_URL: "https://tiles.openfreemap.org/styles/liberty",
+      ...productionCoreProviders,
     };
 
     expect(parseServerEnvironment(production)).toMatchObject({

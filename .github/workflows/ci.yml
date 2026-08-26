@@ -13,11 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
         with:
           version: 10.33.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -36,11 +36,11 @@ jobs:
       PRODUCTION_NEON_ENDPOINT_ID: ${{ secrets.PRODUCTION_NEON_ENDPOINT_ID }}
       DEVELOPMENT_DATABASE_CONFIRMATION: estate-sales-bakersfield-development-neon-test-schemas
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
         with:
           version: 10.33.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
           node-version-file: .node-version
           cache: pnpm

@@ -175,6 +175,16 @@ export class PaymentService {
     const event = await this.ownedEvent(user, eventId);
     if (event.version !== expectedVersion) throw new EventConflictError();
     const eligible = checkoutEligibility(event, this.now());
+    const providerPrice = await stripe.retrievePrice(price.priceId);
+    if (
+      providerPrice.priceId !== price.priceId ||
+      !providerPrice.active ||
+      providerPrice.billingType !== "one_time" ||
+      providerPrice.amount !== price.amount ||
+      providerPrice.currency !== price.currency
+    ) {
+      throw new PaymentConfigurationError();
+    }
 
     const active = await this.payments.findActiveAttempt(event.id);
     if (active) {
@@ -801,10 +811,7 @@ export class PaymentService {
   ): Promise<void> {
     if (!DATABASE_ID.test(eventId)) return;
     const attempt = await this.payments.findActiveAttempt(eventId);
-    if (
-      !attempt?.stripeCheckoutSessionId ||
-      attempt.paymentState === "PAID"
-    ) {
+    if (!attempt?.stripeCheckoutSessionId || attempt.paymentState === "PAID") {
       return;
     }
     const { stripe } = this.configured();
@@ -835,6 +842,7 @@ export class PaymentService {
     const publication = await this.payments.findPublishedByPublicId({
       publicId,
       eventType,
+      activeAfter: now,
     });
     return publication
       ? publishedListing({
@@ -842,7 +850,6 @@ export class PaymentService {
           approvedRevision: publication.approvedRevision,
           canonicalPath: publication.canonicalPath,
           publishedAt: publication.publishedAt,
-          verifiedEmail: publication.verifiedEmail,
           snapshot: publication.snapshot,
           now,
         })

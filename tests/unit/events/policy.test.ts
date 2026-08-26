@@ -57,6 +57,18 @@ describe("event publication policy", () => {
       privacyMode: "APPROXIMATE_LOCATION",
       description: "Serving neighbors around Main Street this weekend.",
     });
+    const reorderedLeak = readyEvent({
+      privacyMode: "APPROXIMATE_LOCATION",
+      title: "Main St sale — house 123",
+    });
+    const directionalLeak = readyEvent({
+      privacyMode: "HIDDEN_UNTIL_START",
+      location: {
+        ...readyEvent().location!,
+        addressLine1: "123 North Main Street",
+      },
+      description: "Find the sale at 123 N. Main St.",
+    });
 
     expect(eventReadiness(titleLeak).missing).toContain(
       "Remove the private street address from the title.",
@@ -65,6 +77,12 @@ describe("event publication policy", () => {
       "Remove the private street address from the description.",
     );
     expect(eventReadiness(genericStreet).ready).toBe(true);
+    expect(eventReadiness(reorderedLeak).missing).toContain(
+      "Remove the private street address from the title.",
+    );
+    expect(eventReadiness(directionalLeak).missing).toContain(
+      "Remove the private street address from the description.",
+    );
     expect(
       eventReadiness(
         readyEvent({
@@ -156,10 +174,12 @@ describe("event publication policy", () => {
     expect(projection.organizer).toEqual({
       displayName: null,
       websiteUrl: null,
+      contactEmail: "seller@example.test",
     });
-    expect(() =>
-      futurePublicEventProjection(readyEvent({ ownerVerifiedEmail: null })),
-    ).not.toThrow();
+    expect(
+      futurePublicEventProjection(readyEvent({ ownerVerifiedEmail: null }))
+        .organizer.contactEmail,
+    ).toBeNull();
   });
 
   it("produces a deterministic digest and changes it for material public content", () => {

@@ -19,6 +19,7 @@ import {
   EventConflictError,
   EventLifecycleBlockedError,
   EventNotFoundError,
+  OrganizerProfileIncompleteError,
   EventStateError,
   EventValidationError,
   PhotoProcessingError,
@@ -42,7 +43,6 @@ import {
   eventReadiness,
   futurePublicEventProjection,
   PUBLISHING_TERMS_VERSION,
-  publicEventProjection,
   toEventEditorDto,
 } from "./policy";
 import type {
@@ -145,6 +145,7 @@ export class EventService {
     private readonly media: MediaStore,
     private readonly images: ImageProcessor,
     private readonly environment: MediaEnvironment,
+    private readonly now: () => Date = () => new Date(),
   ) {}
 
   private async loadOwned(
@@ -225,6 +226,33 @@ export class EventService {
     return toEventEditorDto(await this.loadOwned(eventId, user.id));
   }
 
+  async validateDraftDeletion(
+    principal: AuthPrincipal | null,
+    eventId: string,
+    input: {
+      readonly expectedVersion: number;
+      readonly confirmation: string;
+    },
+  ): Promise<void> {
+    const user = requireUserPrincipal(principal);
+    if (!DATABASE_ID.test(eventId)) throw new EventNotFoundError();
+    const target = await this.events.findOwnedForLifecycle(eventId, user.id);
+    if (!target) throw new EventNotFoundError();
+    this.assertLifecycleConfirmation(target, input.confirmation);
+    if (target.version !== input.expectedVersion)
+      throw new EventConflictError();
+    if (
+      target.publication ||
+      target.canceledAt ||
+      target.deletedAt ||
+      target.removedAt
+    ) {
+      throw new EventLifecycleBlockedError(
+        "Only an active unpublished draft can be deleted.",
+      );
+    }
+  }
+
   async deleteDraft(
     principal: AuthPrincipal | null,
     eventId: string,
@@ -239,7 +267,7 @@ export class EventService {
     const target = await this.events.findOwnedForLifecycle(eventId, user.id);
     if (!target) throw new EventNotFoundError();
     this.assertLifecycleConfirmation(target, input.confirmation);
-    const now = new Date();
+    const now = this.now();
     const result = await this.events.deleteOwnedDraft({
       eventId,
       userId: user.id,
@@ -318,6 +346,31 @@ export class EventService {
     await this.events.clearLifecycleMediaKeys(eventId);
   }
 
+  async purgeExpiredPhotoReservation(reservationId: string): Promise<void> {
+    if (!DATABASE_ID.test(reservationId)) {
+      throw new Error("INVALID_PHOTO_RESERVATION_PURGE_PAYLOAD");
+    }
+    const now = this.now();
+    const reservation = await this.events.findExpiredPhotoReservation({
+      reservationId,
+      now,
+    });
+    if (!reservation) return;
+    await this.media.delete(parseMediaObjectKey(reservation.stagingObjectKey));
+    await this.events.deleteExpiredPhotoReservation({ reservationId, now });
+  }
+
+  async purgeDeletedPhoto(photoId: string): Promise<void> {
+    if (!DATABASE_ID.test(photoId)) {
+      throw new Error("INVALID_PHOTO_PURGE_PAYLOAD");
+    }
+    const keys = (await this.events.findDeletedPhotoObjectKeys(photoId)).map(
+      parseMediaObjectKey,
+    );
+    if (keys.length > 0) await this.media.deleteMany(keys);
+    await this.events.deletePurgedPhoto(photoId);
+  }
+
   async updateDetails(
     principal: AuthPrincipal | null,
     eventId: string,
@@ -327,6 +380,14 @@ export class EventService {
     const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
+    if (current.version !== input.expectedVersion)
+      throw new EventConflictError();
+    if (
+      current.title === input.title &&
+      current.description === input.description
+    ) {
+      return toEventEditorDto(current);
+    }
     const hypothetical = withChanges(current, {
       title: input.title,
       description: input.description,
@@ -356,6 +417,15 @@ export class EventService {
     const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
+    if (current.version !== input.expectedVersion)
+      throw new EventConflictError();
+    if (
+      current.localStartsAt === input.localStartsAt &&
+      current.localEndsAt === input.localEndsAt &&
+      current.timezone === input.timezone
+    ) {
+      return toEventEditorDto(current);
+    }
     if (current.location && current.location.timezone !== input.timezone) {
       throw new EventValidationError(
         "The schedule timezone must match the validated address timezone.",
@@ -394,6 +464,8 @@ export class EventService {
     const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
+    if (current.version !== input.expectedVersion)
+      throw new EventConflictError();
     if (current.timezone && current.timezone !== input.timezone) {
       throw new EventValidationError(
         "The address timezone must match the saved schedule timezone.",
@@ -413,6 +485,9 @@ export class EventService {
       currentLocation.timezone === input.timezone &&
       currentLocation.confirmationStatus === "CONFIRMED",
     );
+    if (addressUnchanged && current.privacyMode === input.privacyMode) {
+      return toEventEditorDto(current);
+    }
     if (input.confirmed && !selected && !addressUnchanged) {
       throw new EventValidationError(
         "Select an address from the results to continue.",
@@ -826,10 +901,12 @@ export class EventService {
     const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
+    if (current.version !== expectedVersion) throw new EventConflictError();
     const photo = current.photos.find(
       (candidate) => candidate.id === photoId && candidate.status === "READY",
     );
     if (!photo) throw new EventValidationError("Choose a ready event photo.");
+    if (current.coverPhotoId === photoId) return toEventEditorDto(current);
     const hypothetical = withChanges(current, {
       coverPhotoId: photoId,
       approvalStatus: "NOT_APPROVED",
@@ -858,6 +935,7 @@ export class EventService {
     const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
+    if (current.version !== expectedVersion) throw new EventConflictError();
     const expectedIds = new Set(current.photos.map((photo) => photo.id));
     const submittedIds = new Set(photoIds);
     if (
@@ -868,6 +946,9 @@ export class EventService {
       throw new EventValidationError(
         "Photo ordering must include each event photo once.",
       );
+    }
+    if (current.photos.every((photo, index) => photo.id === photoIds[index])) {
+      return toEventEditorDto(current);
     }
     const order = new Map(photoIds.map((id, index) => [id, index]));
     const hypothetical = withChanges(current, {
@@ -916,24 +997,19 @@ export class EventService {
       userId: user.id,
       expectedVersion,
       workflowState: draftWorkflowState(hypothetical),
+      now: this.now(),
       audit,
     });
     if (!deleted) throw new EventConflictError();
-    await Promise.allSettled(
-      deleted.objectKeys.map((key) =>
-        this.media.delete(parseMediaObjectKey(key)),
-      ),
-    );
-    return toEventEditorDto(deleted.event);
+    return toEventEditorDto(deleted);
   }
 
   async preview(
     principal: AuthPrincipal | null,
     eventId: string,
-    now = new Date(),
   ): Promise<PublicEventProjection> {
     const user = requireUserPrincipal(principal);
-    return publicEventProjection(await this.loadOwned(eventId, user.id), now);
+    return futurePublicEventProjection(await this.loadOwned(eventId, user.id));
   }
 
   async approve(
@@ -954,6 +1030,17 @@ export class EventService {
     }
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
+    if (current.organizerStatus !== "COMPLETE") {
+      throw new OrganizerProfileIncompleteError(
+        "Complete your organizer profile before approving this event.",
+      );
+    }
+    const now = this.now();
+    if (!current.startsAt || current.startsAt.getTime() <= now.getTime()) {
+      throw new EventStateError(
+        "The event must start in the future before it can be approved.",
+      );
+    }
     if (current.version !== input.expectedVersion)
       throw new EventConflictError();
     const projection = futurePublicEventProjection(current);
@@ -969,7 +1056,7 @@ export class EventService {
         contentRevision: current.contentRevision,
         digest,
         termsVersion: PUBLISHING_TERMS_VERSION,
-        now: new Date(),
+        now,
         audit,
       });
       if (approved) return toEventEditorDto(approved);
@@ -1000,17 +1087,31 @@ export class EventService {
       user?.role === "SUPER_ADMIN"
         ? Boolean(requireSuperAdminPrincipal(user))
         : false;
+    const now = this.now();
     const media = await this.events.findPhotoVariantForPrincipal({
       photoId,
       variant,
       userId: user?.id ?? null,
       administrator,
+      now,
     });
     if (!media) throw new EventNotFoundError("The media object was not found.");
     return {
       stream: await this.media.read(parseMediaObjectKey(media.objectKey)),
       contentType: media.contentType,
       public: media.public,
+      publicCacheSeconds:
+        media.public && media.publicUntil
+          ? Math.max(
+              0,
+              Math.min(
+                300,
+                Math.floor(
+                  (media.publicUntil.getTime() - now.getTime()) / 1_000,
+                ),
+              ),
+            )
+          : 0,
     };
   }
 }

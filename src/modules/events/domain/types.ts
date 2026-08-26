@@ -1,3 +1,5 @@
+export const MAXIMUM_EVENT_PHOTOS = 150;
+
 export type EventType = "ESTATE_SALE" | "YARD_SALE";
 export type AddressPrivacyMode =
   "EXACT_ADDRESS" | "APPROXIMATE_LOCATION" | "HIDDEN_UNTIL_START";
@@ -76,6 +78,7 @@ export interface EventRecord {
   readonly organizerId: string;
   readonly ownerUserId: string;
   readonly ownerVerifiedEmail: string | null;
+  readonly organizerStatus: "INCOMPLETE" | "COMPLETE";
   readonly organizerDisplayName: string | null;
   readonly organizerWebsiteUrl: string | null;
   readonly publicId: string;
@@ -274,6 +277,7 @@ export interface PublicEventProjection {
   readonly organizer: {
     readonly displayName: string | null;
     readonly websiteUrl: string | null;
+    readonly contactEmail: string | null;
   };
   readonly coverPhotoUrl: string;
   readonly gallery: ReadonlyArray<{

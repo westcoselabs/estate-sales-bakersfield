@@ -79,6 +79,21 @@ export class StripeCheckoutProvider implements StripeProvider {
       stripeClient ?? new Stripe(secretKey, { maxNetworkRetries: 2 });
   }
 
+  async retrievePrice(priceId: string) {
+    try {
+      const price = await this.stripe.prices.retrieve(priceId);
+      return {
+        priceId: price.id,
+        active: price.active,
+        amount: price.unit_amount,
+        currency: price.currency.toLowerCase(),
+        billingType: price.type,
+      };
+    } catch (error) {
+      throw providerError(error);
+    }
+  }
+
   async createHostedCheckout(
     input: CreateHostedCheckoutInput,
   ): Promise<HostedCheckoutSession> {

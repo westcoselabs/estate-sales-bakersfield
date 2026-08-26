@@ -96,9 +96,7 @@ export interface AuthenticationEmailMessage {
 }
 
 export interface EmailService {
-  send(
-    message: AuthenticationEmailMessage,
-  ): Promise<{
+  send(message: AuthenticationEmailMessage): Promise<{
     readonly providerMessageId: string;
     readonly templateRevisionId?: string;
   }>;

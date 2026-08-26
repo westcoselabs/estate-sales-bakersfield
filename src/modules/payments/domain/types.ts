@@ -24,6 +24,14 @@ export interface PublicationPrice {
   readonly fixture: boolean;
 }
 
+export interface ProviderPriceEvidence {
+  readonly priceId: string;
+  readonly active: boolean;
+  readonly amount: number | null;
+  readonly currency: string;
+  readonly billingType: "one_time" | "recurring";
+}
+
 export interface CheckoutCorrelationMetadata {
   readonly paymentAttemptId: string;
   readonly eventId: string;
@@ -105,9 +113,7 @@ export interface PublicationRecord {
   readonly publishedAt: Date;
 }
 
-export interface PublishedPublicationRecord extends PublicationRecord {
-  readonly verifiedEmail: string | null;
-}
+export type PublishedPublicationRecord = PublicationRecord;
 
 export type PaymentDisplayState =
   | "DRAFT_INCOMPLETE"

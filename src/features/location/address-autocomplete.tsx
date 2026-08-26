@@ -57,9 +57,15 @@ export function AddressAutocomplete({
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setState("loading");
-      void fetch(`/api/locations/autocomplete?q=${encodeURIComponent(query)}`, {
+      void fetch("/api/locations/autocomplete", {
+        method: "POST",
         signal: controller.signal,
-        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query }),
       })
         .then(async (response) => {
           const payload = (await response.json()) as {

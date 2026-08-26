@@ -6,6 +6,7 @@ import type {
   FulfillmentResult,
   HostedCheckoutSession,
   PaymentAttemptRecord,
+  ProviderPriceEvidence,
   PublicationPrice,
   PublishedPublicationRecord,
   PublicationRecord,
@@ -23,6 +24,7 @@ export interface CreateHostedCheckoutInput {
 }
 
 export interface StripeProvider {
+  retrievePrice(priceId: string): Promise<ProviderPriceEvidence>;
   createHostedCheckout(
     input: CreateHostedCheckoutInput,
   ): Promise<HostedCheckoutSession>;
@@ -133,6 +135,7 @@ export interface PaymentRepository {
   findPublishedByPublicId(input: {
     readonly publicId: string;
     readonly eventType: "ESTATE_SALE" | "YARD_SALE";
+    readonly activeAfter: Date;
   }): Promise<PublishedPublicationRecord | null>;
 }
 

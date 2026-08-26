@@ -1,6 +1,7 @@
 # ADR 006: PostgreSQL Authentication Rate Limits
 
-Status: accepted; amended on 2026-07-21 by the architecture simplification decision.
+Status: accepted; amended on 2026-07-21 by the architecture simplification
+decision and on 2026-08-26 for the Hobby beta schedule.
 
 ## Decision
 
@@ -26,9 +27,12 @@ Limits apply independently to network and subject fingerprints:
 Every protected workflow fails closed when the rate-limit database operation fails. Registration, login, and reset receive a sanitized 503. Verification-resend and forgot-password threshold rejections retain their generic 202 response, while a database outage returns the same sanitized 503 for every submitted identity. No workflow falls back to process memory.
 
 The authenticated cron/job runner deletes expired buckets from its active Neon
-database whenever it runs. It must run at least hourly in Vercel Production;
-local operators can run `pnpm jobs:run`. Test runs use a hashed `TEST_RUN_ID`
-scope inside their disposable Development schema, which is dropped at teardown.
+database whenever it runs. The Production beta runs that cleanup daily at
+`0 9 * * *` UTC to remain compatible with Vercel Hobby. Expired rows do not
+grant additional requests because every rate-limit decision uses the current
+window key; the reduced cadence only increases retention of inert rows. Local
+operators can run `pnpm jobs:run`. Test runs use a hashed `TEST_RUN_ID` scope
+inside their disposable Development schema, which is dropped at teardown.
 
 ## Rationale
 

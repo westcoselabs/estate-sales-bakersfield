@@ -244,12 +244,7 @@ export function AuthShell({
 }
 
 type DashboardDestination =
-  | "overview"
-  | "listings"
-  | "create"
-  | "admin"
-  | "profile"
-  | "settings";
+  "overview" | "listings" | "create" | "admin" | "profile" | "settings";
 
 export function DashboardShell({
   children,

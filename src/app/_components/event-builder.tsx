@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import {
   useEffect,
   useRef,
@@ -466,6 +467,7 @@ async function jsonRequest<T>(
 }
 
 export function CreateEventForm() {
+  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -483,7 +485,7 @@ export function CreateEventForm() {
         { eventType: data.get("eventType") as EventType },
         controller.signal,
       );
-      window.location.assign(`/dashboard/events/${result.event.id}/edit`);
+      router.push(`/dashboard/events/${result.event.id}/edit`);
     } catch (error) {
       setMessage(
         error instanceof DOMException && error.name === "AbortError"
@@ -526,6 +528,7 @@ export function EventBuilder({
   readonly accountEmail: string;
   readonly initialEmailVerified: boolean;
 }) {
+  const router = useRouter();
   const [draft, setDraft] = useState(initialEvent);
   const draftRef = useRef(initialEvent);
   const controllers = useRef(new Set<AbortController>());
@@ -552,9 +555,7 @@ export function EventBuilder({
   const [localEndsAt, setLocalEndsAt] = useState(
     initialEvent.localEndsAt ?? "",
   );
-  const [timezone, setTimezone] = useState(
-    initialEvent.timezone ?? "America/Los_Angeles",
-  );
+  const timezone = "America/Los_Angeles";
   const [scheduleStartTime, setScheduleStartTime] = useState(() =>
     localTimeValue(initialEvent.localStartsAt, "09:00"),
   );
@@ -683,7 +684,6 @@ export function EventBuilder({
     setDescription(event.description ?? "");
     setLocalStartsAt(event.localStartsAt ?? "");
     setLocalEndsAt(event.localEndsAt ?? "");
-    setTimezone(event.timezone ?? "America/Los_Angeles");
     setScheduleStartTime(localTimeValue(event.localStartsAt, "09:00"));
     setScheduleEndTime(localTimeValue(event.localEndsAt, "16:00"));
     setAddressLine1(event.location?.addressLine1 ?? "");
@@ -1612,7 +1612,7 @@ export function EventBuilder({
         kind: "success",
         text: `Revision ${String(response.event.approvedRevision)} approved. Opening payment…`,
       });
-      window.location.assign(`/dashboard/events/${response.event.id}/payment`);
+      router.push(`/dashboard/events/${response.event.id}/payment`);
     } catch (error) {
       if (
         error instanceof ApiRequestError &&
@@ -2121,13 +2121,17 @@ export function EventBuilder({
                       </div>
                     </div>
                     <label className="schedule-timezone-field">
-                      <span>IANA timezone</span>
+                      <span>Timezone</span>
                       <input
                         value={timezone}
-                        onChange={(event) => setTimezone(event.target.value)}
-                        required
+                        aria-describedby="schedule-timezone-note"
+                        readOnly
                       />
                     </label>
+                    <p id="schedule-timezone-note">
+                      Bakersfield schedules use Pacific Time automatically,
+                      including daylight-saving rules.
+                    </p>
                     <div className="schedule-summary" role="status">
                       {scheduleStartDate && scheduleEndDate
                         ? `Sale: ${formatScheduleDate(localStartsAt)} – ${formatScheduleDate(localEndsAt)}, ${formatScheduleTime(scheduleStartTime)} – ${formatScheduleTime(scheduleEndTime)}`

@@ -52,7 +52,7 @@ export default async function EventPreviewPage({ params }: Props) {
     approvedRevision: editor.contentRevision,
     canonicalPath: preview.path,
     publishedAt: new Date(),
-    verifiedEmail: user.emailVerifiedAt ? user.email : null,
+    verifiedEmail: preview.organizer.contactEmail,
     projection: preview,
   };
 
@@ -93,6 +93,14 @@ export default async function EventPreviewPage({ params }: Props) {
           ) : null}
         </div>
       </div>
+      {preview.address.kind === "EXACT" &&
+      editor.privacyMode === "HIDDEN_UNTIL_START" ? (
+        <p className="notice">
+          You are reviewing the exact address that will be released to the
+          public at the event start time. Anonymous visitors will see it as
+          hidden before then.
+        </p>
+      ) : null}
       <PublicEventListing
         listing={previewListing}
         revisionNote={`Exact future listing preview for revision ${String(editor.contentRevision)}.`}

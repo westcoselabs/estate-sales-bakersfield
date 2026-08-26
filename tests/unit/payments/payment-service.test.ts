@@ -67,6 +67,13 @@ function stripeProvider(
   overrides: Partial<StripeProvider> = {},
 ): StripeProvider {
   return {
+    retrievePrice: vi.fn(async () => ({
+      priceId: price.priceId,
+      active: true,
+      amount: price.amount,
+      currency: price.currency,
+      billingType: "one_time" as const,
+    })),
     createHostedCheckout: vi.fn(),
     retrieveCheckout: vi.fn(),
     expireCheckout: vi.fn(),
@@ -127,6 +134,7 @@ function publication(attempt: PaymentAttemptRecord): PublicationRecord {
         organizer: {
           displayName: event.organizerDisplayName,
           websiteUrl: event.organizerWebsiteUrl,
+          contactEmail: event.ownerVerifiedEmail,
         },
         coverPhotoUrl: `/media/${event.coverPhotoId}/cover`,
         gallery: [
@@ -299,6 +307,32 @@ describe("Phase 4 payment service", () => {
         idempotencyKey: `phase4:test:${attempt.id}:g1`,
       }),
     );
+  });
+
+  it("rejects a mismatched provider Price before creating an attempt", async () => {
+    const event = approvedEvent();
+    const createAttempt = vi.fn();
+    const createHostedCheckout = vi.fn();
+    const provider = stripeProvider({
+      retrievePrice: vi.fn(async () => ({
+        priceId: price.priceId,
+        active: true,
+        amount: price.amount + 1,
+        currency: price.currency,
+        billingType: "one_time" as const,
+      })),
+      createHostedCheckout,
+    });
+
+    await expect(
+      service(
+        paymentRepository({ createAttempt }),
+        eventRepository(event),
+        provider,
+      ).createCheckout(principal, event.id, event.version),
+    ).rejects.toMatchObject({ code: "PAYMENT_CONFIGURATION_UNAVAILABLE" });
+    expect(createAttempt).not.toHaveBeenCalled();
+    expect(createHostedCheckout).not.toHaveBeenCalled();
   });
 
   it("replaces a local fixture Checkout lost after a server restart", async () => {

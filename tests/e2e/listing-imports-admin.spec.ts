@@ -588,6 +588,13 @@ test("reviews a manual listing import and manages a one-time ingestion credentia
       }),
     ).toHaveCount(0);
   } finally {
+    await prisma.session.deleteMany({
+      where: { user: { normalizedEmail: email } },
+    });
+    await prisma.user.updateMany({
+      where: { normalizedEmail: email, role: "SUPER_ADMIN" },
+      data: { role: "USER" },
+    });
     await prisma.$disconnect();
   }
 });

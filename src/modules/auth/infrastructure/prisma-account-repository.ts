@@ -1,5 +1,7 @@
 import "server-only";
 
+import { MARKETING_CONSENT_VERSION } from "../application/marketing-preference-service";
+
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 
 import type { AccountRepository, AuditContext } from "../application/ports";
@@ -145,7 +147,7 @@ export class PrismaAccountRepository implements AccountRepository {
             data: {
               userId: account.id,
               consentAt: input.consentAt,
-              consentVersion: "marketing-v1",
+              consentVersion: MARKETING_CONSENT_VERSION,
               consentSource: "SIGNUP",
             },
           });
@@ -156,7 +158,7 @@ export class PrismaAccountRepository implements AccountRepository {
               targetId: account.id,
               actorUserId: account.id,
               metadata: {
-                consentVersion: "marketing-v1",
+                consentVersion: MARKETING_CONSENT_VERSION,
                 consentSource: "SIGNUP",
               },
             }),

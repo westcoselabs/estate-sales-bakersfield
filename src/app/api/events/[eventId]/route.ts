@@ -57,15 +57,14 @@ export async function DELETE(request: Request, context: Context) {
     const { eventId } = await context.params;
     const input = eventLifecycleMutationSchema.parse(await readJson(request));
     const user = await requireUser();
+    const events = createConfiguredEventService();
+    await events.validateDraftDeletion(user, eventId, input);
     await createConfiguredPaymentService().prepareDraftDeletion(user, eventId, {
       requestId,
     });
-    const result = await createConfiguredEventService().deleteDraft(
-      user,
-      eventId,
-      input,
-      { requestId },
-    );
+    const result = await events.deleteDraft(user, eventId, input, {
+      requestId,
+    });
     return authJson({ ...result, requestId }, { requestId });
   } catch (error) {
     return eventApiError(error, request, "events.delete-draft");

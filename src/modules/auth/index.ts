@@ -69,9 +69,12 @@ export {
 } from "./application/abuse-control";
 export { SessionService } from "./application/session-service";
 export {
+  hasExplicitMarketingConsent,
+  MARKETING_CONSENT_VERSION,
   MarketingPreferenceService,
 } from "./application/marketing-preference-service";
 export type {
+  MarketingConsentRecord,
   MarketingPreferenceProjection,
   MarketingPreferenceRepository,
 } from "./application/marketing-preference-service";

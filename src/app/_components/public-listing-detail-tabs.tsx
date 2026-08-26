@@ -67,7 +67,11 @@ export function PublicListingDetailTabs({
         id="listing-pictures-panel"
         role="tabpanel"
       >
-        <PublicListingGallery photos={photos} title={title} heading="Pictures" />
+        <PublicListingGallery
+          photos={photos}
+          title={title}
+          heading="Pictures"
+        />
       </div>
     </div>
   );

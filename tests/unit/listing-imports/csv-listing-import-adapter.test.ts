@@ -17,7 +17,8 @@ const validCsv = readFileSync(
 const validJson = JSON.parse(
   readFileSync(resolve(fixtureRoot, "valid-request.json"), "utf8"),
 ) as unknown;
-const validDataRow = validCsv.trimEnd().split("\n")[1];
+const canonicalValidCsv = validCsv.replaceAll("\r\n", "\n");
+const validDataRow = canonicalValidCsv.trimEnd().split("\n")[1];
 if (validDataRow === undefined) {
   throw new Error("The valid CSV fixture must contain one data row.");
 }
@@ -108,7 +109,9 @@ describe("listing import CSV adapter", () => {
       .join(",");
     expectCsvError(
       () =>
-        parseListingImportCsv(`${validCsv.trimEnd()}\n${mismatchedMetadata}\n`),
+        parseListingImportCsv(
+          `${canonicalValidCsv.trimEnd()}\n${mismatchedMetadata}\n`,
+        ),
       "CSV_METADATA_INVALID",
     );
   });

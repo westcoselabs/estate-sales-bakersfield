@@ -49,6 +49,10 @@ export function runConfiguredEmailJobBatch(limit = 10) {
         await processor.updateContactSubscription(
           payload.userId,
           payload.subscribed,
+          "preferenceUpdatedAt" in payload &&
+            typeof payload.preferenceUpdatedAt === "string"
+            ? payload.preferenceUpdatedAt
+            : null,
         );
       },
     },

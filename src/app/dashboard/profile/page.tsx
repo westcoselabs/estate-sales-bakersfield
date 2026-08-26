@@ -27,7 +27,7 @@ export default async function ProfilePage() {
           <div>
             <p className="eyebrow">Account</p>
             <h1>Profile</h1>
-            <p>Add optional business details to your public events.</p>
+            <p>Complete your organizer identity before approving an event.</p>
           </div>
         </header>
         <div className="profile-layout">
@@ -49,11 +49,15 @@ export default async function ProfilePage() {
           >
             <div className="dashboard-section-heading">
               <div>
-                <p className="eyebrow">Optional details</p>
-                <h2 id="profile-form-title">Business details</h2>
+                <p className="eyebrow">Organizer profile</p>
+                <h2 id="profile-form-title">Publishing details</h2>
               </div>
             </div>
-            <p>Leave any field blank if it does not apply.</p>
+            <p>
+              Your organizer name appears publicly. Contact name and contact
+              email are required for account operations and remain private.
+              Phone and website are optional.
+            </p>
             <OrganizerForm initial={organizer} />
           </section>
         </div>

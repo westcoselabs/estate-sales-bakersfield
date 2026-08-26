@@ -43,10 +43,7 @@ class UnconfiguredEmailGateway implements EmailGateway {
 
 export function createConfiguredEmailGateway(): EmailGateway {
   const env = getServerEnvironment();
-  if (
-    ["local", "test"].includes(env.APP_ENV) &&
-    env.AUTH_EMAIL_CAPTURE_PATH
-  ) {
+  if (["local", "test"].includes(env.APP_ENV) && env.AUTH_EMAIL_CAPTURE_PATH) {
     return new LocalCaptureEmailGateway(env.AUTH_EMAIL_CAPTURE_PATH);
   }
   return env.RESEND_API_KEY && env.RESEND_FROM

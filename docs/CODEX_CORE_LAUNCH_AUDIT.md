@@ -162,15 +162,15 @@ Because the Development Neon identity gate blocked the run, the current merged `
 
 Do not call the release green until these run against the guarded Development Neon workflow.
 
-## Current Vercel deployment blocker
+## Vercel Hobby cron decision
 
-GitHub confirms that Vercel saw the merged `main` SHA and reported `Deployment failed`; the Git integration is therefore not simply stale or disconnected. The Jul 31 deployment visible in the dashboard is the last successful Production deployment.
+GitHub confirmed that Vercel saw the merged `main` SHA and reported `Deployment failed`; the Git integration was therefore not simply stale or disconnected. The Jul 31 deployment visible during the audit was the last successful Production deployment.
 
-There is a strong configuration-level cause that must be resolved first:
+The configuration-level cause was:
 
 - the Vercel project is currently on the **Hobby** plan
-- `vercel.json` defines two native Vercel cron jobs
-- both schedules are `* * * * *` (every minute)
+- `vercel.json` defined two native Vercel cron jobs
+- both schedules were `* * * * *` (every minute)
 - current Vercel Hobby Cron limits allow a cron to run only once per day; more frequent expressions fail deployment validation
 
 Current jobs:
@@ -182,15 +182,20 @@ Current jobs:
 
 The first processes maintenance/durable work including auth rate-limit cleanup, payment reconciliation, media purge, and deferred external-listing expiration. The second processes queued receipt/campaign/contact-subscription email work.
 
-### Vercel decision required
+### Decision recorded 2026-08-26
 
-Do not silently change runtime semantics just to make a deployment appear green. Present these choices to the user:
+The owner selected the Hobby-compatible beta tradeoff. The schedules are now:
 
-1. **Recommended for launch if near-real-time queues are intentional: upgrade Vercel to Pro.** Keep the minute-level schedules, then trigger a fresh `main` deployment after the account/project plan supports them.
-2. **Temporary Hobby-only unblock:** change each native cron to no more than once per day. This can significantly delay queued email work and payment reconciliation/maintenance, so it is not recommended as the final production architecture without reviewing every job's latency requirement.
-3. An external scheduler could call the existing bearer-protected routes more frequently, but that adds another provider and operational surface and conflicts with the project's preference for simplicity. Do not introduce it unless explicitly chosen.
+- `/api/internal/jobs/run`: `0 9 * * *`
+- `/api/internal/email-jobs/run`: `0 10 * * *`
 
-After the plan/configuration is corrected, trigger a fresh Production deployment and inspect the actual Vercel build logs. Do not assume cron validation is the only remaining Vercel issue until the deployment reaches the application build.
+Vercel evaluates these schedules in UTC. Hobby timing is hourly rather than exact, so each route may run at any point in its configured hour. Separating the hours avoids deliberately overlapping the two database-backed workers.
+
+Normal signed Stripe webhook fulfillment remains immediate and authoritative. The daily maintenance worker is a recovery path for missing or delayed webhooks and also handles cleanup/purge work. The daily email worker means queued purchase receipts and contact-subscription synchronization may wait roughly one day; campaigns remain disabled. At the current batch limit of 10, a backlog larger than one batch can carry into a later day. This latency and capacity tradeoff is accepted for the Production beta, not for a later higher-volume public launch.
+
+An external scheduler is not being introduced. If near-real-time recovery or queue delivery becomes a launch requirement, revisit a Pro upgrade or another explicitly reviewed scheduling architecture.
+
+After the configuration is committed and pushed, inspect the fresh Production deployment's actual Vercel build logs. Do not assume cron validation was the only Vercel issue until the deployment reaches `READY`.
 
 ## Deferred listing-import/scraper boundary
 
@@ -314,6 +319,7 @@ At this checkpoint, inventory what is already in the merged application and revi
 Review at minimum:
 
 **Public/authenticated UI**
+
 - landing/navigation
 - Explore/search/list/map
 - listing cards/detail
@@ -322,6 +328,7 @@ Review at minimum:
 - mobile and desktop behavior
 
 **Super Admin**
+
 - overview
 - user search/detail
 - listings/detail/moderation
@@ -331,6 +338,7 @@ Review at minimum:
 - merged Imports UI and whether it should remain hidden/dormant for launch
 
 **Email**
+
 - verification
 - password recovery/reset
 - organizer/payment/publication transactional messages

@@ -24,7 +24,7 @@ export async function GET(_request: Request, context: Context) {
       status: 200,
       headers: {
         "Cache-Control": media.public
-          ? "public, max-age=300, stale-while-revalidate=60"
+          ? `public, max-age=${String(media.publicCacheSeconds)}`
           : "private, no-store",
         "Content-Type": media.contentType,
         "Content-Disposition": "inline",

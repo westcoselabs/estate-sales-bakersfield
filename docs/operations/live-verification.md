@@ -5,25 +5,15 @@ verification. The active hosted acceptance workflow is the stable
 [Production-beta checklist](./production-beta-verification.md), not a Vercel
 Preview deployment.
 
-## Retained legacy command
+## Retired legacy command
 
-`pnpm verify:live` is retained for source compatibility and historical
-evidence. Its current guard requires `APP_ENV=preview` and refuses Local, Test,
-and Production. It expects isolated Preview resources.
+`pnpm verify:live` has been removed. It depended on isolated Preview resources,
+which are prohibited by the main-only Production-beta release policy.
 
-That command cannot validate the main-only Production-beta workflow and must
-not be pointed at Production. Do not create the Preview deployment, providers,
-or webhook it expects merely to make the legacy command pass. Until the
-command is redesigned through a separately approved change, report it as
-`NOT APPLICABLE` to Production-beta acceptance.
-
-The retained command's exit semantics remain:
-
-- Exit 0: every configured legacy live check passed.
-- Exit 1: a configured check failed.
-- Exit 2: resources were unavailable and reported as `BLOCKED`.
-
-No result replaces `pnpm verify` or hosted Production-beta smoke testing.
+Historical reports may still mention it, but it is `NOT APPLICABLE` to current
+acceptance. Do not restore it or create Preview deployments, providers, or
+webhooks to reproduce old evidence. Use `pnpm verify` with guarded Development
+Neon schemas, followed by the stable hosted checklist below.
 
 ## Current verification layers
 

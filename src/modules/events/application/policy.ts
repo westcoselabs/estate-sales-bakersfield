@@ -29,14 +29,33 @@ const STREET_SUFFIXES: Readonly<Record<string, string>> = {
   way: "way",
 };
 
-function normalizedAddressText(value: string): string {
+const DIRECTIONALS: Readonly<Record<string, string>> = {
+  north: "n",
+  south: "s",
+  east: "e",
+  west: "w",
+  northeast: "ne",
+  northwest: "nw",
+  southeast: "se",
+  southwest: "sw",
+};
+
+const STREET_SUFFIX_TOKENS = new Set(Object.values(STREET_SUFFIXES));
+const UNIT_LABELS = new Set(["apartment", "apt", "unit", "suite", "ste", "#"]);
+
+function normalizedAddressTokens(value: string): readonly string[] {
   return value
     .normalize("NFKD")
     .toLowerCase()
     .replace(/[^\p{L}\p{N}#]+/gu, " ")
     .trim()
     .split(/\s+/)
-    .map((part) => STREET_SUFFIXES[part] ?? part)
+    .filter(Boolean)
+    .map((part) => DIRECTIONALS[part] ?? STREET_SUFFIXES[part] ?? part);
+}
+
+function normalizedAddressText(value: string): string {
+  return normalizedAddressTokens(value)
     .join(" ")
     .replace(/\b(?:apartment|apt|unit|suite|ste|#)\s*[a-z0-9-]+\b/g, "")
     .replace(/\s+/g, " ")
@@ -58,15 +77,32 @@ export function privateAddressLeakFields(
     return [];
   }
   const needle = [houseNumber, ...streetParts].join(" ");
+  const streetIdentity = streetParts.filter(
+    (part) => !STREET_SUFFIX_TOKENS.has(part),
+  );
+  const postalTokens = normalizedAddressTokens(event.location.postalCode);
+  const unitTokens = event.location.addressLine2
+    ? normalizedAddressTokens(event.location.addressLine2).filter(
+        (part) => !UNIT_LABELS.has(part),
+      )
+    : [];
   return (["title", "description"] as const).filter((field) => {
     const value = event[field];
     if (!value) return false;
     const normalized = normalizedAddressText(value);
+    const tokens = new Set(normalizedAddressTokens(value));
+    const hasStreetIdentity = streetIdentity.every((part) => tokens.has(part));
+    const hasPostalIdentity =
+      postalTokens.length > 0 && postalTokens.every((part) => tokens.has(part));
+    const hasUnitIdentity =
+      unitTokens.length > 0 && unitTokens.every((part) => tokens.has(part));
     return (
       normalized === needle ||
       normalized.startsWith(`${needle} `) ||
       normalized.endsWith(` ${needle}`) ||
-      normalized.includes(` ${needle} `)
+      normalized.includes(` ${needle} `) ||
+      (tokens.has(houseNumber!) && hasStreetIdentity) ||
+      (hasStreetIdentity && hasPostalIdentity && hasUnitIdentity)
     );
   });
 }
@@ -101,6 +137,11 @@ function safePublicWebsite(value: string | null): string | null {
 
 export function eventReadiness(event: EventRecord): EventReadiness {
   const missing: string[] = [];
+  if (event.organizerStatus !== "COMPLETE") {
+    missing.push(
+      "Complete the required organizer name and private contact fields in your profile.",
+    );
+  }
   if (!event.title) missing.push("Add an event title.");
   if (!event.description) missing.push("Add an event description.");
   for (const field of privateAddressLeakFields(event)) {
@@ -338,6 +379,7 @@ export function publicEventProjection(
     organizer: {
       displayName: event.organizerDisplayName,
       websiteUrl: safePublicWebsite(event.organizerWebsiteUrl),
+      contactEmail: event.ownerVerifiedEmail,
     },
     coverPhotoUrl: `/media/${cover.id}/cover`,
     gallery: event.photos

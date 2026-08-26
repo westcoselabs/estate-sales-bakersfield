@@ -28,6 +28,10 @@ stable Vercel Production deployment is the project's only hosted beta.
   secrets, email addresses, tokens, full addresses, coordinates, Place IDs, or
   payment identifiers.
 - Treat an unexpected warning or error burst as a failed check.
+- Confirm both Hobby-compatible cron definitions were accepted: maintenance in
+  the 09:00 UTC hour and email work in the 10:00 UTC hour. After each daily
+  invocation, retain sanitized claimed/succeeded/retried/dead counts and stop
+  on a sustained backlog larger than the ten-job batch.
 
 ## Indexing and security
 

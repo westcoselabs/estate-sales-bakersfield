@@ -4,6 +4,12 @@ import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import sharp from "sharp";
 
+import {
+  choosePhotoCover,
+  chooseSingleDaySchedule,
+  completeOrganizerProfile,
+} from "./event-builder-support";
+
 interface CapturedEmail {
   readonly kind: "EMAIL_VERIFICATION";
   readonly to: string;
@@ -47,17 +53,22 @@ async function createAccount(page: Page): Promise<string> {
   const password = "phase-four-browser-password";
   await page.goto("/signup");
   await page.getByLabel("Display name").fill("Phase four owner");
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByLabel("Confirm password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByText(/verification instructions/i)).toBeVisible();
   await verifyLatestEmail(page, email);
   await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
+  await completeOrganizerProfile(page, {
+    displayName: "Phase Four Estate Sales",
+    contactName: "Phase four owner",
+    contactEmail: email,
+  });
   return email;
 }
 
@@ -80,11 +91,7 @@ async function buildApprovedEvent(
       "A deterministic Phase 4 estate sale with furniture, art, books, and collectible household pieces.",
     );
   await page.getByRole("button", { name: "Save and continue" }).click();
-  await page.getByLabel("Starts", { exact: true }).fill(`${date}T09:00`);
-  await page.getByLabel("Ends", { exact: true }).fill(`${date}T15:00`);
-  await page
-    .getByLabel("IANA timezone", { exact: true })
-    .fill("America/Los_Angeles");
+  await chooseSingleDaySchedule(page, date);
   await page.getByRole("button", { name: "Save and continue" }).click();
   await page
     .getByLabel("Search the sale property address")
@@ -109,10 +116,18 @@ async function buildApprovedEvent(
     mimeType: "image/jpeg",
     buffer: image,
   });
-  await expect(page.getByText("Status: READY")).toBeVisible({
+  const photoManager = page.getByRole("list", {
+    name: "Photo uploads and event photo order",
+  });
+  await expect(photoManager.getByText("Ready", { exact: true })).toBeVisible({
     timeout: 30_000,
   });
-  await page.getByRole("button", { name: "Make photo 1 cover" }).click();
+  await expect(
+    page.getByText(
+      "1 photo uploaded successfully. Select a cover photo to continue.",
+    ),
+  ).toBeVisible();
+  await choosePhotoCover(page, "phase4-estate-photo.jpg");
   await page.getByRole("button", { name: "Save and continue" }).click();
   await page.getByLabel(/I accept publishing terms version/).check();
   await page.getByRole("button", { name: "Approve exact revision" }).click();
@@ -129,6 +144,9 @@ test("pays and publishes from a fake signed webhook while stale paid revisions r
   page,
 }) => {
   test.setTimeout(180_000);
+  await page.context().setExtraHTTPHeaders({
+    "x-forwarded-for": `e2e-payment-${crypto.randomUUID()}`,
+  });
   const browserErrors: string[] = [];
   page.on("pageerror", (error) => browserErrors.push(error.message));
   const email = await createAccount(page);
@@ -171,18 +189,24 @@ test("pays and publishes from a fake signed webhook while stale paid revisions r
   await expect(page).toHaveURL(
     new RegExp(`/dashboard/events/${publishable.id}/payment/success`),
   );
-  await expect(page.getByRole("heading", { name: "Published" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Your listing is live" }),
+  ).toBeVisible();
   await page.getByRole("link", { name: "View live listing" }).click();
   await expect(
     page.getByRole("heading", { name: "Seven Oaks Phase Four Sale" }),
   ).toBeVisible();
-  await expect(page.getByText(/exact address will be released/i)).toBeVisible();
+  await expect(
+    page.getByText("Address releases when the sale starts"),
+  ).toBeVisible();
   await expect(page.getByText("123 Baker Street")).toHaveCount(0);
   await expect(page.getByRole("link", { name: email })).toHaveAttribute(
     "href",
     `mailto:${encodeURIComponent(email)}`,
   );
-  await expect(page.getByText("Listed by")).toHaveCount(0);
+  await expect(
+    page.getByText("Listed by Phase Four Estate Sales"),
+  ).toBeVisible();
 
   await page.goto(`/dashboard/events/${publishable.id}/edit`);
   await expect(page.getByText("This listing is published.")).toBeVisible();
@@ -218,7 +242,7 @@ test("pays and publishes from a fake signed webhook while stale paid revisions r
     .fill("Materially Edited After Checkout");
   await page.getByRole("button", { name: "Save and continue" }).click();
   await expect(
-    page.getByRole("heading", { name: "Local schedule" }),
+    page.getByRole("heading", { name: "Schedule your sale" }),
   ).toBeVisible();
   const changed = (await (
     await page.request.get(`/api/events/${stale.id}`)
@@ -230,8 +254,9 @@ test("pays and publishes from a fake signed webhook while stale paid revisions r
     new RegExp(`/dashboard/events/${stale.id}/payment/success`),
   );
   await expect(
-    page.getByRole("heading", { name: "Paid; publication blocked" }),
+    page.getByRole("heading", { name: "Publication status" }),
   ).toBeVisible();
+  await expect(page.getByText("Publication needs attention")).toBeVisible();
   expect((await page.request.get(stale.futurePublicPath)).status()).toBe(404);
   expect(
     (await page.request.get(changed.event.futurePublicPath)).status(),

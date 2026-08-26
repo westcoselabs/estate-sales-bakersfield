@@ -1,4 +1,5 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { z, ZodError } from "zod";
 
 import {
   AuthenticationServiceUnavailableError,
@@ -15,12 +16,21 @@ import { getServerEnvironment } from "@/platform/config/env";
 import { getPrismaClient } from "@/platform/database/client";
 import { requestIdFrom } from "@/platform/http/request-context";
 import { logger } from "@/platform/observability/logger";
+import { TrustedOriginError } from "@/platform/security/trusted-origin";
+
+import { assertAuthenticationOrigin, readJson } from "../../auth/_shared";
 
 export const dynamic = "force-dynamic";
 
 const noStoreHeaders = {
   "Cache-Control": "private, no-store, max-age=0",
 };
+
+const autocompleteSchema = z
+  .object({
+    query: z.string().trim().min(4).max(160),
+  })
+  .strict();
 
 function json(
   body: unknown,
@@ -38,31 +48,12 @@ function json(
   });
 }
 
-export async function GET(request: NextRequest) {
+export async function POST(request: Request) {
   const requestId = requestIdFrom(request);
   try {
+    assertAuthenticationOrigin(request);
     const user = await requireUser();
-    const keys = [...new Set(request.nextUrl.searchParams.keys())];
-    const values = request.nextUrl.searchParams.getAll("q");
-    if (
-      keys.length !== 1 ||
-      keys[0] !== "q" ||
-      values.length !== 1 ||
-      values[0]!.trim().length < 4 ||
-      values[0]!.trim().length > 160
-    ) {
-      return json(
-        {
-          schema: "address-autocomplete-v1",
-          error: {
-            code: "INVALID_QUERY",
-            message: "Enter more of the address.",
-          },
-        },
-        requestId,
-        400,
-      );
-    }
+    const { query } = autocompleteSchema.parse(await readJson(request));
 
     const environment = getServerEnvironment();
     if (!environment.AUTH_FINGERPRINT_SECRET) {
@@ -96,9 +87,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const suggestions = await createConfiguredLocationProvider().autocomplete(
-      values[0]!,
-    );
+    const suggestions =
+      await createConfiguredLocationProvider().autocomplete(query);
     return json(
       {
         schema: "address-autocomplete-v1",
@@ -113,6 +103,29 @@ export async function GET(request: NextRequest) {
       requestId,
     );
   } catch (error) {
+    if (error instanceof ZodError || error instanceof SyntaxError) {
+      return json(
+        {
+          schema: "address-autocomplete-v1",
+          error: {
+            code: "INVALID_QUERY",
+            message: "Enter more of the address.",
+          },
+        },
+        requestId,
+        400,
+      );
+    }
+    if (error instanceof TrustedOriginError) {
+      return json(
+        {
+          schema: "address-autocomplete-v1",
+          error: { code: "UNTRUSTED_ORIGIN", message: "Request denied." },
+        },
+        requestId,
+        403,
+      );
+    }
     if (error instanceof AuthenticationServiceUnavailableError) {
       return json(
         {

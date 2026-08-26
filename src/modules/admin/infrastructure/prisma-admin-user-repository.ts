@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { MARKETING_CONSENT_VERSION } from "@/modules/auth";
 
 import type { AdminCursor, AdminUserFilter } from "../domain/types";
 import { AdminConflictError, AdminNotFoundError } from "../domain/errors";
@@ -173,7 +174,24 @@ export class PrismaAdminUserRepository {
 
   async contactExport(search: string, take: number) {
     return this.prisma.user.findMany({
-      where: searchWhere(search),
+      where: {
+        AND: [
+          searchWhere(search),
+          {
+            role: "USER",
+            status: "ACTIVE",
+            emailVerifiedAt: { not: null },
+            marketingPreference: {
+              is: {
+                consentAt: { not: null },
+                consentVersion: MARKETING_CONSENT_VERSION,
+                consentSource: { not: null },
+                unsubscribedAt: null,
+              },
+            },
+          },
+        ],
+      },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take,
       include: listInclude,

@@ -38,8 +38,7 @@ export function requireRecentSuperAdminSession(
   requireSuperAdminPrincipal(session?.principal ?? null);
   if (
     !session ||
-    now.getTime() - session.passwordAuthenticatedAt.getTime() >
-      15 * 60 * 1000
+    now.getTime() - session.passwordAuthenticatedAt.getTime() > 15 * 60 * 1000
   ) {
     throw new AuthorizationError("Recent password confirmation is required");
   }

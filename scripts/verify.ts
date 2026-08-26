@@ -29,7 +29,7 @@ const credentialFreeCommands = [
   "typecheck",
   "prisma:validate",
   "audit:prod",
-  "test:unit",
+  "test:unit:coverage",
   "test:contract:blob",
   "test:contract:email",
   "test:contract:location",
@@ -74,56 +74,9 @@ if (mode === "credential-free") {
     );
   }
   process.exitCode = failed ? 1 : blocked ? 2 : 0;
-} else if (mode === "live") {
-  if (
-    process.env.APP_ENV !== "preview" ||
-    process.env.DATABASE_RESOURCE_ENV !== "preview"
-  ) {
-    process.stderr.write(
-      "BLOCKED: verify:live requires APP_ENV=preview and DATABASE_RESOURCE_ENV=preview.\n",
-    );
-    process.exitCode = 2;
-  } else {
-    let blocked = false;
-    let failed = false;
-    const checks: ReadonlyArray<{
-      command: string;
-      required: readonly string[];
-    }> = [
-      {
-        command: "db:migrate:deploy",
-        required: ["DATABASE_URL", "DIRECT_URL"],
-      },
-      { command: "db:verify:live", required: ["DATABASE_URL", "DIRECT_URL"] },
-      {
-        command: "auth:benchmark:vercel",
-        required: ["VERCEL_BENCHMARK_URL", "CRON_SECRET"],
-      },
-      {
-        command: "test:contract:blob:live",
-        required: ["BLOB_READ_WRITE_TOKEN"],
-      },
-    ];
-
-    for (const check of checks) {
-      const missing = check.required.filter((name) => !process.env[name]);
-      if (missing.length > 0) {
-        blocked = true;
-        process.stderr.write(
-          `BLOCKED: pnpm ${check.command} requires ${missing.join(", ")}.\n`,
-        );
-        continue;
-      }
-      const status = run(check.command);
-      if (status === 2) blocked = true;
-      else if (status !== 0) failed = true;
-    }
-
-    process.exitCode = failed ? 1 : blocked ? 2 : 0;
-  }
 } else {
   process.stderr.write(
-    "Usage: tsx scripts/verify.ts <credential-free|offline|live>\n",
+    "Usage: tsx scripts/verify.ts <credential-free|offline>\n",
   );
   process.exitCode = 1;
 }

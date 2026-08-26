@@ -69,7 +69,9 @@ export function isCalendarDate(value: string): boolean {
 }
 
 function normalizedDate(value: string): PublicDateFilter {
-  return ["today", "tomorrow", "weekend", "next-7-days", "custom"].includes(value)
+  return ["today", "tomorrow", "weekend", "next-7-days", "custom"].includes(
+    value,
+  )
     ? (value as PublicDateFilter)
     : "all";
 }

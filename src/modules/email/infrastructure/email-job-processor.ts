@@ -1,5 +1,7 @@
 import "server-only";
 
+import { hasExplicitMarketingConsent } from "@/modules/auth";
+
 import type { PrismaClient } from "@/generated/prisma/client";
 import type { ServerEnvironment } from "@/platform/config/env";
 
@@ -127,7 +129,14 @@ export class EmailJobProcessor {
                 role: true,
                 status: true,
                 emailVerifiedAt: true,
-                marketingPreference: { select: { unsubscribedAt: true } },
+                marketingPreference: {
+                  select: {
+                    consentAt: true,
+                    consentVersion: true,
+                    consentSource: true,
+                    unsubscribedAt: true,
+                  },
+                },
               },
             },
           },
@@ -140,7 +149,7 @@ export class EmailJobProcessor {
         user.role === "USER" &&
         user.status === "ACTIVE" &&
         user.emailVerifiedAt &&
-        !user.marketingPreference?.unsubscribedAt,
+        hasExplicitMarketingConsent(user.marketingPreference),
     );
     if (!recipients.length || recipients.length > 10_000) {
       await this.prisma.emailCampaign.update({
@@ -164,6 +173,7 @@ export class EmailJobProcessor {
       },
       text: `Recent estate sales: ${listings.map((listing) => listing.title).join(", ")}. Unsubscribe using the link in this email.`,
     });
+    let providerAcceptedDispatch = false;
     try {
       const segmentId =
         campaign.providerSegmentId ??
@@ -232,6 +242,7 @@ export class EmailJobProcessor {
         data: { status: "DISPATCHING" },
       });
       await this.gateway.sendBroadcast(broadcastId);
+      providerAcceptedDispatch = true;
       await this.prisma.emailCampaign.update({
         where: { id: campaign.id },
         data: { status: "SENT", sentAt: new Date(), lastErrorCode: null },
@@ -239,7 +250,9 @@ export class EmailJobProcessor {
     } catch (error) {
       if (error instanceof Error && error.message === "CONTACT_IMPORT_PENDING")
         throw error;
-      const ambiguous = error instanceof EmailProviderError && error.ambiguous;
+      const ambiguous =
+        providerAcceptedDispatch ||
+        (error instanceof EmailProviderError && error.ambiguous);
       await this.prisma.emailCampaign.update({
         where: { id: campaign.id },
         data: {
@@ -253,12 +266,34 @@ export class EmailJobProcessor {
     }
   }
 
-  async updateContactSubscription(userId: string, subscribed: boolean) {
+  async updateContactSubscription(
+    userId: string,
+    subscribed: boolean,
+    preferenceUpdatedAt: string | null,
+  ) {
+    if (!preferenceUpdatedAt) return;
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true },
+      select: {
+        email: true,
+        role: true,
+        status: true,
+        emailVerifiedAt: true,
+        marketingPreference: true,
+      },
     });
     if (!user) return;
-    await this.gateway.updateContactSubscription(user.email, subscribed);
+    if (
+      user.marketingPreference?.updatedAt.toISOString() !== preferenceUpdatedAt
+    ) {
+      return;
+    }
+    const currentlyEligible =
+      user.role === "USER" &&
+      user.status === "ACTIVE" &&
+      Boolean(user.emailVerifiedAt) &&
+      hasExplicitMarketingConsent(user.marketingPreference);
+    if (currentlyEligible !== subscribed) return;
+    await this.gateway.updateContactSubscription(user.email, currentlyEligible);
   }
 }

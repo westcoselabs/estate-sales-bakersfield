@@ -2,11 +2,27 @@ import { requireUserPrincipal } from "./guards";
 import type { AuditContext } from "./ports";
 import type { AuthPrincipal } from "../domain/types";
 
-export interface MarketingPreferenceProjection {
-  consentAt: Date | null;
-  consentVersion: string | null;
-  consentSource: "SIGNUP" | "ACCOUNT_SETTINGS" | null;
-  unsubscribedAt: Date | null;
+export const MARKETING_CONSENT_VERSION = "marketing-v1";
+
+export interface MarketingConsentRecord {
+  readonly consentAt: Date | null;
+  readonly consentVersion: string | null;
+  readonly consentSource: "SIGNUP" | "ACCOUNT_SETTINGS" | null;
+  readonly unsubscribedAt: Date | null;
+}
+
+export function hasExplicitMarketingConsent(
+  preference: MarketingConsentRecord | null | undefined,
+): boolean {
+  return Boolean(
+    preference?.consentAt &&
+    preference.consentVersion === MARKETING_CONSENT_VERSION &&
+    preference.consentSource &&
+    !preference.unsubscribedAt,
+  );
+}
+
+export interface MarketingPreferenceProjection extends MarketingConsentRecord {
   eligible: boolean;
 }
 

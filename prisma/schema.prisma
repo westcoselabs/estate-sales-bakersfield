@@ -666,6 +666,7 @@ model EmailDelivery {
   bouncedAt          DateTime?           @map("bounced_at") @db.Timestamptz(3)
   complainedAt       DateTime?           @map("complained_at") @db.Timestamptz(3)
   suppressedAt       DateTime?           @map("suppressed_at") @db.Timestamptz(3)
+  providerLastEventAt DateTime?           @map("provider_last_event_at") @db.Timestamptz(3)
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 

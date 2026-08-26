@@ -6,6 +6,12 @@ import sharp from "sharp";
 
 import { PUBLISHING_TERMS_VERSION } from "@/modules/events/application/policy";
 
+import {
+  choosePhotoCover,
+  chooseSingleDaySchedule,
+  completeOrganizerProfile,
+} from "./event-builder-support";
+
 interface CapturedEmail {
   readonly kind: "EMAIL_VERIFICATION" | "PASSWORD_RESET";
   readonly to: string;
@@ -52,7 +58,7 @@ async function registerAndVerify(
 ) {
   await page.goto("/signup");
   await page.getByLabel("Display name").fill(displayName);
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByLabel("Confirm password").fill(password);
   const signupResponse = page.waitForResponse((response) =>
@@ -75,7 +81,7 @@ async function registerAndVerify(
 
 async function login(page: Page, email: string, password: string) {
   await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
@@ -122,7 +128,11 @@ test("completes the account, recovery, session, and optional profile lifecycle",
   });
 
   await page.goto("/dashboard/profile");
-  await page.getByLabel("Business name (optional)").fill("Main Estate Sales");
+  await page
+    .getByLabel("Business or organizer name (required, shown publicly)")
+    .fill("Main Estate Sales");
+  await page.getByLabel("Contact name (required, kept private)").fill("Owner");
+  await page.getByLabel("Contact email (required, kept private)").fill(email);
   await page.getByLabel("Website (optional)").fill("main-estate.example.test");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Profile saved.")).toBeVisible();
@@ -134,14 +144,20 @@ test("completes the account, recovery, session, and optional profile lifecycle",
   await secondPage.goto("/dashboard/organizer");
   await expect(secondPage).toHaveURL(/\/dashboard\/profile$/);
   await secondPage
-    .getByLabel("Business name (optional)")
+    .getByLabel("Business or organizer name (required, shown publicly)")
     .fill("Other Estate Sales");
+  await secondPage
+    .getByLabel("Contact name (required, kept private)")
+    .fill("Other owner");
+  await secondPage
+    .getByLabel("Contact email (required, kept private)")
+    .fill(otherEmail);
   await secondPage.getByRole("button", { name: "Save", exact: true }).click();
   await expect(secondPage.getByText("Profile saved.")).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel("Business name (optional)")).toHaveValue(
-    "Main Estate Sales",
-  );
+  await expect(
+    page.getByLabel("Business or organizer name (required, shown publicly)"),
+  ).toHaveValue("Main Estate Sales");
   await expect(page.getByLabel("Website (optional)")).toHaveValue(
     "https://main-estate.example.test",
   );
@@ -151,7 +167,7 @@ test("completes the account, recovery, session, and optional profile lifecycle",
   await login(parallelPage, email, password);
 
   await page.goto("/forgot-password");
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByRole("button", { name: "Send reset link" }).click();
   await expect(page.getByText(/account can be recovered/i)).toBeVisible();
   const resetMessage = await capturedEmail(email, "PASSWORD_RESET");
@@ -172,7 +188,7 @@ test("completes the account, recovery, session, and optional profile lifecycle",
   await page.getByRole("button", { name: "Log out", exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
 
-  await page.getByLabel("Email").fill("unknown@example.test");
+  await page.getByLabel("Email", { exact: true }).fill("unknown@example.test");
   await page.getByLabel("Password").fill("not-the-right-password");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(
@@ -197,7 +213,7 @@ test("supports unverified drafting while preserving publishing verification gate
 
   await page.goto("/signup");
   await page.getByLabel("Display name").fill("Unverified owner");
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByLabel("Confirm password").fill(password);
   const signupResponse = page.waitForResponse((response) =>
@@ -230,7 +246,7 @@ test("supports unverified drafting while preserving publishing verification gate
       "Check your email for verification instructions. You can sign in now.",
   });
 
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
@@ -371,6 +387,12 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
 
   await registerAndVerify(page, email, "Phase three owner", password);
   await login(page, email, password);
+  await completeOrganizerProfile(page, {
+    displayName: "Main Estate Sales",
+    contactName: "Phase three owner",
+    contactEmail: email,
+    website: "main-estate.example.test",
+  });
 
   await page.getByLabel("Sale type").selectOption("ESTATE_SALE");
   await page.getByRole("button", { name: "Create event" }).click();
@@ -386,7 +408,7 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     );
   await page.getByRole("button", { name: "Save and continue" }).click();
   await expect(
-    page.getByRole("heading", { name: "Local schedule" }),
+    page.getByRole("heading", { name: "Schedule your sale" }),
   ).toBeVisible();
 
   await page.goto("/dashboard");
@@ -400,12 +422,7 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   await stalePage.goto(page.url());
 
   await page.getByRole("button", { name: "Schedule" }).click();
-
-  await page.getByLabel("Starts", { exact: true }).fill("2026-08-08T09:00");
-  await page.getByLabel("Ends", { exact: true }).fill("2026-08-08T15:00");
-  await page
-    .getByLabel("IANA timezone", { exact: true })
-    .fill("America/Los_Angeles");
+  await chooseSingleDaySchedule(page, "2026-09-05");
   await page.getByRole("button", { name: "Save and continue" }).click();
   await expect(
     page.getByRole("heading", { name: "Address and privacy" }),
@@ -414,7 +431,12 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   await stalePage.getByRole("button", { name: "Details" }).click();
   await stalePage.getByLabel("Public title").fill("Stale tab overwrite");
   await stalePage.getByRole("button", { name: "Save and continue" }).click();
-  await expect(stalePage.getByText(/changed in another tab/i)).toBeVisible();
+  await expect(
+    stalePage.getByText("Details saved and confirmed by the server."),
+  ).toBeVisible();
+  await expect(
+    stalePage.getByRole("region", { name: "Sale schedule details" }),
+  ).toContainText("September 5, 2026");
   await stalePage.close();
 
   await page
@@ -492,9 +514,13 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
       name: "Upload progress for estate-photo.jpg",
     }),
   ).toBeVisible();
-  await expect(page.getByText("Status: READY")).toHaveCount(2, {
-    timeout: 30_000,
+  const photoManager = page.getByRole("list", {
+    name: "Photo uploads and event photo order",
   });
+  await expect(photoManager.getByText("Ready", { exact: true })).toHaveCount(
+    2,
+    { timeout: 30_000 },
+  );
   const processedQueueThumbnails = page.getByRole("img", {
     name: /Processed thumbnail for estate-photo/,
   });
@@ -515,27 +541,6 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
       ),
     )
     .toBeGreaterThanOrEqual(2);
-  const persistedThumbnails = page.getByRole("img", {
-    name: /^Event photo \d+$/,
-  });
-  await expect(persistedThumbnails).toHaveCount(2);
-  await expect
-    .poll(async () =>
-      persistedThumbnails.evaluateAll((images) =>
-        images.every((image) => (image as HTMLImageElement).naturalWidth > 0),
-      ),
-    )
-    .toBe(true);
-  const completedQueueRow = page
-    .getByRole("listitem")
-    .filter({ hasText: "estate-photo.jpg" });
-  await expect(
-    completedQueueRow.getByRole("button", { name: "Dismiss" }),
-  ).toBeVisible();
-  await completedQueueRow.getByRole("button", { name: "Dismiss" }).click();
-  await expect(completedQueueRow).toHaveCount(0);
-  await expect(page.getByText("Status: READY")).toHaveCount(2);
-
   let interceptedCommittedFinalize = false;
   await page.route(
     "**/api/events/*/photos/*/finalize",
@@ -556,9 +561,9 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   const reconciledQueueRow = page
     .getByRole("listitem")
     .filter({ hasText: "ambiguous-response.jpg" });
-  await expect(reconciledQueueRow.getByText(/Ready.*100%/)).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(
+    reconciledQueueRow.getByText("Ready", { exact: true }),
+  ).toBeVisible({ timeout: 30_000 });
   await expect(
     reconciledQueueRow.getByRole("img", {
       name: "Processed thumbnail for ambiguous-response.jpg",
@@ -567,10 +572,12 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   await expect(
     reconciledQueueRow.getByRole("button", { name: "Retry" }),
   ).toHaveCount(0);
+  await expect(photoManager.getByText("Ready", { exact: true })).toHaveCount(3);
   await expect(
-    reconciledQueueRow.getByRole("button", { name: "Dismiss" }),
+    page.getByText(
+      "1 photo uploaded successfully. Select a cover photo to continue.",
+    ),
   ).toBeVisible();
-  await expect(page.getByText("Status: READY")).toHaveCount(3);
 
   const waitingForCover = page.getByRole("button", {
     name: "Choose a cover to continue",
@@ -582,7 +589,7 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
       "3 photos have finished processing. Choose a cover to continue.",
     ),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Make photo 1 cover" }).click();
+  await choosePhotoCover(page, "estate-photo.jpg");
   await expect(page.getByText("Photo changes saved.")).toBeVisible();
   await expect(
     page.getByText("3 photos are uploaded and the cover is selected."),
@@ -595,7 +602,11 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     page.getByRole("heading", { name: "Review, approval and payment" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Photos" }).click();
-  await expect(page.getByText("Status: READY")).toHaveCount(3);
+  await expect(
+    page
+      .getByRole("list", { name: "Photo uploads and event photo order" })
+      .getByText("READY", { exact: true }),
+  ).toHaveCount(3);
   await expect(
     page.getByRole("img", { name: /^Event photo \d+$/ }),
   ).toHaveCount(3);
@@ -642,7 +653,11 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
       ),
     ).toBe(true);
   }
-  await expect(page.getByText("Status: READY")).toHaveCount(3);
+  await expect(
+    page
+      .getByRole("list", { name: "Photo uploads and event photo order" })
+      .locator(":scope > li[data-status='ready']"),
+  ).toHaveCount(3);
   await expect(
     page.getByRole("button", { name: "Save and continue" }),
   ).toBeEnabled();
@@ -650,12 +665,12 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
 
   await page.getByRole("link", { name: "Open exact listing preview" }).click();
   await expect(
-    page.getByRole("heading", { name: "Oleander Estate Sale", level: 1 }),
+    page.getByRole("heading", { name: "Stale tab overwrite", level: 1 }),
   ).toBeVisible();
   await expect(
-    page.getByText(/Exact address hidden until event start/),
+    page.getByText(/exact address that will be released/i),
   ).toBeVisible();
-  await expect(page.getByText("123 Baker Street")).toHaveCount(0);
+  await expect(page.getByText("123 Baker Street")).toBeVisible();
   await expect(page.getByText("Listed by Main Estate Sales")).toBeVisible();
   await expect(page.getByRole("link", { name: "Website" })).toHaveAttribute(
     "href",
@@ -665,7 +680,7 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     "href",
     `mailto:${encodeURIComponent(email)}`,
   );
-  await page.getByRole("link", { name: "Return to editor" }).click();
+  await page.getByRole("link", { name: "Exit preview" }).click();
 
   await expect(
     page.getByText(

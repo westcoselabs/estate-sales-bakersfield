@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+# Prisma accepts LF and CRLF checksums, but keeping committed migrations on one
+# canonical line ending makes reviews and local verification deterministic.
+prisma/migrations/**/migration.sql text eol=lf

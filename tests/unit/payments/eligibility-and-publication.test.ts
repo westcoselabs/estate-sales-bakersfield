@@ -66,7 +66,6 @@ describe("Phase 4 payment eligibility and publication projection", () => {
       approvedRevision: event.approvedRevision!,
       canonicalPath: snapshot.projection.path,
       publishedAt: now,
-      verifiedEmail: "seller@example.test",
       snapshot,
       now,
     });
@@ -82,7 +81,6 @@ describe("Phase 4 payment eligibility and publication projection", () => {
       approvedRevision: event.approvedRevision!,
       canonicalPath: snapshot.projection.path,
       publishedAt: now,
-      verifiedEmail: "seller@example.test",
       snapshot,
       now: new Date("2026-08-25T16:00:01.000Z"),
     });

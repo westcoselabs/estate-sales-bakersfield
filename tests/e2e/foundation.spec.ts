@@ -7,7 +7,7 @@ test("serves the Phase 1 shell with baseline security headers", async ({
 
   await expect(
     page.getByRole("heading", {
-      name: "Find local sales and one-of-a-kind finds near you",
+      name: "Discover local sales and one-of-a-kind finds.",
     }),
   ).toBeVisible();
   expect(response?.headers()["x-content-type-options"]).toBe("nosniff");

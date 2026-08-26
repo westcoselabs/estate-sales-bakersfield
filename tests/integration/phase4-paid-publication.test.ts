@@ -68,7 +68,8 @@ async function createPrincipal(label: string): Promise<{
   organizerId: string;
 }> {
   const suffix = randomUUID().slice(0, 8);
-  const email = testEmail(`phase4-${label}-${suffix}`);
+  const safeLabel = label.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-");
+  const email = testEmail(`phase4-${safeLabel}-${suffix}`);
   const user = await prisma.user.create({
     data: {
       displayName: `${label} User`,
@@ -78,7 +79,10 @@ async function createPrincipal(label: string): Promise<{
       emailVerifiedAt: new Date(),
       organizerProfile: {
         create: {
-          status: "INCOMPLETE",
+          displayName: `${label} Sales`,
+          contactName: `${label} Contact`,
+          contactEmail: email,
+          status: "COMPLETE",
         },
       },
     },
@@ -388,6 +392,7 @@ describe("Phase 4 paid publication in an isolated Development Neon schema", () =
         variant: "cover",
         userId: null,
         administrator: false,
+        now: new Date("2027-08-25T15:00:00.000Z"),
       }),
     ).resolves.toMatchObject({ public: true });
     await prisma.event.update({
@@ -400,6 +405,7 @@ describe("Phase 4 paid publication in an isolated Development Neon schema", () =
         variant: "cover",
         userId: null,
         administrator: false,
+        now: new Date("2027-08-25T15:00:00.000Z"),
       }),
     ).resolves.toBeNull();
     await expect(
@@ -408,6 +414,7 @@ describe("Phase 4 paid publication in an isolated Development Neon schema", () =
         variant: "cover",
         userId: fixture.principal.id,
         administrator: false,
+        now: new Date("2027-08-25T15:00:00.000Z"),
       }),
     ).resolves.toBeNull();
   });

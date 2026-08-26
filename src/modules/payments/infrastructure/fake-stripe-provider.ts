@@ -72,6 +72,19 @@ export class FakeStripeProvider implements StripeProvider {
     private readonly price: PublicationPrice,
   ) {}
 
+  retrievePrice(priceId: string) {
+    if (priceId !== this.price.priceId) {
+      throw new StripeProviderError("FIXTURE_PRICE_NOT_FOUND");
+    }
+    return Promise.resolve({
+      priceId: this.price.priceId,
+      active: true,
+      amount: this.price.amount,
+      currency: this.price.currency,
+      billingType: "one_time" as const,
+    });
+  }
+
   createHostedCheckout(
     input: CreateHostedCheckoutInput,
   ): Promise<HostedCheckoutSession> {

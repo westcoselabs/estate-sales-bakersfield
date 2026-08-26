@@ -58,6 +58,7 @@ function organizerListing(): PublishedListing {
       organizer: {
         displayName: "Organizer Sales",
         websiteUrl: "https://organizer.example.com/",
+        contactEmail: "organizer@example.com",
       },
       coverPhotoUrl: "/media/photo-1/cover",
       gallery: [{ id: "photo-1", url: "/media/photo-1/gallery", position: 0 }],

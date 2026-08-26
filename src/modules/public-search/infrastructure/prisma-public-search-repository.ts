@@ -84,11 +84,16 @@ export class PrismaPublicSearchRepository implements PublicSearchRepository {
         FROM "event_publications" AS publication
         INNER JOIN "events" AS source_event
           ON source_event."id" = publication."event_id"
+        INNER JOIN "organizer_profiles" AS source_organizer
+          ON source_organizer."id" = source_event."organizer_id"
+        INNER JOIN "users" AS source_user
+          ON source_user."id" = source_organizer."user_id"
         INNER JOIN "event_locations" AS location
           ON location."event_id" = source_event."id"
         WHERE source_event."canceled_at" IS NULL
           AND source_event."deleted_at" IS NULL
           AND source_event."removed_at" IS NULL
+          AND source_user."status" = 'ACTIVE'
 
         UNION ALL
 

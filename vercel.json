@@ -7,7 +7,7 @@
     }
   },
   "crons": [
-    { "path": "/api/internal/jobs/run", "schedule": "* * * * *" },
-    { "path": "/api/internal/email-jobs/run", "schedule": "* * * * *" }
+    { "path": "/api/internal/jobs/run", "schedule": "0 9 * * *" },
+    { "path": "/api/internal/email-jobs/run", "schedule": "0 10 * * *" }
   ]
 }

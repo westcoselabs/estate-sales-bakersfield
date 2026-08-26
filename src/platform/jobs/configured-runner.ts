@@ -46,6 +46,28 @@ export async function runConfiguredJobBatch(limit = 10) {
         }
         await eventService.purgeLifecycleMedia(payload.eventId);
       },
+      EVENT_PHOTO_RESERVATION_PURGE: async (payload) => {
+        if (
+          !payload ||
+          typeof payload !== "object" ||
+          !("reservationId" in payload) ||
+          typeof payload.reservationId !== "string"
+        ) {
+          throw new Error("INVALID_PHOTO_RESERVATION_PURGE_PAYLOAD");
+        }
+        await eventService.purgeExpiredPhotoReservation(payload.reservationId);
+      },
+      EVENT_PHOTO_PURGE: async (payload) => {
+        if (
+          !payload ||
+          typeof payload !== "object" ||
+          !("photoId" in payload) ||
+          typeof payload.photoId !== "string"
+        ) {
+          throw new Error("INVALID_PHOTO_PURGE_PAYLOAD");
+        }
+        await eventService.purgeDeletedPhoto(payload.photoId);
+      },
       [EXTERNAL_LISTING_EXPIRATION_JOB_TYPE]: async (payload, context) => {
         await externalListingLifecycle.expire(payload, {
           jobId: context.jobId,

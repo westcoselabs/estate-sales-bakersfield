@@ -1,5 +1,7 @@
 import "server-only";
 
+import { MARKETING_CONSENT_VERSION } from "@/modules/auth";
+
 import type { PrismaClient } from "@/generated/prisma/client";
 
 import { EmailApplicationError } from "../domain/errors";
@@ -361,10 +363,14 @@ export class PrismaEmailCenterRepository {
           role: "USER",
           status: "ACTIVE",
           emailVerifiedAt: { not: null },
-          OR: [
-            { marketingPreference: null },
-            { marketingPreference: { unsubscribedAt: null } },
-          ],
+          marketingPreference: {
+            is: {
+              consentAt: { not: null },
+              consentVersion: MARKETING_CONSENT_VERSION,
+              consentSource: { not: null },
+              unsubscribedAt: null,
+            },
+          },
         },
         take: 100,
         orderBy: { createdAt: "desc" },
@@ -590,10 +596,14 @@ export class PrismaEmailCenterRepository {
             role: "USER",
             status: "ACTIVE",
             emailVerifiedAt: { not: null },
-            OR: [
-              { marketingPreference: null },
-              { marketingPreference: { unsubscribedAt: null } },
-            ],
+            marketingPreference: {
+              is: {
+                consentAt: { not: null },
+                consentVersion: MARKETING_CONSENT_VERSION,
+                consentSource: { not: null },
+                unsubscribedAt: null,
+              },
+            },
             ...(campaign.selectionMode === "SELECTED_USERS"
               ? { id: { in: campaign.recipients.map((row) => row.userId) } }
               : {}),

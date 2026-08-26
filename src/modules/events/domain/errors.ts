@@ -14,6 +14,10 @@ export class EventValidationError extends EventError {}
 
 export class EventStateError extends EventError {}
 
+export class OrganizerProfileIncompleteError extends EventStateError {
+  override readonly name = "OrganizerProfileIncompleteError";
+}
+
 export class EventLifecycleBlockedError extends EventStateError {
   override readonly name = "EventLifecycleBlockedError";
 }

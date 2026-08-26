@@ -1,15 +1,34 @@
 import { Resend } from "resend";
 import { getPrismaClient } from "@/platform/database/client";
 import { getServerEnvironment } from "@/platform/config/env";
+import {
+  BoundedBodyError,
+  readBoundedText,
+} from "@/platform/http/bounded-body";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+const MAXIMUM_WEBHOOK_BYTES = 128 * 1024;
 
 export async function POST(request: Request) {
   const environment = getServerEnvironment();
   if (!environment.RESEND_API_KEY || !environment.RESEND_WEBHOOK_SECRET)
     return new Response("Unavailable", { status: 503 });
-  const payload = await request.text();
+  let payload: string;
+  try {
+    payload = await readBoundedText(request, {
+      maxBytes: MAXIMUM_WEBHOOK_BYTES,
+    });
+  } catch (error) {
+    return new Response("Invalid webhook request", {
+      status:
+        error instanceof BoundedBodyError && error.code === "PAYLOAD_TOO_LARGE"
+          ? 413
+          : 400,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
   let verified: unknown;
   try {
     verified = new Resend(environment.RESEND_API_KEY).webhooks.verify({
@@ -93,16 +112,49 @@ export async function POST(request: Request) {
       };
       const deliveryStatus = statusMap[type];
       if (messageId && deliveryStatus) {
+        const allowedCurrentStatuses = {
+          DELIVERED: ["PENDING", "SENT", "FAILED", "DELIVERED"],
+          FAILED: ["PENDING", "SENT", "FAILED"],
+          BOUNCED: ["PENDING", "SENT", "DELIVERED", "FAILED", "BOUNCED"],
+          COMPLAINED: [
+            "PENDING",
+            "SENT",
+            "DELIVERED",
+            "FAILED",
+            "BOUNCED",
+            "COMPLAINED",
+            "SUPPRESSED",
+          ],
+          SUPPRESSED: [
+            "PENDING",
+            "SENT",
+            "DELIVERED",
+            "FAILED",
+            "BOUNCED",
+            "SUPPRESSED",
+          ],
+        }[deliveryStatus.status] as Array<
+          | "PENDING"
+          | "SENT"
+          | "DELIVERED"
+          | "FAILED"
+          | "BOUNCED"
+          | "COMPLAINED"
+          | "SUPPRESSED"
+        >;
         await tx.emailDelivery.updateMany({
           where: {
             providerMessageId: messageId,
-            ...(deliveryStatus.status === "DELIVERED"
-              ? { status: { in: ["PENDING", "SENT", "FAILED"] } }
-              : {}),
+            status: { in: allowedCurrentStatuses },
+            OR: [
+              { providerLastEventAt: null },
+              { providerLastEventAt: { lte: occurredAt } },
+            ],
           },
           data: {
             status: deliveryStatus.status,
             [deliveryStatus.field]: occurredAt,
+            providerLastEventAt: occurredAt,
           },
         });
       }
@@ -130,9 +182,7 @@ export async function POST(request: Request) {
         type === "email.bounced" ||
         type === "email.suppressed" ||
         (type === "contact.updated" && data.unsubscribed === true);
-      const shouldResubscribe =
-        type === "contact.updated" && data.unsubscribed === false;
-      if (email && (shouldUnsubscribe || shouldResubscribe)) {
+      if (email && shouldUnsubscribe) {
         const user = await tx.user.findUnique({
           where: { normalizedEmail: email },
           select: { id: true },
@@ -142,9 +192,9 @@ export async function POST(request: Request) {
             where: { userId: user.id },
             create: {
               userId: user.id,
-              unsubscribedAt: shouldUnsubscribe ? occurredAt : null,
+              unsubscribedAt: occurredAt,
             },
-            update: { unsubscribedAt: shouldUnsubscribe ? occurredAt : null },
+            update: { unsubscribedAt: occurredAt },
           });
       }
       await tx.resendWebhookEvent.update({

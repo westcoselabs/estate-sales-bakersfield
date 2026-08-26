@@ -8,7 +8,7 @@ import {
   adminApiError,
   adminJson,
   assertAdminOrigin,
-  readAdminJson,
+  readAdminBoundedJson,
 } from "../_shared";
 
 export async function adminEmailMutation(
@@ -34,7 +34,7 @@ export async function adminEmailMutation(
       action,
       administrator.id,
     );
-    const body = await readAdminJson(request);
+    const body = await readAdminBoundedJson(request);
     const result = await execute({ session, body, requestId });
     return adminJson(result ?? { ok: true }, { requestId });
   } catch (error) {

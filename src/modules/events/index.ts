@@ -5,6 +5,7 @@ export {
 } from "./application/event-service";
 export {
   addressPrivacySchema,
+  BAKERSFIELD_TIMEZONE,
   createEventSchema,
   eventApprovalSchema,
   eventDetailsSchema,
@@ -29,6 +30,7 @@ export {
   EventConflictError,
   EventLifecycleBlockedError,
   EventNotFoundError,
+  OrganizerProfileIncompleteError,
   EventStateError,
   EventValidationError,
   PhotoProcessingError,
@@ -46,3 +48,4 @@ export type {
   EventType,
   PublicEventProjection,
 } from "./domain/types";
+export { MAXIMUM_EVENT_PHOTOS } from "./domain/types";

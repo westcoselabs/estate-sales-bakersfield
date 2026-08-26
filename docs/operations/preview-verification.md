@@ -8,6 +8,6 @@ Do not create a Vercel Preview deployment, Preview-specific provider resource,
 or Preview webhook. The active hosted review process is the
 [Production-beta verification checklist](./production-beta-verification.md).
 
-Legacy `APP_ENV=preview` source paths and `pnpm verify:live` remain compatibility
-artifacts. Their current limitations are documented in
-[Live-provider verification](./live-verification.md).
+Legacy `APP_ENV=preview` source paths remain compatibility artifacts, but the
+`pnpm verify:live` command has been retired. Current boundaries are documented
+in [Live-provider verification](./live-verification.md).

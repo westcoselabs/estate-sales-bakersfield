@@ -19,6 +19,8 @@ export const expectedVersionSchema = z.number().int().positive();
 
 export const createEventSchema = z.object({ eventType: eventTypeSchema });
 
+export const BAKERSFIELD_TIMEZONE = "America/Los_Angeles";
+
 export const eventDetailsSchema = z.object({
   expectedVersion: expectedVersionSchema,
   title: optionalTrimmed(3, 120),
@@ -29,7 +31,7 @@ export const eventScheduleSchema = z.object({
   expectedVersion: expectedVersionSchema,
   localStartsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
   localEndsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
-  timezone: z.string().trim().min(1).max(64),
+  timezone: z.literal(BAKERSFIELD_TIMEZONE),
 });
 
 export const eventLocationSchema = z.object({
@@ -44,7 +46,7 @@ export const eventLocationSchema = z.object({
     .trim()
     .toUpperCase()
     .regex(/^[A-Z]{2}$/),
-  timezone: z.string().trim().min(1).max(64),
+  timezone: z.literal(BAKERSFIELD_TIMEZONE),
   privacyMode: addressPrivacySchema,
   selectionToken: z.string().min(40).max(4096).nullable().optional(),
   confirmed: z.boolean().optional(),

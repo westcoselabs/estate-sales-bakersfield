@@ -7,6 +7,10 @@ import type {
   MarketingPreferenceRepository,
 } from "../application/marketing-preference-service";
 import type { AuditContext } from "../application/ports";
+import {
+  hasExplicitMarketingConsent,
+  MARKETING_CONSENT_VERSION,
+} from "../application/marketing-preference-service";
 
 function projection(
   value: {
@@ -27,7 +31,7 @@ export class PrismaMarketingPreferenceRepository implements MarketingPreferenceR
     const value = await this.prisma.marketingPreference.findUnique({
       where: { userId },
     });
-    return value ? projection(value, value.unsubscribedAt === null) : null;
+    return value ? projection(value, hasExplicitMarketingConsent(value)) : null;
   }
 
   async update(
@@ -46,13 +50,13 @@ export class PrismaMarketingPreferenceRepository implements MarketingPreferenceR
             create: {
               userId,
               consentAt: now,
-              consentVersion: "marketing-v1",
+              consentVersion: MARKETING_CONSENT_VERSION,
               consentSource: "ACCOUNT_SETTINGS",
               unsubscribedAt: null,
             },
             update: {
               consentAt: now,
-              consentVersion: "marketing-v1",
+              consentVersion: MARKETING_CONSENT_VERSION,
               consentSource: "ACCOUNT_SETTINGS",
               unsubscribedAt: null,
             },
@@ -82,7 +86,7 @@ export class PrismaMarketingPreferenceRepository implements MarketingPreferenceR
           requestId: audit.requestId ?? null,
           metadata: subscribed
             ? {
-                consentVersion: "marketing-v1",
+                consentVersion: MARKETING_CONSENT_VERSION,
                 consentSource: "ACCOUNT_SETTINGS",
               }
             : {},
@@ -92,12 +96,16 @@ export class PrismaMarketingPreferenceRepository implements MarketingPreferenceR
         data: {
           queue: "email",
           type: "RESEND_CONTACT_SUBSCRIPTION",
-          payload: { userId, subscribed },
+          payload: {
+            userId,
+            subscribed,
+            preferenceUpdatedAt: value.updatedAt.toISOString(),
+          },
           deduplicationKey: `${userId}:${now.toISOString()}`,
           maxAttempts: 10,
         },
       });
-      return projection(value, subscribed);
+      return projection(value, hasExplicitMarketingConsent(value));
     });
   }
 }

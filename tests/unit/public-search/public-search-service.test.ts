@@ -416,9 +416,7 @@ describe("PublicSearchService", () => {
       criteria(),
       now,
     );
-    expect(listPage.markers?.map(({ id }) => id)).toEqual(
-      listPage.items.map(({ id }) => id),
-    );
+    expect(listPage.markers).toEqual([]);
   });
 
   it("omits a protected marker when its public zone is unknown", async () => {
@@ -468,7 +466,7 @@ describe("PublicSearchService", () => {
     ]);
 
     const page = await new PublicSearchService(repository).search(
-      criteria(),
+      criteria({ view: "map" }),
       now,
     );
 

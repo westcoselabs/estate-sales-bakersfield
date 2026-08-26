@@ -82,6 +82,7 @@ const service = new EventService(
   media,
   new SharpImageProcessor(),
   "test",
+  () => new Date("2026-08-01T12:00:00.000Z"),
 );
 
 let owner: AuthPrincipal;

@@ -3,16 +3,18 @@ import "server-only";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 
 import type { EventRepository } from "../application/ports";
-import type {
-  EventLocationRecord,
-  EventPhotoRecord,
-  EventRecord,
+import {
+  MAXIMUM_EVENT_PHOTOS,
+  type EventLocationRecord,
+  type EventPhotoRecord,
+  type EventRecord,
 } from "../domain/types";
 
 const eventInclude = {
   organizer: {
     select: {
       userId: true,
+      status: true,
       displayName: true,
       websiteUrl: true,
       user: {
@@ -113,6 +115,7 @@ function mapEvent(event: EventPayload): EventRecord {
     ownerVerifiedEmail: event.organizer.user.emailVerifiedAt
       ? event.organizer.user.normalizedEmail
       : null,
+    organizerStatus: event.organizer.status,
     organizerDisplayName: event.organizer.displayName,
     organizerWebsiteUrl: event.organizer.websiteUrl,
     publicId: event.publicId,
@@ -336,6 +339,15 @@ export class PrismaEventRepository implements EventRepository {
           where: { id: event.id },
           data: {
             deletedAt: input.now,
+            approvalStatus: "NOT_APPROVED",
+            approvedRevision: null,
+            approvalDigest: null,
+            approvedAt: null,
+            termsVersion: null,
+            termsAcceptedAt: null,
+            termsAcceptedByUserId: null,
+            currentApprovalId: null,
+            contentRevision: { increment: 1 },
             version: { increment: 1 },
           },
         });
@@ -670,48 +682,130 @@ export class PrismaEventRepository implements EventRepository {
   async createPhotoReservation(
     input: Parameters<EventRepository["createPhotoReservation"]>[0],
   ) {
-    return this.prisma.$transaction(async (transaction) => {
-      const event = await transaction.event.updateMany({
-        where: {
-          id: input.eventId,
-          version: input.expectedVersion,
-          organizer: { userId: input.userId },
-          publication: { is: null },
-        },
-        data: { version: { increment: 1 } },
-      });
-      if (event.count !== 1) return null;
-      const maximum = await transaction.eventPhoto.count({
-        where: { eventId: input.eventId },
-      });
-      await transaction.eventPhoto.create({
-        data: {
-          id: input.photoId,
-          eventId: input.eventId,
-          sortOrder: maximum,
-          stagingObjectKey: input.stagingObjectKey,
-          sourceContentType: input.sourceContentType,
-          uploadReservation: {
-            create: {
-              id: input.reservationId,
-              eventId: input.eventId,
-              stagingObjectKey: input.stagingObjectKey,
-              expiresAt: input.expiresAt,
+    return this.prisma.$transaction(
+      async (transaction) => {
+        await transaction.$queryRaw(Prisma.sql`
+          SELECT "id" FROM "events"
+          WHERE "id" = ${input.eventId}::uuid
+          FOR UPDATE
+        `);
+        const current = await transaction.event.findFirst({
+          where: {
+            id: input.eventId,
+            version: input.expectedVersion,
+            organizer: { userId: input.userId },
+            publication: { is: null },
+          },
+          select: { id: true },
+        });
+        if (!current) return null;
+        const maximum = await transaction.eventPhoto.count({
+          where: { eventId: input.eventId },
+        });
+        if (maximum >= MAXIMUM_EVENT_PHOTOS) return null;
+        const event = await transaction.event.updateMany({
+          where: {
+            id: input.eventId,
+            version: input.expectedVersion,
+            organizer: { userId: input.userId },
+            publication: { is: null },
+          },
+          data: { version: { increment: 1 } },
+        });
+        if (event.count !== 1) return null;
+        await transaction.eventPhoto.create({
+          data: {
+            id: input.photoId,
+            eventId: input.eventId,
+            sortOrder: maximum,
+            stagingObjectKey: input.stagingObjectKey,
+            sourceContentType: input.sourceContentType,
+            uploadReservation: {
+              create: {
+                id: input.reservationId,
+                eventId: input.eventId,
+                stagingObjectKey: input.stagingObjectKey,
+                expiresAt: input.expiresAt,
+              },
             },
           },
-        },
-      });
-      await transaction.auditEntry.create({
-        data: auditData({
-          userId: input.userId,
-          action: "EVENT_PHOTO_UPLOAD_RESERVED",
-          eventId: input.eventId,
-          requestId: input.audit.requestId,
-          metadata: { photoId: input.photoId },
-        }),
-      });
-      return this.findOwnedWith(transaction, input.eventId, input.userId);
+        });
+        await transaction.auditEntry.create({
+          data: auditData({
+            userId: input.userId,
+            action: "EVENT_PHOTO_UPLOAD_RESERVED",
+            eventId: input.eventId,
+            requestId: input.audit.requestId,
+            metadata: { photoId: input.photoId },
+          }),
+        });
+        await transaction.durableJob.create({
+          data: {
+            queue: "default",
+            type: "EVENT_PHOTO_RESERVATION_PURGE",
+            payload: { reservationId: input.reservationId },
+            deduplicationKey: `photo-reservation-purge:${input.reservationId}`,
+            runAt: new Date(input.expiresAt.getTime() + 60_000),
+            maxAttempts: 10,
+          },
+        });
+        return this.findOwnedWith(transaction, input.eventId, input.userId);
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  async findExpiredPhotoReservation(
+    input: Parameters<EventRepository["findExpiredPhotoReservation"]>[0],
+  ) {
+    return this.prisma.uploadReservation.findFirst({
+      where: {
+        id: input.reservationId,
+        consumedAt: null,
+        expiresAt: { lte: input.now },
+        photo: { status: { in: ["RESERVED", "UPLOADED", "FAILED"] } },
+      },
+      select: { photoId: true, stagingObjectKey: true },
     });
+  }
+
+  async deleteExpiredPhotoReservation(
+    input: Parameters<EventRepository["deleteExpiredPhotoReservation"]>[0],
+  ) {
+    await this.prisma.$transaction(
+      async (transaction) => {
+        const reservation = await transaction.uploadReservation.findFirst({
+          where: {
+            id: input.reservationId,
+            consumedAt: null,
+            expiresAt: { lte: input.now },
+            photo: { status: { in: ["RESERVED", "UPLOADED", "FAILED"] } },
+          },
+          select: {
+            photoId: true,
+            eventId: true,
+            event: { select: { organizer: { select: { userId: true } } } },
+          },
+        });
+        if (!reservation) return;
+        await transaction.eventPhoto.delete({
+          where: { id: reservation.photoId },
+        });
+        await transaction.event.update({
+          where: { id: reservation.eventId },
+          data: { version: { increment: 1 } },
+        });
+        await transaction.auditEntry.create({
+          data: auditData({
+            userId: reservation.event.organizer.userId,
+            action: "EVENT_PHOTO_RESERVATION_EXPIRED",
+            eventId: reservation.eventId,
+            metadata: { photoId: reservation.photoId },
+          }),
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   }
 
   async findPhotoReservation(
@@ -973,7 +1067,10 @@ export class PrismaEventRepository implements EventRepository {
           data: { coverPhoto: { disconnect: true } },
         });
       }
-      await transaction.eventPhoto.delete({ where: { id: photo.id } });
+      await transaction.eventPhoto.update({
+        where: { id: photo.id },
+        data: { status: "FAILED", errorCode: "MEDIA_DELETION_PENDING" },
+      });
       await transaction.auditEntry.create({
         data: auditData({
           userId: input.userId,
@@ -983,22 +1080,59 @@ export class PrismaEventRepository implements EventRepository {
           metadata: { photoId: input.photoId },
         }),
       });
+      await transaction.durableJob.create({
+        data: {
+          queue: "default",
+          type: "EVENT_PHOTO_PURGE",
+          payload: { photoId: photo.id },
+          deduplicationKey: `event-photo-purge:${photo.id}`,
+          runAt: input.now,
+          maxAttempts: 10,
+        },
+      });
       const event = await this.findOwnedWith(
         transaction,
         input.eventId,
         input.userId,
       );
       if (!event) throw new Error("Owned event disappeared");
-      return {
-        event,
-        objectKeys: [
+      return event;
+    });
+  }
+
+  async findDeletedPhotoObjectKeys(photoId: string) {
+    const photo = await this.prisma.eventPhoto.findFirst({
+      where: {
+        id: photoId,
+        status: "FAILED",
+        errorCode: "MEDIA_DELETION_PENDING",
+      },
+      select: {
+        stagingObjectKey: true,
+        dashboardThumbnailKey: true,
+        listingCardKey: true,
+        galleryKey: true,
+        coverDisplayKey: true,
+      },
+    });
+    return photo
+      ? [
           photo.stagingObjectKey,
           photo.dashboardThumbnailKey,
           photo.listingCardKey,
           photo.galleryKey,
           photo.coverDisplayKey,
-        ].filter((key): key is string => Boolean(key)),
-      };
+        ].filter((key): key is string => Boolean(key))
+      : [];
+  }
+
+  async deletePurgedPhoto(photoId: string) {
+    await this.prisma.eventPhoto.deleteMany({
+      where: {
+        id: photoId,
+        status: "FAILED",
+        errorCode: "MEDIA_DELETION_PENDING",
+      },
     });
   }
 
@@ -1089,6 +1223,8 @@ export class PrismaEventRepository implements EventRepository {
                     canceledAt: null,
                     deletedAt: null,
                     removedAt: null,
+                    endsAt: { gt: input.now },
+                    organizer: { user: { status: "ACTIVE" } },
                   },
                 },
                 ...(input.userId
@@ -1115,9 +1251,11 @@ export class PrismaEventRepository implements EventRepository {
         event: {
           select: {
             publication: { select: { id: true } },
+            endsAt: true,
             canceledAt: true,
             deletedAt: true,
             removedAt: true,
+            organizer: { select: { user: { select: { status: true } } } },
           },
         },
       },
@@ -1137,8 +1275,12 @@ export class PrismaEventRepository implements EventRepository {
             photo.event.publication &&
             !photo.event.canceledAt &&
             !photo.event.deletedAt &&
-            !photo.event.removedAt,
+            !photo.event.removedAt &&
+            photo.event.endsAt &&
+            photo.event.endsAt.getTime() > input.now.getTime() &&
+            photo.event.organizer.user.status === "ACTIVE",
           ),
+          publicUntil: photo.event.endsAt,
         }
       : null;
   }

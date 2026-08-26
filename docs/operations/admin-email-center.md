@@ -18,9 +18,13 @@ persisted or logged.
    receipt, and owner-only test sends are checked.
 4. Configure Resend to deliver signed events to `/api/webhooks/resend`, and set
    `RESEND_WEBHOOK_SECRET` to the endpoint signing secret.
-5. Configure both protected cron routes at least once per minute:
-   `/api/internal/jobs/run` and `/api/internal/email-jobs/run`. Vercel sends the
-   configured `CRON_SECRET` automatically for declared cron jobs.
+5. Configure both protected cron routes with the checked-in daily Hobby
+   schedules: `/api/internal/jobs/run` at `0 9 * * *` and
+   `/api/internal/email-jobs/run` at `0 10 * * *`. Vercel evaluates these in
+   UTC, may invoke a Hobby cron anywhere in the configured hour, and sends the
+   configured `CRON_SECRET` automatically. Queued receipts and contact sync can
+   therefore wait roughly one day; at the current batch limit of 10, larger
+   backlogs carry into later runs. Campaigns remain disabled during beta.
 6. In Production only, confirm `RESEND_RESOURCE_ENV=production`, then set
    `EMAIL_CAMPAIGNS_ENABLED=true` and deploy. Preview never dispatches a
    campaign.

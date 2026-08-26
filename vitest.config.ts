@@ -18,6 +18,12 @@ export default defineConfig({
       reporter: ["text", "json-summary"],
       include: ["src/modules/**/*.ts", "src/platform/**/*.ts"],
       exclude: ["src/generated/**", "**/index.ts"],
+      thresholds: {
+        statements: 35,
+        branches: 35,
+        functions: 35,
+        lines: 35,
+      },
     },
     projects: [
       {

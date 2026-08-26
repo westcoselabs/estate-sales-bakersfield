@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
 import { Icon } from "@/components/ui/icons";
@@ -55,6 +56,7 @@ export function AccountMenu({
   readonly account: ShellAccount;
   readonly variant?: "default" | "public";
 }) {
+  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const summaryRef = useRef<HTMLElement>(null);
@@ -70,7 +72,8 @@ export function AccountMenu({
         body: "{}",
       });
       if (!response.ok) throw new Error("Logout failed");
-      window.location.assign("/login");
+      router.replace("/login");
+      router.refresh();
     } catch {
       setPending(false);
       setError("Unable to log out. Try again.");

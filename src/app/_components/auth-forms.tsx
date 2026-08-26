@@ -115,6 +115,7 @@ function requestFailure(error: unknown, fallback: string) {
 }
 
 export function SignupForm() {
+  const router = useRouter();
   const submission = useSubmission();
   const [accepted, setAccepted] = useState(false);
   const [issues, setIssues] = useState<readonly FormIssue[]>([]);
@@ -122,10 +123,11 @@ export function SignupForm() {
   useEffect(() => {
     if (!accepted) return;
     const timeout = window.setTimeout(() => {
-      window.location.assign("/login?registered=1");
+      router.replace("/login?registered=1");
+      router.refresh();
     }, 4_000);
     return () => window.clearTimeout(timeout);
-  }, [accepted]);
+  }, [accepted, router]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -596,13 +598,15 @@ export function ResetPasswordForm({ token }: { readonly token: string }) {
 }
 
 export function LogoutButton() {
+  const router = useRouter();
   const submission = useSubmission();
 
   async function logout() {
     submission.setPending(true);
     try {
       await submitJson("/api/auth/logout", {});
-      window.location.assign("/login");
+      router.replace("/login");
+      router.refresh();
     } catch (error) {
       submission.setMessage(
         error instanceof Error ? error.message : "Logout failed.",
@@ -647,8 +651,8 @@ export function OrganizerForm({
         "/api/organizer",
         {
           displayName: String(data.get("displayName") ?? ""),
-          contactName: null,
-          contactEmail: null,
+          contactName: String(data.get("contactName") ?? ""),
+          contactEmail: String(data.get("contactEmail") ?? ""),
           contactPhone: String(data.get("contactPhone") ?? ""),
           websiteUrl: String(data.get("websiteUrl") ?? ""),
         },
@@ -668,11 +672,39 @@ export function OrganizerForm({
   return (
     <form onSubmit={submit}>
       <label>
-        Business name (optional)
+        Business or organizer name (required, shown publicly)
         <input
           defaultValue={initial?.displayName ?? ""}
           name="displayName"
           maxLength={100}
+          minLength={2}
+          required
+        />
+      </label>
+      <label>
+        Contact name (required, kept private)
+        <input
+          autoComplete="name"
+          defaultValue={initial?.contactName ?? ""}
+          name="contactName"
+          maxLength={100}
+          minLength={2}
+          required
+        />
+      </label>
+      <label>
+        Contact email (required, kept private)
+        <input
+          autoCapitalize="none"
+          autoComplete="email"
+          autoCorrect="off"
+          defaultValue={initial?.contactEmail ?? ""}
+          inputMode="email"
+          name="contactEmail"
+          maxLength={320}
+          required
+          spellCheck={false}
+          type="email"
         />
       </label>
       <label>
@@ -721,6 +753,7 @@ export function SessionManager({
 }: {
   readonly initialSessions: readonly SessionData[];
 }) {
+  const router = useRouter();
   const [sessions, setSessions] =
     useState<readonly SessionData[]>(initialSessions);
   const submission = useSubmission();
@@ -760,7 +793,8 @@ export function SessionManager({
     submission.setPending(true);
     try {
       await submitJson("/api/auth/sessions/revoke-all", {});
-      window.location.assign("/login");
+      router.replace("/login");
+      router.refresh();
     } catch (error) {
       submission.setMessage(
         error instanceof Error ? error.message : "Session revocation failed.",

@@ -60,9 +60,10 @@ async function registerAndVerify(
 
 async function login(page: Page, email: string, password: string) {
   await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
 }
 
 test("guards and operates the focused owner portal on desktop and mobile", async ({
@@ -76,11 +77,19 @@ test("guards and operates the focused owner portal on desktop and mobile", async
   const ownerPassword = "super-admin-browser-password";
   const userPassword = "marketing-user-browser-password";
 
+  await page.context().setExtraHTTPHeaders({
+    "x-forwarded-for": `e2e-admin-owner-${suffix}`,
+  });
+
   await page.goto("/admin?private=discard-me");
   await expect(page).toHaveURL(/\/login$/);
   expect(page.url()).not.toContain("private");
 
-  const ordinaryContext = await browser.newContext();
+  const ordinaryContext = await browser.newContext({
+    extraHTTPHeaders: {
+      "x-forwarded-for": `e2e-admin-ordinary-${suffix}`,
+    },
+  });
   const ordinaryPage = await ordinaryContext.newPage();
   await registerAndVerify(ordinaryPage, {
     email: userEmail,
@@ -88,6 +97,11 @@ test("guards and operates the focused owner portal on desktop and mobile", async
     password: userPassword,
   });
   await login(ordinaryPage, userEmail, userPassword);
+  await ordinaryPage.goto("/dashboard/settings");
+  await ordinaryPage.getByRole("button", { name: "Subscribe" }).click();
+  await expect(
+    ordinaryPage.getByText("You are subscribed to optional marketing email."),
+  ).toBeVisible();
   await ordinaryPage.goto("/admin");
   await expect(
     ordinaryPage.getByText("This page could not be found."),

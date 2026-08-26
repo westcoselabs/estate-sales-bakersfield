@@ -105,7 +105,8 @@ export function ExploreResultsShell({
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousHtmlOverflow;
       document.body.style.overscrollBehavior = previousBodyOverscroll;
-      document.documentElement.style.overscrollBehavior = previousHtmlOverscroll;
+      document.documentElement.style.overscrollBehavior =
+        previousHtmlOverscroll;
     };
   }, [view]);
 

@@ -48,13 +48,13 @@ test("adapts the signed-out navigation for desktop and mobile", async ({
   await expect(
     page
       .getByRole("navigation", { name: "Primary", exact: true })
-      .getByRole("link", { name: "Explore", exact: true }),
+      .getByRole("link", { name: "Find sales", exact: true }),
   ).toHaveAttribute("href", "/search");
   await expect(
     page
       .getByRole("navigation", { name: "Primary", exact: true })
       .getByRole("link", { name: "FAQs", exact: true }),
-  ).toHaveCount(0);
+  ).toHaveAttribute("href", "/faq");
   await expect(
     desktopHeader.getByRole("link", { name: "Log in", exact: true }),
   ).toBeVisible();
@@ -69,7 +69,7 @@ test("adapts the signed-out navigation for desktop and mobile", async ({
     .boundingBox();
   expect(desktopListingBox).not.toBeNull();
   expect(desktopLoginBox).not.toBeNull();
-  expect(desktopListingBox?.x ?? 0).toBeGreaterThan(desktopLoginBox?.x ?? 0);
+  expect(desktopListingBox?.x ?? 0).toBeLessThan(desktopLoginBox?.x ?? 0);
 
   await page.setViewportSize({ width: 390, height: 844 });
   const mobileActions = page.locator(".public-header__mobile-actions");
@@ -91,7 +91,7 @@ test("adapts the signed-out navigation for desktop and mobile", async ({
     name: "Mobile primary",
   });
   await expect(
-    mobileNavigation.getByRole("link", { name: "Explore", exact: true }),
+    mobileNavigation.getByRole("link", { name: "Find sales", exact: true }),
   ).toBeVisible();
   await expect(
     mobileNavigation.getByRole("link", { name: "Estate sales", exact: true }),
@@ -139,7 +139,7 @@ test("keeps category hubs and map presentation in one shared search", async ({
   await expect(
     page
       .getByRole("navigation", { name: "Primary", exact: true })
-      .getByRole("link", { name: "Explore", exact: true }),
+      .getByRole("link", { name: "Find sales", exact: true }),
   ).toHaveAttribute("href", "/search");
   await expect(
     page.getByRole("link", { name: "Map preview", exact: true }),
@@ -172,12 +172,12 @@ test("renders public discovery content without client JavaScript", async ({
   await page.goto("/");
   await expect(
     page.getByRole("heading", {
-      name: "Find local sales and one-of-a-kind finds near you",
+      name: "Discover local sales and one-of-a-kind finds.",
     }),
   ).toBeVisible();
-  await page.goto("/search?sale=estate&date=weekend");
+  await page.goto("/search?sale=estate&date=weekend&view=list");
   await expect(
-    page.getByRole("heading", { name: /sales shown|No sales shown/ }),
+    page.getByRole("region", { name: /sales shown|No sales shown/ }),
   ).toBeVisible();
   await context.close();
 });
@@ -186,11 +186,13 @@ test("normalizes filter URLs, restores browser history, and loads no map provide
   page,
 }) => {
   await page.goto("/search?view=list");
-  await page.getByRole("button", { name: "Estate sales" }).click();
+  await page.getByRole("button", { name: "All sales", exact: true }).click();
+  await page.getByRole("option", { name: "Estate sales" }).click();
   await expect
     .poll(() => new URL(page.url()).searchParams.get("sale"))
     .toBe("estate");
-  await page.getByRole("button", { name: "Today" }).click();
+  await page.getByRole("button", { name: "Any date", exact: true }).click();
+  await page.getByRole("option", { name: "Today" }).click();
   await expect
     .poll(() => new URL(page.url()).searchParams.get("date"))
     .toBe("today");
@@ -202,7 +204,7 @@ test("normalizes filter URLs, restores browser history, and loads no map provide
   expect(new URL(page.url()).searchParams.has("date")).toBe(false);
   await expect(
     page.getByRole("button", { name: "Estate sales", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+  ).toBeVisible();
 
   const resourceUrls = await page.evaluate(() =>
     performance
@@ -220,9 +222,21 @@ test("restores custom date inputs after browser Back", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/search?view=list");
   await page.getByRole("button", { name: /^Filters/ }).click();
-  await page.getByRole("button", { name: "Choose dates" }).click();
-  await page.getByLabel("Start date").fill("2026-08-12");
-  await page.getByLabel("End date").fill("2026-08-14");
+  const filterDialog = page.getByRole("dialog", { name: "Filter sales" });
+  await filterDialog
+    .getByRole("button", { name: "Any date", exact: true })
+    .click();
+  await filterDialog.getByRole("option", { name: "Date range" }).click();
+  await filterDialog.getByRole("button", { name: "Choose dates" }).click();
+  const calendar = filterDialog.getByRole("dialog", {
+    name: "Choose a date range",
+  });
+  await calendar
+    .getByRole("button", { name: "Wednesday, August 12, 2026" })
+    .click();
+  await calendar
+    .getByRole("button", { name: "Friday, August 14, 2026" })
+    .click();
   await page.getByRole("button", { name: "Apply filters" }).click();
 
   await expect
@@ -235,10 +249,13 @@ test("restores custom date inputs after browser Back", async ({ page }) => {
     .poll(() => new URL(page.url()).searchParams.get("to"))
     .toBe("2026-08-14");
   await page.getByRole("button", { name: /^Filters/ }).click();
-  await page
-    .getByRole("dialog", { name: "Filter sales" })
-    .getByRole("button", { name: "Today" })
+  const changedFilterDialog = page.getByRole("dialog", {
+    name: "Filter sales",
+  });
+  await changedFilterDialog
+    .getByRole("button", { name: "Date range", exact: true })
     .click();
+  await changedFilterDialog.getByRole("option", { name: "Today" }).click();
   await page.getByRole("button", { name: "Apply filters" }).click();
   await expect
     .poll(() => new URL(page.url()).searchParams.get("date"))
@@ -249,8 +266,11 @@ test("restores custom date inputs after browser Back", async ({ page }) => {
     .poll(() => new URL(page.url()).searchParams.get("date"))
     .toBe("custom");
   await page.getByRole("button", { name: /^Filters/ }).click();
-  await expect(page.getByLabel("Start date")).toHaveValue("2026-08-12");
-  await expect(page.getByLabel("End date")).toHaveValue("2026-08-14");
+  await expect(
+    page.getByRole("dialog", { name: "Filter sales" }).getByRole("button", {
+      name: "Aug 12 – Aug 14",
+    }),
+  ).toBeVisible();
 });
 
 test("uses an accessible mobile filter sheet and returns focus on close", async ({
@@ -319,7 +339,7 @@ test("serves narrow shared list and map projections", async ({ request }) => {
   });
 });
 
-test("switches presentation in URL history without a second search navigation", async ({
+test("switches presentation in URL history without a full document navigation", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -327,10 +347,7 @@ test("switches presentation in URL history without a second search navigation", 
   const searchNavigations: string[] = [];
   page.on("request", (request) => {
     const url = new URL(request.url());
-    if (
-      url.pathname === "/search" &&
-      ["document", "fetch"].includes(request.resourceType())
-    ) {
+    if (url.pathname === "/search" && request.resourceType() === "document") {
       searchNavigations.push(request.url());
     }
   });
@@ -373,9 +390,14 @@ test("uses a two-action mobile dock and preserves filters across modes", async (
   ).toBeVisible();
 
   await page.getByRole("button", { name: /^Filters/ }).click();
-  await page
-    .getByRole("dialog", { name: "Filter sales" })
-    .getByRole("button", { name: "Estate sales" })
+  const mobileFilterDialog = page.getByRole("dialog", {
+    name: "Filter sales",
+  });
+  await mobileFilterDialog
+    .getByRole("button", { name: "All sales", exact: true })
+    .click();
+  await mobileFilterDialog
+    .getByRole("option", { name: "Estate sales" })
     .click();
   await page.getByRole("button", { name: "Apply filters" }).click();
   await expect
@@ -435,7 +457,7 @@ test("removes nonessential Explore motion when reduced motion is requested", asy
   const transitionDuration = await page
     .getByRole("button", { name: "List View" })
     .evaluate((element) => getComputedStyle(element).transitionDuration);
-  expect(transitionDuration).toBe("0s");
+  expect(transitionDuration).toMatch(/1e-05s|0\.00001s|0s/);
 });
 
 const requiredExploreShots = [

@@ -302,9 +302,14 @@ export class PublicSearchService {
     const visible = rows.slice(0, limit);
     const last = visible.at(-1);
     const items = visible.map((row) => cardProjection(row, now));
-    const markers = visible
-      .map((row) => markerProjection(row, now))
-      .filter((marker): marker is PublicMapMarkerProjection => marker !== null);
+    const markers =
+      criteria.view === "map"
+        ? visible
+            .map((row) => markerProjection(row, now))
+            .filter(
+              (marker): marker is PublicMapMarkerProjection => marker !== null,
+            )
+        : [];
     return {
       schema: "public-search-v1",
       criteria,

@@ -880,31 +880,12 @@ export class PrismaPaymentRepository implements PaymentRepository {
           canceledAt: null,
           deletedAt: null,
           removedAt: null,
-        },
-      },
-      include: {
-        event: {
-          select: {
-            organizer: {
-              select: {
-                user: {
-                  select: {
-                    normalizedEmail: true,
-                    emailVerifiedAt: true,
-                  },
-                },
-              },
-            },
-          },
+          endsAt: { gt: input.activeAfter },
+          organizer: { user: { status: "ACTIVE" } },
         },
       },
     });
     if (!publication) return null;
-    return {
-      ...mapPublication(publication),
-      verifiedEmail: publication.event.organizer.user.emailVerifiedAt
-        ? publication.event.organizer.user.normalizedEmail
-        : null,
-    };
+    return mapPublication(publication);
   }
 }

@@ -262,8 +262,22 @@ export const serverEnvironmentSchema = z
 
     if (environment.APP_ENV === "production") {
       for (const key of [
+        "AUTH_FINGERPRINT_SECRET",
+        "BLOB_READ_WRITE_TOKEN",
+        "BLOB_RESOURCE_ENV",
+        "RESEND_API_KEY",
+        "RESEND_FROM",
+        "RESEND_RESOURCE_ENV",
+        "RESEND_WEBHOOK_SECRET",
         "GEOAPIFY_API_KEY",
         "NEXT_PUBLIC_MAP_STYLE_URL",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "STRIPE_PRICE_ID",
+        "STRIPE_EXPECTED_AMOUNT",
+        "STRIPE_EXPECTED_CURRENCY",
+        "STRIPE_MODE",
+        "STRIPE_RESOURCE_ENV",
       ] as const) {
         if (!environment[key]) {
           context.addIssue({

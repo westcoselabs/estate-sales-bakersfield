@@ -9,6 +9,7 @@ import {
   EventConflictError,
   EventLifecycleBlockedError,
   EventNotFoundError,
+  OrganizerProfileIncompleteError,
   EventStateError,
   EventValidationError,
   PhotoProcessingError,
@@ -89,6 +90,17 @@ export function eventApiError(
         requestId,
       },
       { status: 409, requestId },
+    );
+  }
+  if (error instanceof OrganizerProfileIncompleteError) {
+    return authJson(
+      {
+        error: error.message,
+        code: "ORGANIZER_PROFILE_INCOMPLETE",
+        profilePath: "/dashboard/profile",
+        requestId,
+      },
+      { status: 422, requestId },
     );
   }
   if (error instanceof EventStateError) {

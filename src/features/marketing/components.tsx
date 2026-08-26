@@ -84,8 +84,8 @@ function SelectedListingsResults({
             <h3>No upcoming published sales yet</h3>
             <p>
               New listings will appear here as organizers publish them and
-              reviewed external listings become available. You can still
-              explore sale guides or prepare your own listing.
+              reviewed external listings become available. You can still explore
+              sale guides or prepare your own listing.
             </p>
             <div className="marketing-actions">
               <Link className="ui-button ui-button--primary" href={moreHref}>

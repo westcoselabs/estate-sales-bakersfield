@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { Icon } from "@/components/ui/icons";
@@ -200,7 +201,11 @@ export function PaymentPanel({
         {returnContext === "cancel" ? (
           <p className="payment-panel__notice payment-panel__notice--warning">
             <Icon name="warning" size={19} />
-            <span>No publication occurs from a canceled Checkout return.</span>
+            <span>
+              A return from Checkout does not prove cancellation or payment.
+              This page continues to use Stripe reconciliation and the signed
+              webhook as the authority.
+            </span>
           </p>
         ) : null}
         <dl className="payment-summary">
@@ -301,14 +306,38 @@ export function PaymentCancelRecorder({
   readonly eventId: string;
   readonly attemptId: string | null;
 }) {
+  const router = useRouter();
+  const [message, setMessage] = useState(
+    attemptId ? "Confirming the latest Checkout status…" : "",
+  );
   useEffect(() => {
     if (!attemptId) return;
-    void fetch(`/api/events/${eventId}/payment-cancel`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ attemptId }),
-    }).catch(() => undefined);
-  }, [attemptId, eventId]);
-  return null;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch(`/api/events/${eventId}/payment-cancel`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ attemptId }),
+          signal: controller.signal,
+        });
+        setMessage(
+          response.ok
+            ? "Checkout status confirmed."
+            : "The return could not be recorded; showing the authoritative payment status.",
+        );
+        router.refresh();
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setMessage(
+            "The return could not be recorded; showing the authoritative payment status.",
+          );
+          router.refresh();
+        }
+      }
+    })();
+    return () => controller.abort();
+  }, [attemptId, eventId, router]);
+  return message ? <p aria-live="polite">{message}</p> : null;
 }
