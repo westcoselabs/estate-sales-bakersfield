@@ -29,6 +29,8 @@ jobs:
     timeout-minutes: 30
     env:
       APP_ENV: test
+      APP_URL: http://localhost:3000
+      LOG_LEVEL: silent
       DATABASE_RESOURCE_ENV: development
       DATABASE_URL: ${{ secrets.DEVELOPMENT_DATABASE_URL }}
       DIRECT_URL: ${{ secrets.DEVELOPMENT_DIRECT_URL }}
