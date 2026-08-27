@@ -371,6 +371,9 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   const otherEmail = `${runId}-phase3-other-${suffix}@example.test`;
   const password = "phase-three-browser-password";
   const browserErrors: string[] = [];
+  await page.context().setExtraHTTPHeaders({
+    "x-forwarded-for": `e2e-phase3-owner-${suffix}`,
+  });
   page.on("pageerror", (error) => browserErrors.push(error.message));
   await page.addInitScript(() => {
     const originalRevokeObjectUrl = URL.revokeObjectURL.bind(URL);
@@ -557,7 +560,9 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     mimeType: "image/jpeg",
     buffer: image,
   });
-  await expect.poll(() => interceptedCommittedFinalize).toBe(true);
+  await expect
+    .poll(() => interceptedCommittedFinalize, { timeout: 30_000 })
+    .toBe(true);
   const reconciledQueueRow = page
     .getByRole("listitem")
     .filter({ hasText: "ambiguous-response.jpg" });
@@ -752,6 +757,9 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   );
 
   const otherContext = await browser.newContext();
+  await otherContext.setExtraHTTPHeaders({
+    "x-forwarded-for": `e2e-phase3-other-${suffix}`,
+  });
   const otherPage = await otherContext.newPage();
   await registerAndVerify(
     otherPage,

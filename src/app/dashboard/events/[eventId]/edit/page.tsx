@@ -22,15 +22,13 @@ export default async function EventEditPage({ params }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/dashboard");
   const { eventId } = await params;
-  const [event, payment] = await Promise.all([
-    createConfiguredEventService()
-      .get(user, eventId)
-      .catch((error: unknown) => {
-        if (error instanceof EventNotFoundError) notFound();
-        throw error;
-      }),
-    createConfiguredPaymentService().status(user, eventId),
-  ]);
+  const event = await createConfiguredEventService()
+    .get(user, eventId)
+    .catch((error: unknown) => {
+      if (error instanceof EventNotFoundError) notFound();
+      throw error;
+    });
+  const payment = await createConfiguredPaymentService().status(user, eventId);
   const deletionBlocked = [
     "PAYMENT_PENDING",
     "PAYMENT_RECEIVED_PUBLISHING",

@@ -136,6 +136,9 @@ test("reviews a manual listing import and manages a one-time ingestion credentia
   });
 
   try {
+    await page.context().setExtraHTTPHeaders({
+      "x-forwarded-for": `e2e-imports-${suffix}`,
+    });
     await registerAndVerify(page, {
       email,
       name: "Listing import administrator",
