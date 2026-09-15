@@ -360,6 +360,7 @@ describe("ListingImportService", () => {
           actor: {
             kind: "ADMIN_USER",
             adminUserId: "admin-1",
+            adminSessionId: "session-1",
           },
         },
       ),

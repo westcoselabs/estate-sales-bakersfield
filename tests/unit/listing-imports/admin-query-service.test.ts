@@ -19,6 +19,7 @@ const administrator: AuthPrincipal = {
   email: "admin@example.test",
   emailVerifiedAt: new Date("2026-08-07T17:00:00.000Z"),
   role: "SUPER_ADMIN",
+  mfaAuthenticatedAt: new Date(),
   status: "ACTIVE",
 };
 

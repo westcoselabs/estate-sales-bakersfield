@@ -5,7 +5,10 @@ import {
   createConfiguredAdminListingDirectory,
   listingDirectoryCriteria,
 } from "@/modules/admin";
-import { getCurrentUser, requireSuperAdminPrincipal } from "@/modules/auth";
+import {
+  requireAdminPagePrincipal,
+  requireSuperAdminPrincipal,
+} from "@/modules/auth";
 
 function formatDate(value: Date | null) {
   return value
@@ -43,7 +46,9 @@ export default async function AdminListingsPage({
     limit?: string;
   }>;
 }) {
-  const principal = requireSuperAdminPrincipal(await getCurrentUser());
+  const principal = requireSuperAdminPrincipal(
+    await requireAdminPagePrincipal(),
+  );
   const criteria = listingDirectoryCriteria(await searchParams);
   const directory = await createConfiguredAdminListingDirectory().list(
     principal,

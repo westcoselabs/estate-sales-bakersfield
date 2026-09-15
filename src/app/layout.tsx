@@ -3,7 +3,7 @@ import { Manrope } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { getServerApplicationUrl } from "@/platform/config/application-url";
-import { prelaunchRobots } from "@/platform/seo/indexing-policy";
+import { publicRobots } from "@/platform/seo/indexing-policy";
 
 import "./globals.css";
 import "./foundation.css";
@@ -18,8 +18,9 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   metadataBase: getServerApplicationUrl(),
   title: "Estate Sales Bakersfield",
-  description: "Build and preview Bakersfield estate and yard sale listings",
-  robots: prelaunchRobots,
+  description:
+    "Find upcoming estate sales and yard sales in Bakersfield, California.",
+  robots: publicRobots(),
   icons: {
     icon: [{ url: "/images/Logo-gold-black-favicon.webp", type: "image/webp" }],
   },

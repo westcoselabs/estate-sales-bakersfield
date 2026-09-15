@@ -26,6 +26,7 @@ import type {
   EventType,
 } from "@/modules/events";
 import { uploadPrivateMedia } from "@/modules/media/client";
+import { preparePhotoForUpload } from "@/modules/media/client/prepare-photo";
 
 import {
   completedWizardSteps,
@@ -35,6 +36,22 @@ import {
   type EventWizardStep,
 } from "./event-wizard-state";
 import { photoBatchSummary, photoUploadTimeoutMs } from "./photo-upload-state";
+import {
+  createPhotoMutationQueue,
+  runPhotoUploadPipeline,
+} from "./photo-upload-pipeline";
+import uploadStyles from "./photo-upload-progress.module.css";
+import { EventScheduleEditor } from "./event-schedule-editor";
+import { EventReadinessNotice } from "./event-readiness-notice";
+import scheduleStyles from "./event-schedule-editor.module.css";
+import {
+  editorAddressRevealAt,
+  editorScheduleDays,
+  formatSaleDay,
+  formatSaleTime,
+  SALE_TIMEZONE,
+  scheduleValidationMessage,
+} from "./event-schedule-state";
 
 interface EventResponse {
   readonly event: EventEditorDto;
@@ -102,6 +119,7 @@ interface PhotoActionDropdownProps {
   readonly onMoveLater: () => void;
   readonly onMakeCover: () => void;
   readonly onDelete: () => void;
+  readonly orderAndDeleteDisabled?: boolean;
 }
 
 function PhotoActionDropdown({
@@ -115,6 +133,7 @@ function PhotoActionDropdown({
   onMoveLater,
   onMakeCover,
   onDelete,
+  orderAndDeleteDisabled = false,
 }: PhotoActionDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ top: 8, left: 8 });
@@ -206,7 +225,7 @@ function PhotoActionDropdown({
               <button
                 type="button"
                 role="menuitem"
-                disabled={!canMoveEarlier || disabled}
+                disabled={!canMoveEarlier || disabled || orderAndDeleteDisabled}
                 onClick={() => runAction(onMoveEarlier)}
               >
                 Move earlier
@@ -214,7 +233,7 @@ function PhotoActionDropdown({
               <button
                 type="button"
                 role="menuitem"
-                disabled={!canMoveLater || disabled}
+                disabled={!canMoveLater || disabled || orderAndDeleteDisabled}
                 onClick={() => runAction(onMoveLater)}
               >
                 Move later
@@ -233,7 +252,7 @@ function PhotoActionDropdown({
                 type="button"
                 role="menuitem"
                 className="photo-actions-dropdown__delete"
-                disabled={disabled}
+                disabled={disabled || orderAndDeleteDisabled}
                 onClick={() => runAction(onDelete)}
               >
                 Delete
@@ -288,57 +307,6 @@ function formatListingDate(
   }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
-const SCHEDULE_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function localDateKey(value: string | null | undefined): string | null {
-  return value && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)
-    ? value.slice(0, 10)
-    : null;
-}
-
-function localTimeValue(
-  value: string | null | undefined,
-  fallback: string,
-): string {
-  return value && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)
-    ? value.slice(11)
-    : fallback;
-}
-
-function calendarDateFromKey(value: string | null | undefined): Date | null {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const [year, month, day] = value.split("-").map(Number);
-  if (!year || !month || !day) return null;
-  return new Date(year, month - 1, day);
-}
-
-function calendarDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${String(year)}-${month}-${day}`;
-}
-
-function formatScheduleDate(value: string | null | undefined): string {
-  const date = calendarDateFromKey(localDateKey(value));
-  return date
-    ? new Intl.DateTimeFormat("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      }).format(date)
-    : "Select a date";
-}
-
-function formatScheduleTime(value: string): string {
-  const [hour, minute] = value.split(":").map(Number);
-  if (hour === undefined || minute === undefined) return value;
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(2000, 0, 1, hour, minute));
-}
-
 const STEP_LABELS: Readonly<Record<EventWizardStep, string>> = {
   details: "Details",
   schedule: "Schedule",
@@ -369,10 +337,10 @@ const LocationConfirmationMap = dynamic(
 );
 
 const UPLOAD_STATUS_LABELS: Readonly<Record<UploadStatus, string>> = {
-  selected: "Selected",
-  reserving: "Reserving",
+  selected: "Waiting",
+  reserving: "Preparing",
   uploading: "Uploading",
-  processing: "Processing photo",
+  processing: "Finishing",
   ready: "Ready",
   failed: "Failed",
 };
@@ -392,6 +360,8 @@ function UploadPreview({ item }: { readonly item: UploadItem }) {
     // eslint-disable-next-line @next/next/no-img-element
     <img
       className="upload-preview"
+      loading="lazy"
+      decoding="async"
       src={item.previewUrl}
       alt={`${item.previewIsLocal ? "Selected preview" : "Processed thumbnail"} for ${item.fileName}`}
       onError={() => setFailedSource(item.previewUrl)}
@@ -423,6 +393,7 @@ class ApiRequestError extends Error {
   constructor(
     message: string,
     readonly code?: string,
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
   }
@@ -461,8 +432,18 @@ async function jsonRequest<T>(
     readonly code?: string;
     readonly requestId?: string;
   };
-  if (!response.ok)
-    throw requestError(result, "The event could not be updated.");
+  if (!response.ok) {
+    const error = requestError(result, "The event could not be updated.");
+    const retryAfter = Number(response.headers.get("Retry-After"));
+    if (
+      error instanceof ApiRequestError &&
+      Number.isFinite(retryAfter) &&
+      retryAfter > 0
+    ) {
+      throw new ApiRequestError(error.message, error.code, retryAfter);
+    }
+    throw error;
+  }
   return result;
 }
 
@@ -549,29 +530,10 @@ export function EventBuilder({
   const [description, setDescription] = useState(
     initialEvent.description ?? "",
   );
-  const [localStartsAt, setLocalStartsAt] = useState(
-    initialEvent.localStartsAt ?? "",
+  const [scheduleDays, setScheduleDays] = useState(() =>
+    editorScheduleDays(initialEvent),
   );
-  const [localEndsAt, setLocalEndsAt] = useState(
-    initialEvent.localEndsAt ?? "",
-  );
-  const timezone = "America/Los_Angeles";
-  const [scheduleStartTime, setScheduleStartTime] = useState(() =>
-    localTimeValue(initialEvent.localStartsAt, "09:00"),
-  );
-  const [scheduleEndTime, setScheduleEndTime] = useState(() =>
-    localTimeValue(initialEvent.localEndsAt, "16:00"),
-  );
-  const [activeScheduleTimePicker, setActiveScheduleTimePicker] = useState<
-    "start" | "end" | null
-  >(null);
-  const [scheduleMonth, setScheduleMonth] = useState(() => {
-    const initialDate = calendarDateFromKey(
-      localDateKey(initialEvent.localStartsAt),
-    );
-    const month = initialDate ?? new Date();
-    return new Date(month.getFullYear(), month.getMonth(), 1);
-  });
+  const timezone = SALE_TIMEZONE;
   const [addressLine1, setAddressLine1] = useState(
     initialEvent.location?.addressLine1 ?? "",
   );
@@ -591,7 +553,12 @@ export function EventBuilder({
     initialEvent.location?.countryCode ?? "US",
   );
   const [privacyMode, setPrivacyMode] = useState<AddressPrivacyMode>(
-    initialEvent.privacyMode ?? "HIDDEN_UNTIL_START",
+    initialEvent.privacyMode === "EXACT_ADDRESS"
+      ? "EXACT_ADDRESS"
+      : "HIDDEN_UNTIL_START",
+  );
+  const [localAddressRevealAt, setLocalAddressRevealAt] = useState(() =>
+    editorAddressRevealAt(initialEvent),
   );
   const [addressQuery, setAddressQuery] = useState(
     initialEvent.location?.normalizedAddress ??
@@ -625,21 +592,64 @@ export function EventBuilder({
     "idle" | "valid" | "invalid"
   >("idle");
   const uploadActiveRef = useRef(false);
+  const photoMutationQueue = useRef(createPhotoMutationQueue());
+  const disposed = useRef(false);
   const operationActiveRef = useRef(false);
   const photoDragDepth = useRef(0);
   const previewUrls = useRef(new Set<string>());
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const previousStepRef = useRef(step);
 
-  useEffect(
-    () => () => {
-      for (const controller of controllers.current) controller.abort();
-      controllers.current.clear();
-      for (const url of previewUrls.current) URL.revokeObjectURL(url);
-      previewUrls.current.clear();
-    },
-    [],
-  );
+  useEffect(() => {
+    disposed.current = false;
+    const activeControllers = controllers.current;
+    const activePreviews = previewUrls.current;
+    return () => {
+      disposed.current = true;
+      for (const controller of activeControllers) controller.abort();
+      activeControllers.clear();
+      for (const url of activePreviews) URL.revokeObjectURL(url);
+      activePreviews.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!uploadActive) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const beforeNavigation = (event: MouseEvent) => {
+      const link =
+        event.target instanceof Element
+          ? event.target.closest("a[href]")
+          : null;
+      if (
+        !(link instanceof HTMLAnchorElement) ||
+        link.target === "_blank" ||
+        link.download ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        link.href.startsWith(`${window.location.href}#`)
+      )
+        return;
+      if (
+        !window.confirm(
+          "Photos are still uploading. Leave this page and stop the remaining uploads?",
+        )
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("click", beforeNavigation, true);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      document.removeEventListener("click", beforeNavigation, true);
+    };
+  }, [uploadActive]);
 
   useEffect(() => {
     if (previousStepRef.current === step) return;
@@ -679,44 +689,80 @@ export function EventBuilder({
     };
   }, [emailVerified]);
 
-  function syncForms(event: EventEditorDto) {
-    setTitle(event.title ?? "");
-    setDescription(event.description ?? "");
-    setLocalStartsAt(event.localStartsAt ?? "");
-    setLocalEndsAt(event.localEndsAt ?? "");
-    setScheduleStartTime(localTimeValue(event.localStartsAt, "09:00"));
-    setScheduleEndTime(localTimeValue(event.localEndsAt, "16:00"));
-    setAddressLine1(event.location?.addressLine1 ?? "");
-    setAddressLine2(event.location?.addressLine2 ?? "");
-    setCity(event.location?.city ?? "Bakersfield");
-    setRegion(event.location?.region ?? "California");
-    setPostalCode(event.location?.postalCode ?? "");
-    setCountryCode(event.location?.countryCode ?? "US");
-    setAddressQuery(
-      event.location?.normalizedAddress ?? event.location?.addressLine1 ?? "",
+  function syncForms(
+    event: EventEditorDto,
+    previous: EventEditorDto,
+    savedStep?: EventWizardStep,
+  ) {
+    setTitle((current) =>
+      savedStep === "details" || current === (previous.title ?? "")
+        ? (event.title ?? "")
+        : current,
     );
-    setSelectionToken(null);
-    setSelectedAddress(null);
-    setLocationAddressError("");
-    setSelectedCoordinates(
-      event.location?.latitude !== null &&
-        event.location?.latitude !== undefined &&
-        event.location.longitude !== null &&
-        event.location.longitude !== undefined
-        ? {
-            latitude: event.location.latitude,
-            longitude: event.location.longitude,
-          }
-        : null,
+    setDescription((current) =>
+      savedStep === "details" || current === (previous.description ?? "")
+        ? (event.description ?? "")
+        : current,
     );
-    setLocationConfirmed(event.location?.confirmationStatus === "CONFIRMED");
-    setPrivacyMode(event.privacyMode ?? "HIDDEN_UNTIL_START");
+    setScheduleDays((current) =>
+      savedStep === "schedule" ||
+      JSON.stringify(current) === JSON.stringify(editorScheduleDays(previous))
+        ? editorScheduleDays(event)
+        : current,
+    );
+    if (
+      savedStep === "location" ||
+      JSON.stringify(event.location) !== JSON.stringify(previous.location)
+    ) {
+      setAddressLine1(event.location?.addressLine1 ?? "");
+      setAddressLine2(event.location?.addressLine2 ?? "");
+      setCity(event.location?.city ?? "Bakersfield");
+      setRegion(event.location?.region ?? "California");
+      setPostalCode(event.location?.postalCode ?? "");
+      setCountryCode(event.location?.countryCode ?? "US");
+      setAddressQuery(
+        event.location?.normalizedAddress ?? event.location?.addressLine1 ?? "",
+      );
+      setSelectionToken(null);
+      setSelectedAddress(null);
+      setLocationAddressError("");
+      setSelectedCoordinates(
+        event.location?.latitude !== null &&
+          event.location?.latitude !== undefined &&
+          event.location.longitude !== null &&
+          event.location.longitude !== undefined
+          ? {
+              latitude: event.location.latitude,
+              longitude: event.location.longitude,
+            }
+          : null,
+      );
+      setLocationConfirmed(event.location?.confirmationStatus === "CONFIRMED");
+    }
+    const previousPrivacyMode =
+      previous.privacyMode === "EXACT_ADDRESS"
+        ? "EXACT_ADDRESS"
+        : "HIDDEN_UNTIL_START";
+    setPrivacyMode((current) =>
+      savedStep === "location" || current === previousPrivacyMode
+        ? event.privacyMode === "EXACT_ADDRESS"
+          ? "EXACT_ADDRESS"
+          : "HIDDEN_UNTIL_START"
+        : current,
+    );
+    setLocalAddressRevealAt((current) =>
+      savedStep === "location" || current === editorAddressRevealAt(previous)
+        ? editorAddressRevealAt(event)
+        : current,
+    );
   }
 
-  function acceptEvent(event: EventEditorDto) {
+  function acceptEvent(event: EventEditorDto, savedStep?: EventWizardStep) {
+    if (disposed.current || event.version < draftRef.current.version) return;
+    const previous = draftRef.current;
     draftRef.current = event;
     setDraft(event);
-    syncForms(event);
+    syncForms(event, previous, savedStep);
   }
 
   async function request<T>(
@@ -725,6 +771,8 @@ export function EventBuilder({
     body?: unknown,
     timeoutMs = 25_000,
   ): Promise<T> {
+    if (disposed.current)
+      throw new DOMException("Upload stopped", "AbortError");
     const controller = new AbortController();
     controllers.current.add(controller);
     const timer = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -772,48 +820,53 @@ export function EventBuilder({
     setConfirmation("");
     setStepFeedback(target, { kind: "success", text: "" });
     try {
-      let response: EventResponse;
-      try {
-        response = await request<EventResponse>(endpoint, method, body);
-      } catch (error) {
-        if (!(error instanceof StaleVersionError)) throw error;
+      await photoMutationQueue.current(async () => {
+        let response: EventResponse;
+        try {
+          response = await request<EventResponse>(endpoint, method, {
+            ...body,
+            expectedVersion: draftRef.current.version,
+          });
+        } catch (error) {
+          if (!(error instanceof StaleVersionError)) throw error;
+          setStepFeedback(target, {
+            kind: "success",
+            text: "Your draft was updated in the background. Refreshing the latest version and saving your changes…",
+          });
+          const latest = await refreshEvent();
+          response = await request<EventResponse>(endpoint, method, {
+            ...body,
+            expectedVersion: latest.version,
+          });
+        }
+        acceptEvent(response.event, target);
+        if (!complete(response.event)) {
+          setStepFeedback(target, {
+            kind: allowIncompleteAdvance ? "success" : "error",
+            text:
+              response.event.readiness.missing.find((message) =>
+                target === "details"
+                  ? message.includes("private street address")
+                  : target === "location"
+                    ? /address|privacy/i.test(message)
+                    : false,
+              ) ??
+              (allowIncompleteAdvance
+                ? "Draft saved. Confirm the address before approval or payment."
+                : "The server saved the values but this step is still incomplete."),
+          });
+          if (allowIncompleteAdvance) setStep(next);
+          return;
+        }
         setStepFeedback(target, {
           kind: "success",
-          text: "Your draft was updated in the background. Refreshing the latest version and saving your changes…",
+          text: "Saved and confirmed by the server.",
         });
-        const latest = await refreshEvent();
-        response = await request<EventResponse>(endpoint, method, {
-          ...body,
-          expectedVersion: latest.version,
-        });
-      }
-      acceptEvent(response.event);
-      if (!complete(response.event)) {
-        setStepFeedback(target, {
-          kind: allowIncompleteAdvance ? "success" : "error",
-          text:
-            response.event.readiness.missing.find((message) =>
-              target === "details"
-                ? message.includes("private street address")
-                : target === "location"
-                  ? /address|privacy/i.test(message)
-                  : false,
-            ) ??
-            (allowIncompleteAdvance
-              ? "Draft saved. Confirm the address before approval or payment."
-              : "The server saved the values but this step is still incomplete."),
-        });
-        if (allowIncompleteAdvance) setStep(next);
-        return;
-      }
-      setStepFeedback(target, {
-        kind: "success",
-        text: "Saved and confirmed by the server.",
+        setConfirmation(
+          `${STEP_LABELS[target]} saved and confirmed by the server.`,
+        );
+        setStep(next);
       });
-      setConfirmation(
-        `${STEP_LABELS[target]} saved and confirmed by the server.`,
-      );
-      setStep(next);
     } catch (error) {
       setStepFeedback(target, {
         kind: "error",
@@ -838,10 +891,11 @@ export function EventBuilder({
 
   function saveSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!localStartsAt || !localEndsAt) {
+    const message = scheduleValidationMessage(scheduleDays);
+    if (message) {
       setStepFeedback("schedule", {
         kind: "error",
-        text: "Choose both a start and end date before saving.",
+        text: message,
       });
       return;
     }
@@ -851,50 +905,11 @@ export function EventBuilder({
       "PUT",
       {
         expectedVersion: draftRef.current.version,
-        localStartsAt,
-        localEndsAt,
+        scheduleDays,
         timezone,
       },
       (saved) => saved.steps.scheduleComplete,
       "location",
-    );
-  }
-
-  function updateScheduleStartTime(value: string) {
-    setScheduleStartTime(value);
-    const date = localDateKey(localStartsAt);
-    if (date) setLocalStartsAt(`${date}T${value}`);
-  }
-
-  function updateScheduleEndTime(value: string) {
-    setScheduleEndTime(value);
-    const date = localDateKey(localEndsAt);
-    if (date) setLocalEndsAt(`${date}T${value}`);
-  }
-
-  function chooseScheduleDate(date: Date) {
-    const selectedDate = calendarDateKey(date);
-    const currentStart = localDateKey(localStartsAt);
-    const currentEnd = localDateKey(localEndsAt);
-
-    if (!currentStart || currentEnd) {
-      setLocalStartsAt(`${selectedDate}T${scheduleStartTime}`);
-      setLocalEndsAt("");
-      return;
-    }
-
-    if (selectedDate < currentStart) {
-      setLocalStartsAt(`${selectedDate}T${scheduleStartTime}`);
-      return;
-    }
-
-    setLocalEndsAt(`${selectedDate}T${scheduleEndTime}`);
-  }
-
-  function changeScheduleMonth(offset: number) {
-    setScheduleMonth(
-      (current) =>
-        new Date(current.getFullYear(), current.getMonth() + offset, 1),
     );
   }
 
@@ -927,20 +942,46 @@ export function EventBuilder({
 
   function saveLocation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    saveLocationValues();
+  }
+
+  function saveLocationValues(asUnconfirmedDraft = false) {
+    if (
+      asUnconfirmedDraft &&
+      (addressLine1.trim().length < 3 ||
+        city.trim().length < 2 ||
+        region.trim().length < 2)
+    ) {
+      const text =
+        "Enter the street address, city, and state to save your draft.";
+      setLocationAddressError(text);
+      setStepFeedback("location", { kind: "error", text });
+      return;
+    }
+    if (
+      privacyMode === "HIDDEN_UNTIL_START" &&
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(localAddressRevealAt)
+    ) {
+      setStepFeedback("location", {
+        kind: "error",
+        text: "Choose the date and time when the full address should be shown.",
+      });
+      return;
+    }
     const currentLocation = draftRef.current.location;
     const hasSavedConfirmedAddress =
       currentLocation?.confirmationStatus === "CONFIRMED" &&
       currentLocation.latitude !== null &&
       currentLocation.longitude !== null;
 
-    if (!selectedAddress && !hasSavedConfirmedAddress) {
+    if (!asUnconfirmedDraft && !selectedAddress && !hasSavedConfirmedAddress) {
       const text = "Select an address from the results to continue.";
       setLocationAddressError(text);
       setStepFeedback("location", { kind: "error", text });
       return;
     }
 
-    if (!locationConfirmed) {
+    if (!asUnconfirmedDraft && !locationConfirmed) {
       const text = "Confirm this is the sale property.";
       setStepFeedback("location", { kind: "error", text });
       return;
@@ -961,11 +1002,14 @@ export function EventBuilder({
         countryCode,
         timezone,
         privacyMode,
-        selectionToken,
-        confirmed: locationConfirmed,
+        localAddressRevealAt:
+          privacyMode === "HIDDEN_UNTIL_START" ? localAddressRevealAt : null,
+        selectionToken: asUnconfirmedDraft ? null : selectionToken,
+        confirmed: !asUnconfirmedDraft && locationConfirmed,
       },
       (saved) => saved.steps.locationComplete,
       "photos",
+      asUnconfirmedDraft,
     );
   }
 
@@ -1167,10 +1211,14 @@ export function EventBuilder({
       if (
         item.photoId &&
         draftRef.current.photos.some(
-          (photo) => photo.id === item.photoId && photo.status !== "READY",
+          (photo) =>
+            photo.id === item.photoId &&
+            photo.status !== "READY" &&
+            photo.errorCode !== "MEDIA_DELETION_PENDING",
         )
       ) {
         await cleanupReservation(item.photoId);
+        updateUpload(item.id, { photoId: undefined });
       }
       updateUpload(item.id, {
         status: "reserving",
@@ -1188,6 +1236,7 @@ export function EventBuilder({
         },
       );
       acceptEvent(reserved.reservation.event);
+      updateUpload(item.id, { photoId: reserved.reservation.photoId });
       return { item, reservation: reserved.reservation };
     } catch (error) {
       updateUpload(item.id, {
@@ -1254,7 +1303,7 @@ export function EventBuilder({
         });
         if (!upload.ok) {
           throw new Error(
-            `The isolated test upload failed (${String(upload.status)}).`,
+            `The photo upload failed (${String(upload.status)}). Please retry.`,
           );
         }
         pathname = reservation.uploadPathname;
@@ -1291,22 +1340,70 @@ export function EventBuilder({
 
   async function finalizeTransferredUpload(
     transfer: TransferredPhotoUpload,
+    signal: AbortSignal,
   ): Promise<UploadAttemptResult> {
     const { item, reservation } = transfer.reserved;
     const photoId = reservation.photoId;
     let finalizeAttempted = false;
     try {
-      finalizeAttempted = true;
-      const completed = await request<EventResponse>(
-        `/api/events/${draftRef.current.id}/photos/${photoId}/finalize`,
-        "POST",
-        {
-          expectedVersion: draftRef.current.version,
-          reservationId: reservation.reservationId,
-          pathname: transfer.pathname,
-        },
-        90_000,
-      );
+      let completed: EventResponse | undefined;
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        signal.throwIfAborted();
+        finalizeAttempted = true;
+        try {
+          completed = await request<EventResponse>(
+            `/api/events/${draftRef.current.id}/photos/${photoId}/finalize`,
+            "POST",
+            {
+              expectedVersion: draftRef.current.version,
+              reservationId: reservation.reservationId,
+              pathname: transfer.pathname,
+            },
+            90_000,
+          );
+          break;
+        } catch (error) {
+          if (error instanceof StaleVersionError && attempt < 3) {
+            // Version conflicts happen before reservation consumption. Another
+            // tab may have saved; retain the upload and use the latest version.
+            finalizeAttempted = false;
+            await refreshEvent();
+            continue;
+          }
+          if (
+            !(error instanceof ApiRequestError) ||
+            ![
+              "PROCESSING_BUSY",
+              "RATE_LIMITED",
+              "LIMITER_UNAVAILABLE",
+            ].includes(error.code ?? "") ||
+            attempt === 3
+          )
+            throw error;
+          // The server has not consumed this upload. Reuse its bytes after the
+          // requested pause instead of deleting it and uploading the file again.
+          finalizeAttempted = false;
+          updateUpload(item.id, {
+            error: "Waiting for a free spot. Your photo is already uploaded.",
+          });
+          await new Promise<void>((resolve, reject) => {
+            const abort = () => {
+              window.clearTimeout(timer);
+              reject(new DOMException("Upload stopped", "AbortError"));
+            };
+            const timer = window.setTimeout(
+              () => {
+                signal.removeEventListener("abort", abort);
+                resolve();
+              },
+              Math.max(1, error.retryAfterSeconds ?? 2 * (attempt + 1)) * 1000,
+            );
+            signal.addEventListener("abort", abort, { once: true });
+          });
+        }
+      }
+      if (!completed)
+        throw new Error("This photo could not be finished. Please try again.");
       acceptEvent(completed.event);
       if (
         !completed.event.photos.some(
@@ -1320,6 +1417,19 @@ export function EventBuilder({
       }
       return "ready";
     } catch (error) {
+      if (signal.aborted) return "pending";
+      // These responses are issued before the reservation is consumed. Read
+      // back its state, then safely clean it up so the user can retry. A lost
+      // response or a processing failure remains ambiguous and is not retried.
+      if (
+        error instanceof StaleVersionError ||
+        (error instanceof ApiRequestError &&
+          ["PROCESSING_BUSY", "RATE_LIMITED", "LIMITER_UNAVAILABLE"].includes(
+            error.code ?? "",
+          ))
+      ) {
+        finalizeAttempted = false;
+      }
       const reconciliation = await reconcilePhotoAfterFailure(
         photoId,
         finalizeAttempted,
@@ -1337,7 +1447,7 @@ export function EventBuilder({
           retryable: false,
           photoId,
           error:
-            "Server processing is still being confirmed. Reload before taking another action; retry is disabled to prevent a duplicate photo.",
+            "This photo is still being checked. Refresh the page to check its progress.",
         });
         return "pending";
       }
@@ -1356,12 +1466,14 @@ export function EventBuilder({
     if (
       uploadActiveRef.current ||
       batch.length === 0 ||
-      !beginOperation("photos")
+      operationActiveRef.current
     ) {
       return;
     }
     uploadActiveRef.current = true;
     setUploadActive(true);
+    const controller = new AbortController();
+    controllers.current.add(controller);
     setStepFeedback("photos", { kind: "success", text: "" });
     const hadReadyPhotos = draftRef.current.photos.some(
       (photo) => photo.status === "READY",
@@ -1376,48 +1488,71 @@ export function EventBuilder({
           Boolean(item.file) &&
           (item.status === "selected" || item.retryable),
       );
-      const reserved: ReservedPhotoUpload[] = [];
-      for (const item of candidates) {
-        const reservation = await reserveUpload(item);
-        if (reservation) reserved.push(reservation);
-      }
-      const transferVersion = draftRef.current.version;
-      const transfers: Array<TransferredPhotoUpload | undefined> = Array(
-        reserved.length,
-      );
-      let nextTransferIndex = 0;
-      await Promise.all(
-        Array.from(
-          { length: Math.min(MAX_PARALLEL_PHOTO_TRANSFERS, reserved.length) },
-          async () => {
-            while (nextTransferIndex < reserved.length) {
-              const index = nextTransferIndex;
-              nextTransferIndex += 1;
-              const reservation = reserved[index];
-              if (!reservation) continue;
-              transfers[index] = await transferReservedUpload(
-                reservation,
-                transferVersion,
-              );
-            }
-          },
-        ),
-      );
-
       let succeeded = 0;
-      let failed =
-        batch.length - candidates.length + candidates.length - reserved.length;
+      let failed = batch.length - candidates.length;
       let awaitingConfirmation = 0;
-      for (const transfer of transfers) {
-        if (!transfer) {
-          failed += 1;
-          continue;
-        }
-        const result = await finalizeTransferredUpload(transfer);
-        if (result === "ready") succeeded += 1;
-        else if (result === "pending") awaitingConfirmation += 1;
-        else failed += 1;
-      }
+      await runPhotoUploadPipeline(candidates, {
+        concurrency: MAX_PARALLEL_PHOTO_TRANSFERS,
+        signal: controller.signal,
+        process: async (item) => {
+          try {
+            if (!item.file) return;
+            updateUpload(item.id, {
+              status: "reserving",
+              progress: 0,
+              error: undefined,
+            });
+            const prepared = await preparePhotoForUpload(item.file, {
+              signal: controller.signal,
+            });
+            controller.signal.throwIfAborted();
+            const preparedItem = {
+              ...item,
+              file: prepared.file,
+              fileSize: prepared.file.size,
+            };
+            updateUpload(item.id, {
+              file: prepared.file,
+              fileSize: prepared.file.size,
+            });
+            const reservation = await photoMutationQueue.current(() =>
+              reserveUpload(preparedItem),
+            );
+            if (!reservation) {
+              failed += 1;
+              return;
+            }
+            controller.signal.throwIfAborted();
+            const transfer = await transferReservedUpload(
+              reservation,
+              reservation.reservation.event.version,
+            );
+            if (!transfer) {
+              failed += 1;
+              return;
+            }
+            const result = await photoMutationQueue.current(() =>
+              finalizeTransferredUpload(transfer, controller.signal),
+            );
+            if (result === "ready") succeeded += 1;
+            else if (result === "pending") awaitingConfirmation += 1;
+            else failed += 1;
+          } catch (error) {
+            if (controller.signal.aborted) return;
+            failed += 1;
+            updateUpload(item.id, {
+              status: "failed",
+              progress: 0,
+              retryable: true,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "This photo could not be uploaded. Please try again.",
+            });
+          }
+        },
+      });
+      if (controller.signal.aborted) return;
       try {
         await refreshEvent();
       } catch {
@@ -1438,9 +1573,9 @@ export function EventBuilder({
         text,
       });
     } finally {
+      controllers.current.delete(controller);
       setUploadActive(false);
       uploadActiveRef.current = false;
-      finishOperation();
     }
   }
 
@@ -1452,8 +1587,13 @@ export function EventBuilder({
   ) {
     if (!beginOperation(name)) return;
     try {
-      const response = await request<EventResponse>(endpoint, method, body);
-      acceptEvent(response.event);
+      await photoMutationQueue.current(async () => {
+        const response = await request<EventResponse>(endpoint, method, {
+          ...body,
+          expectedVersion: draftRef.current.version,
+        });
+        acceptEvent(response.event);
+      });
       setStepFeedback("photos", {
         kind: "success",
         text: "Photo changes saved.",
@@ -1519,11 +1659,7 @@ export function EventBuilder({
       ? draftRef.current.photos.find((photo) => photo.id === item.photoId)
       : undefined;
     const dismissOnly =
-      item.status === "ready" ||
-      item.status === "processing" ||
-      persistedPhoto?.status === "READY" ||
-      persistedPhoto?.status === "PROCESSING" ||
-      persistedPhoto?.status === "UPLOADED";
+      item.status === "ready" || persistedPhoto?.status === "READY";
     if (!persistedPhoto || dismissOnly) {
       dismissUpload(item);
       return;
@@ -1550,6 +1686,10 @@ export function EventBuilder({
   }
 
   async function continueFromPhotos() {
+    if (uploadActiveRef.current) {
+      setStep("review");
+      return;
+    }
     if (!beginOperation("photos-continue")) return;
     try {
       const event = await refreshEvent();
@@ -1580,6 +1720,18 @@ export function EventBuilder({
 
   async function approve(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (
+      uploadActiveRef.current ||
+      draftRef.current.photos.some((photo) =>
+        ["RESERVED", "UPLOADED", "PROCESSING"].includes(photo.status),
+      )
+    ) {
+      setStepFeedback("review", {
+        kind: "error",
+        text: "Wait for your photos to finish uploading before approving the sale.",
+      });
+      return;
+    }
     if (!emailVerified) {
       setStepFeedback("review", {
         kind: "error",
@@ -1730,13 +1882,7 @@ export function EventBuilder({
 
   function uploadDismissesLocally(item: UploadItem): boolean {
     const photo = persistedUploadPhoto(item);
-    return (
-      item.status === "ready" ||
-      item.status === "processing" ||
-      photo?.status === "READY" ||
-      photo?.status === "PROCESSING" ||
-      photo?.status === "UPLOADED"
-    );
+    return item.status === "ready" || photo?.status === "READY";
   }
 
   function uploadCanRetry(item: UploadItem): boolean {
@@ -1745,7 +1891,7 @@ export function EventBuilder({
       item.status === "failed" &&
       item.retryable &&
       item.file &&
-      (!photo || photo.status === "FAILED"),
+      (!photo || photo.status === "FAILED" || photo.status === "RESERVED"),
     );
   }
 
@@ -1758,23 +1904,6 @@ export function EventBuilder({
   const uploadInFlightCount = uploads.filter((item) =>
     ["selected", "reserving", "uploading", "processing"].includes(item.status),
   ).length;
-  const scheduleStartDate = calendarDateFromKey(localDateKey(localStartsAt));
-  const scheduleEndDate = calendarDateFromKey(localDateKey(localEndsAt));
-  const scheduleCalendarStart = new Date(
-    scheduleMonth.getFullYear(),
-    scheduleMonth.getMonth(),
-    1 - scheduleMonth.getDay(),
-  );
-  const scheduleDays = Array.from({ length: 42 }, (_, index) => {
-    const day = new Date(scheduleCalendarStart);
-    day.setDate(scheduleCalendarStart.getDate() + index);
-    return day;
-  });
-  const scheduleTimeOptions = Array.from({ length: 48 }, (_, index) => {
-    const hour = String(Math.floor(index / 2)).padStart(2, "0");
-    const minute = index % 2 === 0 ? "00" : "30";
-    return `${hour}:${minute}`;
-  });
   const uploadsByPhotoId = new Map(
     uploads.flatMap((upload) =>
       upload.photoId ? [[upload.photoId, upload] as const] : [],
@@ -1788,25 +1917,40 @@ export function EventBuilder({
       photoIndex,
     })),
     ...uploads
-      .filter((upload) => !upload.photoId)
+      .filter(
+        (upload) =>
+          !upload.photoId ||
+          !draft.photos.some((photo) => photo.id === upload.photoId),
+      )
       .map((upload) => ({
         key: upload.id,
         upload,
         photo: undefined,
         photoIndex: -1,
       })),
-  ].sort(
-    (left, right) =>
-      Number(Boolean(right.photo?.isCover)) -
-      Number(Boolean(left.photo?.isCover)),
-  );
+  ]
+    .filter((row) => row.photo?.errorCode !== "MEDIA_DELETION_PENDING")
+    .sort(
+      (left, right) =>
+        Number(Boolean(right.photo?.isCover)) -
+        Number(Boolean(left.photo?.isCover)),
+    );
   const currentStepIndex = EVENT_WIZARD_STEPS.indexOf(step);
+  const hasPendingPhotos =
+    uploadActive ||
+    draft.photos.some((photo) =>
+      ["RESERVED", "UPLOADED", "PROCESSING"].includes(photo.status),
+    );
+  const stepAvailable = (target: EventWizardStep) =>
+    wizardStepAvailable(target, draft.steps) ||
+    (target === "review" &&
+      uploadActive &&
+      draft.steps.detailsComplete &&
+      draft.steps.scheduleComplete);
   const previousStep =
     currentStepIndex > 0 ? EVENT_WIZARD_STEPS[currentStepIndex - 1] : undefined;
   const nextStep = EVENT_WIZARD_STEPS[currentStepIndex + 1];
-  const canAdvanceToNextStep = Boolean(
-    nextStep && wizardStepAvailable(nextStep, draft.steps),
-  );
+  const canAdvanceToNextStep = Boolean(nextStep && stepAvailable(nextStep));
 
   return (
     <div className="builder-layout">
@@ -1817,14 +1961,14 @@ export function EventBuilder({
         <button
           type="button"
           className="secondary-button"
-          disabled={!previousStep || Boolean(pending) || uploadActive}
+          disabled={!previousStep || Boolean(pending)}
           onClick={() => previousStep && setStep(previousStep)}
         >
           Back
         </button>
         <button
           type="button"
-          disabled={!canAdvanceToNextStep || Boolean(pending) || uploadActive}
+          disabled={!canAdvanceToNextStep || Boolean(pending)}
           onClick={() => nextStep && setStep(nextStep)}
         >
           Next
@@ -1832,7 +1976,7 @@ export function EventBuilder({
       </div>
       <nav aria-label="Event builder progress" className="wizard-timeline">
         {EVENT_WIZARD_STEPS.map((item, index) => {
-          const available = wizardStepAvailable(item, draft.steps);
+          const available = stepAvailable(item);
           const current = item === step;
           return (
             <button
@@ -1841,7 +1985,7 @@ export function EventBuilder({
               className={
                 current ? "is-current" : completed[item] ? "is-complete" : ""
               }
-              disabled={!available || Boolean(pending) || uploadActive}
+              disabled={!available || Boolean(pending)}
               aria-label={STEP_LABELS[item]}
               aria-current={current ? "step" : undefined}
               onClick={() => setStep(item)}
@@ -1873,6 +2017,69 @@ export function EventBuilder({
 
       <div className="builder-workspace">
         <div className="builder-step-column">
+          {uploadActive ? (
+            <section
+              className={uploadStyles.summary}
+              aria-label="Photo upload progress"
+            >
+              <strong role="status">
+                {uploadReadyCount} of {uploads.length} photos ready
+              </strong>
+              <progress
+                aria-label="Overall photo upload progress"
+                max={Math.max(1, uploads.length)}
+                value={uploadReadyCount}
+              />
+              <p>
+                You can review your sale while photos upload. Keep this tab
+                open.
+              </p>
+              {uploadFailedCount > 0 ? (
+                <small>
+                  {uploadFailedCount}{" "}
+                  {uploadFailedCount === 1 ? "photo needs" : "photos need"}{" "}
+                  attention. You can retry after the remaining photos finish.
+                </small>
+              ) : null}
+              {step === "photos" ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={Boolean(pending)}
+                  onClick={() => setStep("review")}
+                >
+                  Continue to review
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={Boolean(pending)}
+                  onClick={() => setStep("photos")}
+                >
+                  View photos
+                </button>
+              )}
+            </section>
+          ) : null}
+          {step === "review" &&
+          !uploadActive &&
+          (uploadFailedCount > 0 || !hasReadyCover || hasPendingPhotos) ? (
+            <p className="warning-box">
+              {hasPendingPhotos
+                ? "Some photos are still being checked. Refresh to check their progress."
+                : !hasReadyCover
+                  ? "Choose a cover photo before approving your sale."
+                  : "Some photos did not upload. Return to Photos to retry them or remove them."}{" "}
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setStep("photos")}
+              >
+                View photos
+              </button>
+            </p>
+          ) : null}
           {step === "details" ? (
             <section className="builder-card" aria-labelledby="details-title">
               <p className="eyebrow">Step 1 of 5</p>
@@ -1930,217 +2137,27 @@ export function EventBuilder({
                     Schedule your sale
                   </h2>
                   <p>
-                    Choose the sale dates and local hours. We’ll validate the
-                    timezone and daylight-saving rules when you save.
+                    Select every date your sale is open, then enter a start and
+                    end time for each day.
                   </p>
                 </div>
               </div>
               <form onSubmit={saveSchedule}>
-                <div className="schedule-picker">
-                  <section
-                    className="schedule-calendar"
-                    aria-label="Choose your sale dates"
-                  >
-                    <div className="schedule-calendar__header">
-                      <button
-                        type="button"
-                        className="schedule-calendar__nav schedule-calendar__nav--previous"
-                        aria-label="Previous month"
-                        onClick={() => changeScheduleMonth(-1)}
-                      >
-                        <Icon name="chevron" size={26} />
-                      </button>
-                      <h3>
-                        {new Intl.DateTimeFormat("en-US", {
-                          month: "long",
-                          year: "numeric",
-                        }).format(scheduleMonth)}
-                      </h3>
-                      <button
-                        type="button"
-                        className="schedule-calendar__nav schedule-calendar__nav--next"
-                        aria-label="Next month"
-                        onClick={() => changeScheduleMonth(1)}
-                      >
-                        <Icon name="chevron" size={26} />
-                      </button>
-                    </div>
-                    <div
-                      className="schedule-calendar__weekdays"
-                      aria-hidden="true"
-                    >
-                      {SCHEDULE_WEEKDAYS.map((weekday) => (
-                        <span key={weekday}>{weekday}</span>
-                      ))}
-                    </div>
-                    <div className="schedule-calendar__days">
-                      {scheduleDays.map((day) => {
-                        const dayKey = calendarDateKey(day);
-                        const startKey = localDateKey(localStartsAt);
-                        const endKey = localDateKey(localEndsAt);
-                        const isStart = dayKey === startKey;
-                        const isEnd = dayKey === endKey;
-                        const isInRange = Boolean(
-                          startKey &&
-                          endKey &&
-                          dayKey > startKey &&
-                          dayKey < endKey,
-                        );
-                        const isCurrentMonth =
-                          day.getMonth() === scheduleMonth.getMonth();
-                        const isToday = dayKey === calendarDateKey(new Date());
-
-                        return (
-                          <button
-                            key={dayKey}
-                            type="button"
-                            className={[
-                              "schedule-calendar__day",
-                              !isCurrentMonth ? "is-outside-month" : "",
-                              isToday ? "is-today" : "",
-                              isStart ? "is-range-start" : "",
-                              isEnd ? "is-range-end" : "",
-                              isInRange ? "is-in-range" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                            aria-label={new Intl.DateTimeFormat("en-US", {
-                              weekday: "long",
-                              month: "long",
-                              day: "numeric",
-                              year: "numeric",
-                            }).format(day)}
-                            aria-pressed={isStart || isEnd}
-                            onClick={() => chooseScheduleDate(day)}
-                          >
-                            <span>{day.getDate()}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-
-                  <section
-                    className="schedule-details"
-                    aria-label="Sale schedule details"
-                  >
-                    <div className="schedule-date-field">
-                      <span>Start date*</span>
-                      <div>
-                        <strong>{formatScheduleDate(localStartsAt)}</strong>
-                        <button
-                          type="button"
-                          className="schedule-time-trigger"
-                          aria-expanded={activeScheduleTimePicker === "start"}
-                          aria-haspopup="dialog"
-                          aria-label={`Start time: ${formatScheduleTime(scheduleStartTime)}`}
-                          onClick={() =>
-                            setActiveScheduleTimePicker((current) =>
-                              current === "start" ? null : "start",
-                            )
-                          }
-                        >
-                          {formatScheduleTime(scheduleStartTime)}
-                          <Icon name="chevron" size={14} />
-                        </button>
-                        {activeScheduleTimePicker === "start" ? (
-                          <div
-                            className="schedule-time-popover"
-                            role="dialog"
-                            aria-label="Choose start time"
-                          >
-                            <div>
-                              {scheduleTimeOptions.map((time) => (
-                                <button
-                                  key={time}
-                                  type="button"
-                                  className={
-                                    time === scheduleStartTime
-                                      ? "is-selected"
-                                      : ""
-                                  }
-                                  onClick={() => {
-                                    updateScheduleStartTime(time);
-                                    setActiveScheduleTimePicker(null);
-                                  }}
-                                >
-                                  {formatScheduleTime(time)}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="schedule-date-field">
-                      <span>End date*</span>
-                      <div>
-                        <strong>{formatScheduleDate(localEndsAt)}</strong>
-                        <button
-                          type="button"
-                          className="schedule-time-trigger"
-                          aria-expanded={activeScheduleTimePicker === "end"}
-                          aria-haspopup="dialog"
-                          aria-label={`End time: ${formatScheduleTime(scheduleEndTime)}`}
-                          onClick={() =>
-                            setActiveScheduleTimePicker((current) =>
-                              current === "end" ? null : "end",
-                            )
-                          }
-                        >
-                          {formatScheduleTime(scheduleEndTime)}
-                          <Icon name="chevron" size={14} />
-                        </button>
-                        {activeScheduleTimePicker === "end" ? (
-                          <div
-                            className="schedule-time-popover"
-                            role="dialog"
-                            aria-label="Choose end time"
-                          >
-                            <div>
-                              {scheduleTimeOptions.map((time) => (
-                                <button
-                                  key={time}
-                                  type="button"
-                                  className={
-                                    time === scheduleEndTime
-                                      ? "is-selected"
-                                      : ""
-                                  }
-                                  onClick={() => {
-                                    updateScheduleEndTime(time);
-                                    setActiveScheduleTimePicker(null);
-                                  }}
-                                >
-                                  {formatScheduleTime(time)}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                    <label className="schedule-timezone-field">
-                      <span>Timezone</span>
-                      <input
-                        value={timezone}
-                        aria-describedby="schedule-timezone-note"
-                        readOnly
-                      />
-                    </label>
-                    <p id="schedule-timezone-note">
-                      Bakersfield schedules use Pacific Time automatically,
-                      including daylight-saving rules.
-                    </p>
-                    <div className="schedule-summary" role="status">
-                      {scheduleStartDate && scheduleEndDate
-                        ? `Sale: ${formatScheduleDate(localStartsAt)} – ${formatScheduleDate(localEndsAt)}, ${formatScheduleTime(scheduleStartTime)} – ${formatScheduleTime(scheduleEndTime)}`
-                        : scheduleStartDate
-                          ? "Choose an end date to finish your sale schedule."
-                          : "Select a start date to begin."}
-                    </div>
-                  </section>
-                </div>
+                {!draft.scheduleDays?.length &&
+                draft.localStartsAt &&
+                draft.localEndsAt &&
+                draft.localStartsAt.slice(0, 10) !==
+                  draft.localEndsAt.slice(0, 10) ? (
+                  <p className="warning-box">
+                    Daily hours were not previously saved. Review the suggested
+                    opening and closing times for each day before saving.
+                  </p>
+                ) : null}
+                <EventScheduleEditor
+                  days={scheduleDays}
+                  onChange={setScheduleDays}
+                  disabled={Boolean(pending)}
+                />
                 <StepFeedback feedback={currentFeedback} />
                 <WizardActions
                   back={() => setStep("details")}
@@ -2230,7 +2247,10 @@ export function EventBuilder({
                   </section>
                 ) : (
                   <section className="unconfirmed-address-draft">
-                    <p>Select an address from the results to continue.</p>
+                    <p>
+                      If you can’t find the address, save it as a draft and
+                      continue. Confirm the property before approving your sale.
+                    </p>
                     <div className="form-grid">
                       <label>
                         City
@@ -2280,19 +2300,12 @@ export function EventBuilder({
                     }}
                   />
                 </label>
-                <fieldset>
+                <fieldset disabled={Boolean(pending)}>
                   <legend>Privacy for this address</legend>
                   {(
                     [
                       ["EXACT_ADDRESS", "Show exact address"],
-                      [
-                        "APPROXIMATE_LOCATION",
-                        "Show only an approximate Bakersfield-area label",
-                      ],
-                      [
-                        "HIDDEN_UNTIL_START",
-                        "Hide exact address until the event starts",
-                      ],
+                      ["HIDDEN_UNTIL_START", "Hide address until"],
                     ] as const
                   ).map(([value, label]) => (
                     <label className="radio-label" key={value}>
@@ -2306,8 +2319,57 @@ export function EventBuilder({
                       {label}
                     </label>
                   ))}
+                  {privacyMode === "HIDDEN_UNTIL_START" ? (
+                    <div className={scheduleStyles.reveal}>
+                      <label>
+                        Address reveal date
+                        <input
+                          type="date"
+                          value={localAddressRevealAt.split("T")[0] ?? ""}
+                          onChange={(event) =>
+                            setLocalAddressRevealAt(
+                              `${event.target.value}T${localAddressRevealAt.split("T")[1] ?? "08:00"}`,
+                            )
+                          }
+                          required
+                          aria-describedby="address-reveal-note"
+                        />
+                      </label>
+                      <label>
+                        Address reveal time
+                        <input
+                          type="time"
+                          value={localAddressRevealAt.split("T")[1] ?? ""}
+                          onChange={(event) =>
+                            setLocalAddressRevealAt(
+                              `${localAddressRevealAt.split("T")[0] ?? ""}T${event.target.value}`,
+                            )
+                          }
+                          required
+                          aria-describedby="address-reveal-note"
+                        />
+                      </label>
+                      <p id="address-reveal-note">
+                        Pacific Time (US/Pacific). Until then, shoppers will see
+                        the general area on the map. The full address will
+                        appear automatically at your selected date and time.
+                      </p>
+                    </div>
+                  ) : null}
                 </fieldset>
                 <StepFeedback feedback={currentFeedback} />
+                {!locationConfirmed ? (
+                  <div className="button-row">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={Boolean(pending)}
+                      onClick={() => saveLocationValues(true)}
+                    >
+                      Save draft and continue to Photos
+                    </button>
+                  </div>
+                ) : null}
                 <WizardActions
                   back={() => setStep("schedule")}
                   pending={pending === "location"}
@@ -2327,9 +2389,7 @@ export function EventBuilder({
                 Photos
               </h2>
               <p className="photo-step-intro">
-                Select several images at once. Every file is validated before
-                its private reservation, then sanitized and finalized
-                independently.
+                Add photos of the items for sale, then choose a cover photo.
               </p>
               <label
                 className={`photo-dropzone photo-dropzone--${photoDragState}${draft.photos.length >= MAX_EVENT_PHOTOS ? " photo-dropzone--full" : ""}`}
@@ -2465,9 +2525,6 @@ export function EventBuilder({
                   </ul>
                 </div>
               ) : null}
-              {uploadActive ? (
-                <p role="status">Uploading and processing selected photos…</p>
-              ) : null}
               {draft.photos.length ? (
                 <div className="photo-library" hidden>
                   <div
@@ -2502,7 +2559,7 @@ export function EventBuilder({
                       </div>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={coverPhoto.urls.thumbnail}
+                        src={coverPhoto.urls.gallery}
                         alt={`Event photo ${coverPhotoIndex + 1}`}
                       />
                       <div>
@@ -2578,6 +2635,18 @@ export function EventBuilder({
                 <p hidden>No server-stored photos yet.</p>
               )}
               <div className="photo-manager">
+                {uploads.filter(uploadCanRetry).length > 1 ? (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={Boolean(pending) || uploadActive}
+                    onClick={() =>
+                      void uploadSelected(uploads.filter(uploadCanRetry))
+                    }
+                  >
+                    Retry failed photos
+                  </button>
+                ) : null}
                 <div
                   className="photo-manager__heading"
                   role="status"
@@ -2707,7 +2776,8 @@ export function EventBuilder({
                                 photoIndex < draft.photos.length - 1
                               }
                               canMakeCover={!photo.isCover}
-                              disabled={Boolean(pending) || uploadActive}
+                              disabled={Boolean(pending)}
+                              orderAndDeleteDisabled={uploadActive}
                               onMoveEarlier={() => movePhoto(photo.id, -1)}
                               onMoveLater={() => movePhoto(photo.id, 1)}
                               onMakeCover={() => selectCover(photo.id)}
@@ -2739,15 +2809,22 @@ export function EventBuilder({
                                   : "Remove"}
                               </button>
                             </div>
+                          ) : photo ? (
+                            <button
+                              type="button"
+                              className="danger-button"
+                              disabled={Boolean(pending) || uploadActive}
+                              onClick={() => removePhoto(photo.id)}
+                            >
+                              Remove
+                            </button>
                           ) : null}
                         </li>
                       );
                     })}
                   </ol>
                 ) : (
-                  <p className="photo-manager__empty">
-                    No server-stored photos yet.
-                  </p>
+                  <p className="photo-manager__empty">No photos added yet.</p>
                 )}
               </div>
               <p className="photo-readiness" role="status">
@@ -2765,7 +2842,7 @@ export function EventBuilder({
                 <button
                   type="button"
                   className="secondary-button"
-                  disabled={Boolean(pending) || uploadActive}
+                  disabled={Boolean(pending)}
                   onClick={() => setStep("location")}
                 >
                   Back
@@ -2775,18 +2852,19 @@ export function EventBuilder({
                   aria-busy={pending === "photos-continue"}
                   disabled={
                     Boolean(pending) ||
-                    uploadActive ||
-                    !draft.steps.photosComplete
+                    (!uploadActive && !draft.steps.photosComplete)
                   }
                   onClick={() => void continueFromPhotos()}
                 >
                   {pending === "photos-continue"
                     ? "Checking…"
-                    : readyPhotoCount === 0
-                      ? "Add a photo to continue"
-                      : !hasReadyCover
-                        ? "Choose a cover to continue"
-                        : "Save and continue"}
+                    : uploadActive
+                      ? "Continue to review"
+                      : readyPhotoCount === 0
+                        ? "Add a photo to continue"
+                        : !hasReadyCover
+                          ? "Choose a cover to continue"
+                          : "Save and continue"}
                 </button>
               </div>
             </section>
@@ -2800,53 +2878,63 @@ export function EventBuilder({
               </h2>
               <dl className="status-list">
                 <div>
-                  <dt>Draft state</dt>
-                  <dd>{draft.workflowState.replaceAll("_", " ")}</dd>
-                </div>
-                <div>
-                  <dt>Content revision</dt>
-                  <dd>{draft.contentRevision}</dd>
-                </div>
-                <div>
                   <dt>Approval</dt>
                   <dd>{draft.approvalStatus.replaceAll("_", " ")}</dd>
                 </div>
               </dl>
-              {!draft.steps.reviewReady ? (
-                <div className="warning-box">
-                  <h3>Still needed</h3>
+              <section
+                className={scheduleStyles.review}
+                aria-label="Review sale dates and address privacy"
+              >
+                <h3>Dates &amp; times · Pacific Time</h3>
+                {editorScheduleDays(draft).length ? (
                   <ul>
-                    {draft.readiness.missing.map((item) => (
-                      <li key={item}>{item}</li>
+                    {editorScheduleDays(draft).map((day) => (
+                      <li key={day.date}>
+                        {formatSaleDay(day.date)} ·{" "}
+                        {formatSaleTime(day.startTime)} –{" "}
+                        {formatSaleTime(day.endTime)}
+                      </li>
                     ))}
                   </ul>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => setStep(resumeEventWizardStep(draft.steps))}
-                  >
-                    Return to incomplete step
-                  </button>
-                </div>
+                ) : (
+                  <p>No sale dates saved.</p>
+                )}
+                <p>
+                  {draft.privacyMode === "EXACT_ADDRESS"
+                    ? "The full address is shown when the listing is published."
+                    : draft.privacyMode === "HIDDEN_UNTIL_START" &&
+                        editorAddressRevealAt(draft)
+                      ? `Full address will be shown on ${formatSaleDay(editorAddressRevealAt(draft).slice(0, 10))} at ${formatSaleTime(editorAddressRevealAt(draft).slice(11, 16))}, Pacific Time. Shoppers see the general area until then.`
+                      : "The full address is hidden. Choose a reveal date and time in Privacy."}
+                </p>
+              </section>
+              {!draft.readiness.ready ? (
+                <EventReadinessNotice
+                  eventId={draft.id}
+                  missing={draft.readiness.missing}
+                  uploading={uploadActive}
+                  onEdit={() => setStep(resumeEventWizardStep(draft.steps))}
+                />
               ) : (
                 <p className="success-box">
-                  All server requirements are complete. Review the exact listing
-                  before approval.
+                  Review your listing before approval.
                 </p>
               )}
-              {draft.steps.reviewReady ? (
+              {draft.readiness.ready ? (
                 <p>
                   <Link
                     className="button-link"
                     href={`/dashboard/events/${draft.id}/preview`}
+                    target={uploadActive ? "_blank" : undefined}
+                    rel={uploadActive ? "noopener" : undefined}
                   >
                     Open exact listing preview
                   </Link>
                 </p>
               ) : (
                 <p>
-                  Exact preview is unavailable until the incomplete steps above
-                  are saved.
+                  Complete the details above to preview your listing.
                 </p>
               )}
               {draft.publication ? (
@@ -2949,10 +3037,18 @@ export function EventBuilder({
                       ) : null}
                     </section>
                   )}
+                  <p>
+                    Listing fees are non-refundable, including if you cancel
+                    your event. You can cancel a published event from your
+                    dashboard. Read the{" "}
+                    <Link href="/terms">publishing terms</Link>.
+                  </p>
                   <label className="checkbox-label">
-                    <input type="checkbox" name="acceptedTerms" value="yes" />I
-                    accept publishing terms version {termsVersion} and approve
-                    this exact event revision for payment.
+                    <input type="checkbox" name="acceptedTerms" value="yes" />
+                    <strong>
+                      I accept publishing terms and approve this event for
+                      payment.
+                    </strong>
                   </label>
                   <StepFeedback feedback={currentFeedback} />
                   <div className="wizard-actions">
@@ -2966,7 +3062,8 @@ export function EventBuilder({
                     </button>
                     <button
                       disabled={
-                        !draft.steps.reviewReady ||
+                        !draft.readiness.ready ||
+                        hasPendingPhotos ||
                         !emailVerified ||
                         Boolean(pending)
                       }
@@ -2996,7 +3093,7 @@ export function EventBuilder({
             </div>
             {coverPhoto ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={coverPhoto.urls.card} alt="Selected listing cover" />
+              <img src={coverPhoto.urls.gallery} alt="Selected listing cover" />
             ) : (
               <div className="builder-preview-placeholder">
                 <Icon name="photo" />
@@ -3025,9 +3122,14 @@ export function EventBuilder({
                   <Icon name="shield" size={17} /> Privacy
                 </dt>
                 <dd>
-                  {draft.privacyMode
-                    ? draft.privacyMode.replaceAll("_", " ").toLowerCase()
-                    : "Not set"}
+                  {draft.privacyMode === "EXACT_ADDRESS"
+                    ? "Full address visible"
+                    : draft.privacyMode === "HIDDEN_UNTIL_START" &&
+                        editorAddressRevealAt(draft)
+                      ? `Hidden until ${formatSaleDay(editorAddressRevealAt(draft).slice(0, 10))}, ${formatSaleTime(editorAddressRevealAt(draft).slice(11, 16))} PT`
+                      : draft.privacyMode
+                        ? "Full address hidden"
+                        : "Not set"}
                 </dd>
               </div>
             </dl>

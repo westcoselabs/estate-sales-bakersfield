@@ -7,7 +7,10 @@ import {
   AdminNotFoundError,
   createConfiguredAdminUserDetail,
 } from "@/modules/admin";
-import { getCurrentUser, requireSuperAdminPrincipal } from "@/modules/auth";
+import {
+  requireAdminPagePrincipal,
+  requireSuperAdminPrincipal,
+} from "@/modules/auth";
 
 import { UserActions } from "../_components/user-actions";
 
@@ -37,7 +40,9 @@ export default async function AdminUserDetailPage({
 }: {
   params: Promise<{ userId: string }>;
 }) {
-  const principal = requireSuperAdminPrincipal(await getCurrentUser());
+  const principal = requireSuperAdminPrincipal(
+    await requireAdminPagePrincipal(),
+  );
   const id = z
     .string()
     .uuid()

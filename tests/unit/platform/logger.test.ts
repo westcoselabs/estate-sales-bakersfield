@@ -18,6 +18,9 @@ describe("structured logger", () => {
         authorization: "Bearer raw-authorization",
         headers: { cookie: "estate_session=raw-cookie" },
         password: "raw-password",
+        code: "123456",
+        secret: "raw-authenticator-secret",
+        recoveryCodes: ["raw-recovery-code"],
         resetToken: "raw-reset-token",
         stripeSignature: "raw-stripe-signature",
         checkoutUrl: "https://checkout.example.test/raw-session",
@@ -30,6 +33,9 @@ describe("structured logger", () => {
           body: "nested-request-body",
         },
         payload: {
+          code: "654321",
+          encryptedSecret: "raw-encrypted-authenticator-secret",
+          recoveryCode: "raw-nested-recovery-code",
           items: [
             {
               sourceUrl:
@@ -53,6 +59,12 @@ describe("structured logger", () => {
     expect(serialized).not.toContain("raw-authorization");
     expect(serialized).not.toContain("raw-cookie");
     expect(serialized).not.toContain("raw-password");
+    expect(serialized).not.toContain("123456");
+    expect(serialized).not.toContain("654321");
+    expect(serialized).not.toContain("raw-authenticator-secret");
+    expect(serialized).not.toContain("raw-recovery-code");
+    expect(serialized).not.toContain("raw-encrypted-authenticator-secret");
+    expect(serialized).not.toContain("raw-nested-recovery-code");
     expect(serialized).not.toContain("raw-reset-token");
     expect(serialized).not.toContain("raw-stripe-signature");
     expect(serialized).not.toContain("raw-session");

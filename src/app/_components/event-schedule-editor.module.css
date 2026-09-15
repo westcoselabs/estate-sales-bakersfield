@@ -1,0 +1,198 @@
+.editor {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.calendar {
+  width: min(100%, 30rem);
+  justify-self: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 1rem;
+}
+
+.calendar :global(.schedule-calendar__day) {
+  min-height: 2.75rem;
+  padding: 0;
+}
+
+.timezone {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.details {
+  min-width: 0;
+}
+
+.details h3 {
+  margin: 0 0 0.3rem;
+}
+
+.hint {
+  margin: 0 0 1rem;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.dayList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dayRow {
+  display: grid;
+  grid-template-columns:
+    minmax(7.5rem, 1.25fr) repeat(2, minmax(0, 1fr))
+    2.75rem;
+  align-items: end;
+  gap: 0.75rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.dayRow time {
+  align-self: center;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.dayRow label {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.dayRow input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.55rem;
+  font-size: 0.9375rem;
+}
+
+.dayRow .remove {
+  display: grid;
+  width: 2.75rem;
+  min-height: 2.75rem;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 1.5rem;
+}
+
+.dayRow .remove:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.empty {
+  margin: 0;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-control);
+  padding: 1.2rem;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.reveal {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  padding: 0.75rem 0 0;
+}
+
+.reveal label {
+  min-width: 0;
+}
+
+.reveal input {
+  width: 100%;
+  min-width: 0;
+}
+
+.reveal p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+}
+
+.review {
+  margin: 1.25rem 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 1rem;
+}
+
+.review h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.review ul {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+}
+
+.review p {
+  margin: 0.85rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 540px) {
+  .calendar {
+    padding: 0.75rem 0.35rem;
+  }
+
+  .details {
+    padding: 1rem;
+  }
+
+  .dayRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+  }
+
+  .dayRow time {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    padding-right: 3.35rem;
+  }
+
+  .dayRow label {
+    grid-row: 2;
+  }
+
+  .dayRow .remove {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    align-self: center;
+  }
+}
+
+@media (max-width: 360px) {
+  .dayRow label {
+    grid-column: 1 / -1;
+  }
+
+  .dayRow label:nth-of-type(2) {
+    grid-row: 3;
+  }
+}

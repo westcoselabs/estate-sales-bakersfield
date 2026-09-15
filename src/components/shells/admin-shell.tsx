@@ -116,6 +116,10 @@ export function AdminShell({
             <Icon name="settings" />
             Admin account
           </Link>
+          <Link href="/account/security">
+            <Icon name="shield" />
+            Two-step verification
+          </Link>
           <AccountMenu account={account} />
         </div>
       </aside>
@@ -123,6 +127,7 @@ export function AdminShell({
         <AdminBrand />
         <div>
           <span>Owner portal</span>
+          <Link href="/account/security">Security</Link>
           <AccountMenu account={account} />
         </div>
       </header>

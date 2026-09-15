@@ -20,6 +20,53 @@ const productionCoreProviders = {
 };
 
 describe("server environment validation", () => {
+  it("accepts a missing MFA key for build preparation and validates configured encryption keys", () => {
+    expect(
+      parseServerEnvironment(base).ADMIN_MFA_ENCRYPTION_KEY,
+    ).toBeUndefined();
+    expect(
+      parseServerEnvironment({ ...base, ADMIN_MFA_ENCRYPTION_KEY: "" })
+        .ADMIN_MFA_ENCRYPTION_KEY,
+    ).toBeUndefined();
+    const key = "ab".repeat(32);
+    expect(
+      parseServerEnvironment({ ...base, ADMIN_MFA_ENCRYPTION_KEY: key })
+        .ADMIN_MFA_ENCRYPTION_KEY,
+    ).toBe(key);
+    expect(() =>
+      parseServerEnvironment({
+        ...base,
+        ADMIN_MFA_ENCRYPTION_KEY: "incorrect-key",
+      }),
+    ).toThrow();
+  });
+
+  it("accepts an optional public support inbox and rejects malformed destinations", () => {
+    expect(
+      parseServerEnvironment({ ...base, PUBLIC_SUPPORT_EMAIL: "" })
+        .PUBLIC_SUPPORT_EMAIL,
+    ).toBeUndefined();
+    expect(
+      parseServerEnvironment({
+        ...base,
+        PUBLIC_SUPPORT_EMAIL: "support@example.test",
+      }).PUBLIC_SUPPORT_EMAIL,
+    ).toBe("support@example.test");
+    expect(() =>
+      parseServerEnvironment({
+        ...base,
+        PUBLIC_SUPPORT_EMAIL: "support@example.test?bcc=other@example.test",
+      }),
+    ).toThrow();
+  });
+
+  it("keeps public indexing disabled until production is outside beta with live Stripe", () => {
+    expect(parseServerEnvironment(base).PUBLIC_INDEXING_ENABLED).toBe(false);
+    expect(() =>
+      parseServerEnvironment({ ...base, PUBLIC_INDEXING_ENABLED: "true" }),
+    ).toThrow(/Public indexing requires/);
+  });
+
   it("allows credential-free local and test configuration", () => {
     expect(parseServerEnvironment(base)).toMatchObject(base);
   });

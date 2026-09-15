@@ -221,6 +221,34 @@ test("normalizes filter URLs, restores browser history, and loads no map provide
 test("restores custom date inputs after browser Back", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/search?view=list");
+  const dates = await page.evaluate(() => {
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), 12);
+    const to = new Date(now.getFullYear(), now.getMonth(), 14);
+    const dateKey = (value: Date) =>
+      [
+        value.getFullYear(),
+        String(value.getMonth() + 1).padStart(2, "0"),
+        String(value.getDate()).padStart(2, "0"),
+      ].join("-");
+    const fullLabel = new Intl.DateTimeFormat("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+    const shortLabel = new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+    return {
+      from: dateKey(from),
+      to: dateKey(to),
+      fromLabel: fullLabel.format(from),
+      toLabel: fullLabel.format(to),
+      rangeLabel: `${shortLabel.format(from)} – ${shortLabel.format(to)}`,
+    };
+  });
   await page.getByRole("button", { name: /^Filters/ }).click();
   const filterDialog = page.getByRole("dialog", { name: "Filter sales" });
   await filterDialog
@@ -231,12 +259,8 @@ test("restores custom date inputs after browser Back", async ({ page }) => {
   const calendar = filterDialog.getByRole("dialog", {
     name: "Choose a date range",
   });
-  await calendar
-    .getByRole("button", { name: "Wednesday, August 12, 2026" })
-    .click();
-  await calendar
-    .getByRole("button", { name: "Friday, August 14, 2026" })
-    .click();
+  await calendar.getByRole("button", { name: dates.fromLabel }).click();
+  await calendar.getByRole("button", { name: dates.toLabel }).click();
   await page.getByRole("button", { name: "Apply filters" }).click();
 
   await expect
@@ -244,10 +268,10 @@ test("restores custom date inputs after browser Back", async ({ page }) => {
     .toBe("custom");
   await expect
     .poll(() => new URL(page.url()).searchParams.get("from"))
-    .toBe("2026-08-12");
+    .toBe(dates.from);
   await expect
     .poll(() => new URL(page.url()).searchParams.get("to"))
-    .toBe("2026-08-14");
+    .toBe(dates.to);
   await page.getByRole("button", { name: /^Filters/ }).click();
   const changedFilterDialog = page.getByRole("dialog", {
     name: "Filter sales",
@@ -268,7 +292,7 @@ test("restores custom date inputs after browser Back", async ({ page }) => {
   await page.getByRole("button", { name: /^Filters/ }).click();
   await expect(
     page.getByRole("dialog", { name: "Filter sales" }).getByRole("button", {
-      name: "Aug 12 – Aug 14",
+      name: dates.rangeLabel,
     }),
   ).toBeVisible();
 });
@@ -412,6 +436,90 @@ test("uses a two-action mobile dock and preserves filters across modes", async (
     page.locator('.explore-mobile-toolbar [aria-label="Sort results"]'),
   ).toHaveCount(0);
   await expect(dock.locator("button")).toHaveCount(2);
+});
+
+test("refreshes map results within the chosen viewport without recreating the canvas", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/search?view=list");
+  await expect(page.locator(".maplibregl-canvas")).toHaveCount(0);
+  await page.getByRole("button", { name: "Map View" }).click();
+  const canvas = page.locator(".maplibregl-canvas");
+  await expect(canvas).toBeVisible();
+  await canvas.evaluate((element) => {
+    element.setAttribute("data-map-instance", "original");
+  });
+  const searchArea = page.getByRole("button", {
+    name: "Search this area",
+    exact: true,
+  });
+  await expect(searchArea).toBeEnabled();
+  await searchArea.click();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.has("bounds"))
+    .toBe(true);
+  await expect(canvas).toHaveAttribute("data-map-instance", "original");
+  await expect(
+    page.getByRole("button", { name: "All Bakersfield" }),
+  ).toBeVisible();
+
+  const firstBounds = new URL(page.url()).searchParams.get("bounds");
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await searchArea.click();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("bounds"))
+    .not.toBe(firstBounds);
+  await expect(canvas).toHaveAttribute("data-map-instance", "original");
+  await page.getByRole("button", { name: "All Bakersfield" }).click();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.has("bounds"))
+    .toBe(false);
+  await expect(canvas).toHaveAttribute("data-map-instance", "original");
+});
+
+test("suspends the showcase animation while paused, offscreen, or reduced motion is enabled", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/");
+  const track = page.locator(".hero-marquee__track");
+  await expect(track).toHaveCSS("animation-play-state", "running");
+  await page.getByRole("button", { name: "Pause showcase" }).click();
+  await expect(track).toHaveCSS("animation-play-state", "paused");
+  const mutationCount = await page
+    .locator(".hero-marquee")
+    .evaluate(async (element) => {
+      let changes = 0;
+      const observer = new MutationObserver((records) => {
+        changes += records.length;
+      });
+      observer.observe(element, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["style"],
+      });
+      for (let frame = 0; frame < 8; frame += 1) {
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        );
+      }
+      observer.disconnect();
+      return changes;
+    });
+  expect(mutationCount).toBe(0);
+  await page.getByRole("button", { name: "Play showcase" }).click();
+  await expect(track).toHaveCSS("animation-play-state", "running");
+  await page.locator("footer").scrollIntoViewIfNeeded();
+  await expect(track).toHaveCSS("animation-play-state", "paused");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.locator(".hero-marquee").scrollIntoViewIfNeeded();
+  await expect(track).toHaveCSS("animation-name", "none");
+  await expect(page.locator(".hero-marquee__card").first()).toHaveCSS(
+    "--hero-card-rotation",
+    "0deg",
+  );
 });
 
 test("keeps unsupported mockup treatments out of result cards", async ({

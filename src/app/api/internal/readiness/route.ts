@@ -33,29 +33,60 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const prisma = getPrismaClient();
-    const [, deadJobs, failedResendWebhooks, manualReviewPayments] =
-      await Promise.all([
-        prisma.$queryRaw`SELECT 1`,
-        prisma.durableJob.count({ where: { status: "DEAD" } }),
-        prisma.resendWebhookEvent.count({
-          where: { processingState: "FAILED" },
-        }),
-        prisma.paymentAttempt.count({
-          where: { fulfillmentState: "MANUAL_REVIEW" },
-        }),
-      ]);
+    const queueDelayMinutes = environment.JOB_MAX_QUEUE_DELAY_MINUTES;
+    const overdueBefore = new Date(Date.now() - queueDelayMinutes * 60_000);
+    const staleLockBefore = new Date(Date.now() - 15 * 60_000);
+    const [
+      ,
+      deadJobs,
+      failedResendWebhooks,
+      manualReviewPayments,
+      blockedPaidPayments,
+      overdueJobs,
+    ] = await Promise.all([
+      prisma.$queryRaw`SELECT 1`,
+      prisma.durableJob.count({ where: { status: "DEAD" } }),
+      prisma.resendWebhookEvent.count({
+        where: { processingState: "FAILED" },
+      }),
+      prisma.paymentAttempt.count({
+        where: { fulfillmentState: "MANUAL_REVIEW" },
+      }),
+      prisma.paymentAttempt.count({
+        where: { paymentState: "PAID", fulfillmentState: "BLOCKED" },
+      }),
+      prisma.durableJob.count({
+        where: {
+          OR: [
+            {
+              status: { in: ["PENDING", "FAILED"] },
+              runAt: { lt: overdueBefore },
+            },
+            { status: "RUNNING", lockedAt: { lt: staleLockBefore } },
+          ],
+        },
+      }),
+    ]);
     return Response.json(
       {
         build: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? "local",
         requestId,
+        queueDelayMinutes,
         status:
-          deadJobs + failedResendWebhooks + manualReviewPayments > 0
+          deadJobs +
+            failedResendWebhooks +
+            manualReviewPayments +
+            blockedPaidPayments +
+            overdueJobs >
+          0
             ? "warning"
             : "ready",
         warnings: {
           deadJobs,
           failedResendWebhooks,
           manualReviewPayments,
+          blockedPaidPayments,
+          overdueJobs,
         },
       },
       { headers: headers(requestId) },

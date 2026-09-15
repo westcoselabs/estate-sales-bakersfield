@@ -18,11 +18,11 @@ expiration; sensitive mutations require password authentication during the
 preceding 15 minutes. Reauthentication rotates the opaque token while
 preserving the original absolute expiration.
 
-The application deliberately has no MFA in this MVP. This accepted risk is
-partially reduced by short absolute sessions, recent-password confirmation,
-database-backed limits, session rotation, protected operator provisioning, and
-append-only audit records. These controls do not eliminate the risk of owner
-credential compromise.
+Administrator access now requires TOTP or one-time recovery-code verification
+against the enabled credential generation. Existing sessions without MFA are
+denied; sensitive actions require password and MFA proof within 15 minutes.
+Enrollment, recovery, key management, and operator recovery are documented in
+[administrator-mfa.md](../operations/administrator-mfa.md).
 
 Marketing eligibility requires an ordinary active, verified account, an
 explicit `marketing-v1` consent record, and no unsubscribe timestamp. Missing

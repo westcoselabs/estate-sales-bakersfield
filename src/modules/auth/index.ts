@@ -7,6 +7,7 @@ export { CryptoOpaqueTokenProvider } from "./infrastructure/crypto-token-provide
 export {
   cleanupConfiguredAuthenticationRateLimits,
   createConfiguredAbuseControl,
+  createConfiguredAdminMfaService,
   createConfiguredAuthenticationWorkflow,
   createConfiguredMarketingPreferenceService,
   createConfiguredSessionService,
@@ -17,6 +18,8 @@ export {
   getCurrentSessionToken,
   getCurrentUser,
   requireSuperAdmin,
+  requireAdminPageSession,
+  requireAdminPagePrincipal,
   requireUser,
   requireVerifiedPublishingUser,
   setSessionCookie,
@@ -39,6 +42,8 @@ export {
   AuthenticationError,
   AuthenticationServiceUnavailableError,
   AuthorizationError,
+  MfaRequiredError,
+  MfaVerificationError,
   EmailVerificationRequiredError,
   EmailDeliveryError,
   InvalidCredentialsError,
@@ -51,6 +56,7 @@ export { normalizeEmail } from "./domain/email";
 export {
   requireRecentSuperAdminSession,
   requireSuperAdminPrincipal,
+  requireSuperAdminIdentity,
   requireUserPrincipal,
   requireVerifiedPublishingPrincipal,
 } from "./application/guards";

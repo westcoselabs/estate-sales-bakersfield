@@ -2,6 +2,27 @@ import type { PublicSearchCriteria } from "../domain/types";
 
 export const BAKERSFIELD_TIMEZONE = "America/Los_Angeles";
 
+// Reuse the ICU formatter across searches. Constructing it for every candidate
+// offset previously dominated the CPU cost of resolving a date filter.
+const calendarFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BAKERSFIELD_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+function localParts(date: Date): Record<string, string> {
+  return Object.fromEntries(
+    calendarFormatter
+      .formatToParts(date)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+}
+
 interface CalendarParts {
   readonly year: number;
   readonly month: number;
@@ -34,51 +55,35 @@ function addDays(value: string, days: number): string {
   });
 }
 
-function localDateAt(date: Date, timezone: string): string {
-  const values = Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-      .formatToParts(date)
-      .filter((part) => part.type !== "literal")
-      .map((part) => [part.type, part.value]),
-  );
+function localDateAt(date: Date): string {
+  const values = localParts(date);
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-function localMidnightToUtc(value: string, timezone: string): Date {
+function localMidnightToUtc(value: string): Date {
   const parts = parseCalendarDate(value);
   const target = `${value}T00:00`;
   const naive = Date.UTC(parts.year, parts.month - 1, parts.day);
-  for (
-    let offsetMinutes = -14 * 60;
-    offsetMinutes <= 14 * 60;
-    offsetMinutes += 15
-  ) {
-    const candidate = new Date(naive - offsetMinutes * 60_000);
-    const values = Object.fromEntries(
-      new Intl.DateTimeFormat("en-CA", {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23",
-      })
-        .formatToParts(candidate)
-        .filter((part) => part.type !== "literal")
-        .map((part) => [part.type, part.value]),
-    );
+  // Correct the observed local offset, then verify the boundary. A second
+  // correction covers a DST transition between the initial guess and midnight.
+  // Bakersfield's clock changes never make local midnight ambiguous or absent.
+  let candidate = new Date(naive);
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const values = localParts(candidate);
     if (
       `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}` ===
       target
     ) {
       return candidate;
     }
+    const observed = Date.UTC(
+      Number(values.year),
+      Number(values.month) - 1,
+      Number(values.day),
+      Number(values.hour),
+      Number(values.minute),
+    );
+    candidate = new Date(candidate.getTime() + naive - observed);
   }
   throw new Error("Could not resolve the Bakersfield calendar boundary");
 }
@@ -93,7 +98,7 @@ export function resolvePublicDateInterval(
   now: Date,
 ): PublicDateInterval | null {
   if (criteria.date === "all") return null;
-  const today = localDateAt(now, BAKERSFIELD_TIMEZONE);
+  const today = localDateAt(now);
   let from = today;
   let endExclusive = addDays(today, 1);
 
@@ -121,7 +126,7 @@ export function resolvePublicDateInterval(
   }
 
   return {
-    startsAt: localMidnightToUtc(from, BAKERSFIELD_TIMEZONE),
-    endsAt: localMidnightToUtc(endExclusive, BAKERSFIELD_TIMEZONE),
+    startsAt: localMidnightToUtc(from),
+    endsAt: localMidnightToUtc(endExclusive),
   };
 }

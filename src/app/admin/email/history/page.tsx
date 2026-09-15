@@ -1,9 +1,9 @@
-import { getCurrentSession } from "@/modules/auth";
+import { requireAdminPageSession } from "@/modules/auth";
 import { createConfiguredEmailCenter } from "@/modules/email";
 
 export default async function EmailHistoryPage() {
   const rows = await createConfiguredEmailCenter().listDeliveryHistory(
-    await getCurrentSession(),
+    await requireAdminPageSession(),
   );
   return (
     <div className="admin-page">

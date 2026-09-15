@@ -3,7 +3,7 @@ import "server-only";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
-import { RECENT_PASSWORD_TTL_MS } from "@/modules/auth";
+import { authorizedAdministratorSession } from "@/platform/database/admin-session-authorization";
 
 import { eventSlug, futurePublicPath } from "../../events/domain/slug";
 import {
@@ -317,30 +317,12 @@ export class PrismaListingImportReviewRepository
       );
     }
 
-    const recentSessionPredicate = authorization.requireRecentSession
-      ? Prisma.sql`
-          AND session."password_authenticated_at" >=
-            CURRENT_TIMESTAMP - (${RECENT_PASSWORD_TTL_MS} * INTERVAL '1 millisecond')
-        `
-      : Prisma.empty;
-    const sessions = await transaction.$queryRaw<
-      { readonly authorizedAt: Date }[]
-    >(Prisma.sql`
-      SELECT CURRENT_TIMESTAMP AS "authorizedAt"
-      FROM "sessions" session
-      JOIN "users" administrator
-        ON administrator."id" = session."user_id"
-      WHERE session."id" = ${actor.sessionId}::uuid
-        AND session."user_id" = ${actor.userId}::uuid
-        AND session."expires_at" > CURRENT_TIMESTAMP
-        AND administrator."role" = 'SUPER_ADMIN'::"user_role"
-        AND administrator."status" = 'ACTIVE'::"account_status"
-        AND administrator."email_verified_at" IS NOT NULL
-        ${recentSessionPredicate}
-      FOR SHARE OF session, administrator
-    `);
-    const session = sessions[0];
-    if (session) return session.authorizedAt;
+    const authorizedAt = await authorizedAdministratorSession(transaction, {
+      userId: actor.userId,
+      sessionId: actor.sessionId,
+      requireRecent: authorization.requireRecentSession,
+    });
+    if (authorizedAt) return authorizedAt;
 
     throw new ListingImportReviewError(
       "ACTOR_NOT_AUTHORIZED",

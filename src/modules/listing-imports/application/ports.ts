@@ -37,6 +37,7 @@ export type ListingImportActor =
   | {
       readonly kind: "ADMIN_USER";
       readonly adminUserId: string;
+      readonly adminSessionId: string;
     };
 
 export interface ListingImportAuditContext {

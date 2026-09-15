@@ -20,6 +20,23 @@ import { PrismaSessionRepository } from "./prisma-session-repository";
 import { PrismaMarketingPreferenceRepository } from "./prisma-marketing-preference-repository";
 import { ResendEmailService } from "./resend-email-service";
 import { MarketingPreferenceService } from "../application/marketing-preference-service";
+import { AdminMfaService } from "../application/admin-mfa-service";
+import { EncryptedTotpCryptography } from "./admin-mfa-cryptography";
+import { PrismaAdminMfaRepository } from "./prisma-admin-mfa-repository";
+
+export function createConfiguredAdminMfaService(): AdminMfaService {
+  const cryptography = new EncryptedTotpCryptography(
+    getServerEnvironment().ADMIN_MFA_ENCRYPTION_KEY ?? "",
+  );
+  return new AdminMfaService(
+    new PrismaAdminMfaRepository(getPrismaClient()),
+    cryptography,
+    new PrismaAccountRepository(getPrismaClient()),
+    new Argon2PasswordHasher(),
+    new CryptoOpaqueTokenProvider(),
+    createConfiguredSessionService(),
+  );
+}
 
 function escapeManagedEmailValue(value: string): string {
   return value.replace(/[&<>"']/g, (character) => {

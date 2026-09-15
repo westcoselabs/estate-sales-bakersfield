@@ -27,12 +27,37 @@ export const eventDetailsSchema = z.object({
   description: optionalTrimmed(20, 5000),
 });
 
-export const eventScheduleSchema = z.object({
-  expectedVersion: expectedVersionSchema,
-  localStartsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
-  localEndsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
-  timezone: z.literal(BAKERSFIELD_TIMEZONE),
-});
+export const eventScheduleSchema = z
+  .object({
+    expectedVersion: expectedVersionSchema,
+    localStartsAt: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
+      .optional(),
+    localEndsAt: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
+      .optional(),
+    scheduleDays: z
+      .array(
+        z.object({
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          startTime: z.string().regex(/^\d{2}:\d{2}$/),
+          endTime: z.string().regex(/^\d{2}:\d{2}$/),
+        }),
+      )
+      .min(1)
+      .max(366)
+      .optional(),
+    timezone: z.literal(BAKERSFIELD_TIMEZONE),
+  })
+  .refine(
+    (input) => input.scheduleDays || (input.localStartsAt && input.localEndsAt),
+    {
+      message: "Select event dates and opening and closing times.",
+      path: ["scheduleDays"],
+    },
+  );
 
 export const eventLocationSchema = z.object({
   expectedVersion: expectedVersionSchema,
@@ -48,6 +73,11 @@ export const eventLocationSchema = z.object({
     .regex(/^[A-Z]{2}$/),
   timezone: z.literal(BAKERSFIELD_TIMEZONE),
   privacyMode: addressPrivacySchema,
+  localAddressRevealAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
+    .nullable()
+    .optional(),
   selectionToken: z.string().min(40).max(4096).nullable().optional(),
   confirmed: z.boolean().optional(),
   pinLatitude: z.number().finite().min(-90).max(90).optional(),

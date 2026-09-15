@@ -290,7 +290,7 @@ export function DashboardShell({
         }>)
       : []),
   ];
-  const nav = destinations.map((destination) => (
+  const renderDestination = (destination: (typeof destinations)[number]) => (
     <Link
       key={destination.key}
       className={`dashboard-nav-link dashboard-nav-link--${destination.key}`}
@@ -303,13 +303,15 @@ export function DashboardShell({
       />
       <span>{destination.label}</span>
     </Link>
-  ));
+  );
   return (
     <div className="dashboard-app">
       <SkipLink />
       <aside className="dashboard-sidebar">
         <Brand />
-        <nav aria-label="Dashboard navigation">{nav}</nav>
+        <nav aria-label="Dashboard navigation">
+          {destinations.map(renderDestination)}
+        </nav>
         <TextLink
           className="dashboard-exit-link"
           href="/"
@@ -335,7 +337,9 @@ export function DashboardShell({
         aria-label="Mobile dashboard navigation"
         data-active={active}
       >
-        {nav}
+        {destinations
+          .filter((destination) => destination.key !== "admin")
+          .map(renderDestination)}
       </nav>
     </div>
   );

@@ -126,6 +126,79 @@ afterAll(async () => {
 });
 
 describe("Phase 3 event builder in an isolated Development Neon schema", () => {
+  it("persists each day's hours and the selected address release through reloads", async () => {
+    const scheduleDays = [
+      { date: "2026-10-04", startTime: "08:00", endTime: "13:00" },
+      { date: "2026-10-05", startTime: "08:00", endTime: "12:00" },
+      { date: "2026-10-06", startTime: "08:00", endTime: "13:00" },
+    ];
+    let event = await service.create(owner, "ESTATE_SALE");
+    expect(event.scheduleDays).toBeNull();
+    expect(event.addressRevealAt).toBeNull();
+    event = await service.updateSchedule(owner, event.id, {
+      expectedVersion: event.version,
+      timezone: "America/Los_Angeles",
+      scheduleDays: [...scheduleDays].reverse(),
+    });
+    const [selectedLocation] = await locationProvider.autocomplete();
+    if (!selectedLocation) throw new Error("Missing location fixture");
+    const address = {
+      addressLine1: "123 Main Street",
+      addressLine2: null,
+      city: "Bakersfield",
+      region: "CA",
+      postalCode: "93301",
+      countryCode: "US",
+      timezone: "America/Los_Angeles" as const,
+      privacyMode: "HIDDEN_UNTIL_START" as const,
+    };
+    event = await service.updateLocation(owner, event.id, {
+      ...address,
+      expectedVersion: event.version,
+      localAddressRevealAt: "2026-10-04T06:00",
+      confirmed: true,
+      selectedLocation,
+    });
+    expect(await service.get(owner, event.id)).toMatchObject({
+      scheduleDays,
+      localStartsAt: "2026-10-04T08:00",
+      localEndsAt: "2026-10-06T13:00",
+      startsAt: "2026-10-04T15:00:00.000Z",
+      endsAt: "2026-10-06T20:00:00.000Z",
+      addressRevealAt: "2026-10-04T13:00:00.000Z",
+      localAddressRevealAt: "2026-10-04T06:00",
+    });
+    expect(
+      await prisma.event.findUniqueOrThrow({
+        where: { id: event.id },
+        select: { scheduleDays: true, addressRevealAt: true },
+      }),
+    ).toEqual({
+      scheduleDays,
+      addressRevealAt: new Date("2026-10-04T13:00:00.000Z"),
+    });
+
+    const originalRevision = event.contentRevision;
+    event = await service.updateLocation(owner, event.id, {
+      ...address,
+      expectedVersion: event.version,
+      localAddressRevealAt: "2026-10-04T07:30",
+    });
+    expect(event.contentRevision).toBe(originalRevision + 1);
+    expect((await service.get(owner, event.id)).addressRevealAt).toBe(
+      "2026-10-04T14:30:00.000Z",
+    );
+    expect(event.location?.confirmationStatus).toBe("CONFIRMED");
+
+    event = await service.updateLocation(owner, event.id, {
+      ...address,
+      expectedVersion: event.version,
+      privacyMode: "EXACT_ADDRESS",
+      localAddressRevealAt: null,
+    });
+    expect((await service.get(owner, event.id)).addressRevealAt).toBeNull();
+  });
+
   it("creates the internal profile automatically for an account with no profile", async () => {
     const email = testEmail("phase3-no-profile");
     const user = await prisma.user.create({

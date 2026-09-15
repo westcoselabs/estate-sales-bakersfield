@@ -12,7 +12,10 @@ import {
 import { createConfiguredPaymentService } from "@/modules/payments";
 import { getPrismaClient } from "@/platform/database/client";
 
-export async function runConfiguredJobBatch(limit = 10) {
+export async function runConfiguredJobBatch(
+  limit = 50,
+  deadlineAt = new Date(Date.now() + 20_000),
+) {
   const rateLimitBucketsDeleted =
     await cleanupConfiguredAuthenticationRateLimits();
   const paymentService = createConfiguredPaymentService();
@@ -78,6 +81,9 @@ export async function runConfiguredJobBatch(limit = 10) {
       queue: "default",
       workerId: `vercel-${randomUUID()}`,
       limit,
+      concurrency: 2,
+      drain: true,
+      deadlineAt,
     },
   );
   return {

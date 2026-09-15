@@ -636,8 +636,10 @@ interface OrganizerData {
 
 export function OrganizerForm({
   initial,
+  returnHref,
 }: {
   readonly initial: OrganizerData | null;
+  readonly returnHref?: string;
 }) {
   const submission = useSubmission();
   const router = useRouter();
@@ -659,6 +661,7 @@ export function OrganizerForm({
         "PUT",
       );
       submission.setMessage("Profile saved.");
+      if (returnHref) router.push(returnHref);
       router.refresh();
     } catch (error) {
       submission.setMessage(

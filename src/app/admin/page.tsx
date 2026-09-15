@@ -6,7 +6,10 @@ import {
   createConfiguredAdminOverviewReporting,
   parseAdminDateRange,
 } from "@/modules/admin";
-import { getCurrentUser, requireSuperAdminPrincipal } from "@/modules/auth";
+import {
+  requireAdminPagePrincipal,
+  requireSuperAdminPrincipal,
+} from "@/modules/auth";
 
 function number(value: number) {
   return new Intl.NumberFormat("en-US").format(value);
@@ -59,7 +62,9 @@ export default async function AdminOverviewPage({
 }: {
   searchParams: Promise<{ range?: string }>;
 }) {
-  const principal = requireSuperAdminPrincipal(await getCurrentUser());
+  const principal = requireSuperAdminPrincipal(
+    await requireAdminPagePrincipal(),
+  );
   const rangeKey = parseAdminDateRange((await searchParams).range);
   const overview = await createConfiguredAdminOverviewReporting().get(
     principal,

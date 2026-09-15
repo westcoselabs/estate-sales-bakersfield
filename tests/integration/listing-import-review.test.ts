@@ -1,3 +1,4 @@
+import { administratorMfaProof } from "./support/admin-mfa-fixtures";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -217,7 +218,11 @@ async function createCandidate(fixture: ReviewFixture): Promise<string> {
     },
     {
       transport: "MANUAL_JSON",
-      actor: { kind: "ADMIN_USER", adminUserId: administratorId },
+      actor: {
+        kind: "ADMIN_USER",
+        adminUserId: administratorId,
+        adminSessionId: administratorSessionId,
+      },
       audit: { requestId: identifier("import-request") },
     },
   );
@@ -420,6 +425,7 @@ beforeAll(async () => {
         .digest("hex"),
       expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
       passwordAuthenticatedAt: now,
+      ...(await administratorMfaProof(prisma, administratorId, now)),
     },
   });
   administratorSessionId = currentSession.id;
@@ -431,6 +437,7 @@ beforeAll(async () => {
         .digest("hex"),
       expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
       passwordAuthenticatedAt: new Date(now.getTime() - 20 * 60 * 1000),
+      ...(await administratorMfaProof(prisma, administratorId, now)),
     },
   });
   staleAdministratorSessionId = staleSession.id;
@@ -869,6 +876,7 @@ describe("listing import Phase 4 review lifecycle", () => {
           .digest("hex"),
         expiresAt: new Date(Date.now() + 60 * 60 * 1_000),
         passwordAuthenticatedAt: new Date(),
+        ...(await administratorMfaProof(prisma, confirmer.id)),
       },
       select: { id: true },
     });

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getCurrentSession } from "@/modules/auth";
+import { requireAdminPageSession } from "@/modules/auth";
 import { createConfiguredEmailCenter } from "@/modules/email";
 import { parseCampaignListingSnapshot } from "@/modules/email";
 import { CampaignActions } from "./campaign-actions";
@@ -10,7 +10,7 @@ export default async function CampaignPage({
 }) {
   const { campaignId } = await params;
   const campaign = await createConfiguredEmailCenter().getCampaign(
-    await getCurrentSession(),
+    await requireAdminPageSession(),
     campaignId,
   );
   if (!campaign) notFound();

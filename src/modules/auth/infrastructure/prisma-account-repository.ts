@@ -3,6 +3,7 @@ import "server-only";
 import { MARKETING_CONSENT_VERSION } from "../application/marketing-preference-service";
 
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
+import { lockSessionUser } from "@/platform/database/session-user-lock";
 
 import type { AccountRepository, AuditContext } from "../application/ports";
 import type { AuthenticationAccount, CurrentSession } from "../domain/types";
@@ -460,6 +461,7 @@ export class PrismaAccountRepository implements AccountRepository {
             select: accountSelection,
           });
           if (!account) return null;
+          await lockSessionUser(transaction, account.id);
 
           await transaction.passwordResetToken.updateMany({
             where: {
@@ -505,6 +507,13 @@ export class PrismaAccountRepository implements AccountRepository {
     input: Parameters<AccountRepository["resetPassword"]>[0],
   ): Promise<Awaited<ReturnType<AccountRepository["resetPassword"]>>> {
     return this.prisma.$transaction(async (transaction) => {
+      const resetToken = await transaction.passwordResetToken.findUnique({
+        where: { tokenHash: input.tokenHash },
+        select: { userId: true },
+      });
+      if (!resetToken) return null;
+      // Lock the user before tokens/sessions, matching session rotation and MFA.
+      await lockSessionUser(transaction, resetToken.userId);
       const consumed = await transaction.$queryRaw<
         Array<{ user_id: string }>
       >(Prisma.sql`

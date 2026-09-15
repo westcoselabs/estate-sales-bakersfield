@@ -2,6 +2,7 @@ import {
   AuthenticationError,
   AuthorizationError,
   EmailVerificationRequiredError,
+  MfaRequiredError,
 } from "../domain/errors";
 import type { AuthPrincipal, CurrentSession } from "../domain/types";
 
@@ -17,7 +18,8 @@ export function requireUserPrincipal(
   return principal;
 }
 
-export function requireSuperAdminPrincipal(
+/** Role check only; used exclusively to bootstrap MFA and password proof. */
+export function requireSuperAdminIdentity(
   principal: AuthPrincipal | null,
 ): AuthPrincipal {
   const user = requireUserPrincipal(principal);
@@ -31,6 +33,18 @@ export function requireSuperAdminPrincipal(
   return user;
 }
 
+export function requireSuperAdminPrincipal(
+  principal: AuthPrincipal | null,
+): AuthPrincipal {
+  const administrator = requireSuperAdminIdentity(principal);
+  if (administrator.mfaEnabled && !administrator.mfaAuthenticatedAt) {
+    throw new MfaRequiredError(
+      "Administrator two-step verification is required",
+    );
+  }
+  return administrator;
+}
+
 export function requireRecentSuperAdminSession(
   session: CurrentSession | null,
   now: Date = new Date(),
@@ -38,9 +52,17 @@ export function requireRecentSuperAdminSession(
   requireSuperAdminPrincipal(session?.principal ?? null);
   if (
     !session ||
+    session.expiresAt <= now ||
     now.getTime() - session.passwordAuthenticatedAt.getTime() > 15 * 60 * 1000
   ) {
     throw new AuthorizationError("Recent password confirmation is required");
+  }
+  if (
+    session.principal.mfaEnabled &&
+    (!session.mfaAuthenticatedAt ||
+      now.getTime() - session.mfaAuthenticatedAt.getTime() > 15 * 60 * 1000)
+  ) {
+    throw new MfaRequiredError("Recent two-step verification is required");
   }
   return session;
 }

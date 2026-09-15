@@ -5,25 +5,26 @@ import { PublicShell } from "@/components/shells/shells";
 import { Icon } from "@/components/ui/icons";
 import {
   Breadcrumbs,
-  SelectedListings,
   SelectedListingsSkeleton,
   SellerCallout,
 } from "@/features/marketing/components";
-import { marketingMetadata } from "@/features/marketing/metadata";
-import { normalizeSearchQuery } from "@/modules/public-search";
+import { SalesHubListings } from "@/app/_components/sales-hub-listings";
+import {
+  salesHubCursor,
+  salesHubMetadata,
+} from "@/app/_components/sales-hub-data";
+import type { PublicSearchRawQuery } from "@/modules/public-search";
 import { getServerApplicationUrl } from "@/platform/config/application-url";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = marketingMetadata({
-  title: "Upcoming Yard Sales in Bakersfield, CA",
-  description:
-    "Plan a Bakersfield yard-sale outing, view selected upcoming listings, and open yard-sale results in the shared directory.",
-  path: "/yard-sales",
-});
+type Props = { readonly searchParams: Promise<PublicSearchRawQuery> };
+export async function generateMetadata({ searchParams }: Props) {
+  return salesHubMetadata("yard", await searchParams);
+}
 
-export default function YardSalesHubPage() {
-  const criteria = normalizeSearchQuery({ sale: "yard" }).criteria;
+export default async function YardSalesHubPage({ searchParams }: Props) {
+  const cursor = salesHubCursor(await searchParams);
   const applicationUrl = getServerApplicationUrl();
   const breadcrumbData = {
     "@context": "https://schema.org",
@@ -66,7 +67,7 @@ export default function YardSalesHubPage() {
               </Link>
               <Link
                 className="ui-button ui-button--secondary"
-                href="/search?sale=yard&date=weekend"
+                href="/yard-sales/this-weekend"
               >
                 This weekend
               </Link>
@@ -93,13 +94,7 @@ export default function YardSalesHubPage() {
             />
           }
         >
-          <SelectedListings
-            criteria={criteria}
-            limit={3}
-            title="Selected upcoming yard sales"
-            description="A look at the next yard sales currently published in the directory."
-            moreHref="/search?sale=yard"
-          />
+          <SalesHubListings hubKey="yard" cursor={cursor} />
         </Suspense>
 
         <section

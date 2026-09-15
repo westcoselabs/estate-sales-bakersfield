@@ -1,0 +1,461 @@
+{
+  "schema": "http-scale-rehearsal-v1",
+  "capturedAt": "2026-09-15T04:27:25.224Z",
+  "commit": "b92105e8b4ff432831748228e7e3b9edbfbe1811",
+  "workingTree": "uncommitted launch hardening",
+  "fixture": {
+    "counts": {
+      "users": 100000,
+      "publications": 5000,
+      "externalListings": 5000
+    },
+    "anchor": "2026-09-15T04:00:00.000Z",
+    "sourceSha256": "edf6161ddf640e467ef8258824513b2d7700c372a5f1b884bd530d0e5dd0a02b"
+  },
+  "statistics": "Explicit ANALYZE of the 13 fixture tables before warmup",
+  "runtime": "v24.11.1",
+  "scope": "Local Next production build; APP_ENV=test bypasses shared application cache; real Development Neon; one server process; restricted DB role capped at 32 connections; closed-loop load; no CDN, browser assets, cold-start fleet or Production sizing validation",
+  "warmup": {
+    "requests": 6,
+    "errors": 0,
+    "p50Ms": 3452,
+    "p95Ms": 3468,
+    "p99Ms": 3468,
+    "maxMs": 3468,
+    "bytes": 583282,
+    "statuses": {
+      "200": 6
+    },
+    "routes": [
+      {
+        "route": "/api/search?projection=list",
+        "ms": 3318.4004999999997,
+        "status": 200,
+        "valid": true,
+        "bytes": 11830
+      },
+      {
+        "route": "/api/search?projection=map",
+        "ms": 3318.002300000002,
+        "status": 200,
+        "valid": true,
+        "bytes": 23703
+      },
+      {
+        "route": "/search",
+        "ms": 3468.0986999999986,
+        "status": 200,
+        "valid": true,
+        "bytes": 103254
+      },
+      {
+        "route": "/estate-sales",
+        "ms": 3452.4819000000007,
+        "status": 200,
+        "valid": true,
+        "bytes": 158360
+      },
+      {
+        "route": "/sales-today",
+        "ms": 3459.1612000000023,
+        "status": 200,
+        "valid": true,
+        "bytes": 143914
+      },
+      {
+        "route": "/yard-sales/this-weekend",
+        "ms": 3454.7454,
+        "status": 200,
+        "valid": true,
+        "bytes": 142221
+      }
+    ]
+  },
+  "stages": [
+    {
+      "concurrency": 5,
+      "elapsedMs": 4953,
+      "requestsPerSecond": 24.23,
+      "requests": 120,
+      "errors": 0,
+      "p50Ms": 191,
+      "p95Ms": 337,
+      "p99Ms": 361,
+      "maxMs": 402,
+      "bytes": 11665640,
+      "statuses": {
+        "200": 120
+      },
+      "routes": [
+        {
+          "route": "/api/search?projection=list",
+          "requests": 20,
+          "errors": 0,
+          "p50Ms": 169,
+          "p95Ms": 262,
+          "p99Ms": 298,
+          "maxMs": 298,
+          "bytes": 236600,
+          "statuses": {
+            "200": 20
+          }
+        },
+        {
+          "route": "/api/search?projection=map",
+          "requests": 20,
+          "errors": 0,
+          "p50Ms": 162,
+          "p95Ms": 256,
+          "p99Ms": 266,
+          "maxMs": 266,
+          "bytes": 474060,
+          "statuses": {
+            "200": 20
+          }
+        },
+        {
+          "route": "/search",
+          "requests": 20,
+          "errors": 0,
+          "p50Ms": 255,
+          "p95Ms": 348,
+          "p99Ms": 402,
+          "maxMs": 402,
+          "bytes": 2065080,
+          "statuses": {
+            "200": 20
+          }
+        },
+        {
+          "route": "/estate-sales",
+          "requests": 20,
+          "errors": 0,
+          "p50Ms": 182,
+          "p95Ms": 337,
+          "p99Ms": 338,
+          "maxMs": 338,
+          "bytes": 3167200,
+          "statuses": {
+            "200": 20
+          }
+        },
+        {
+          "route": "/sales-today",
+          "requests": 20,
+          "errors": 0,
+          "p50Ms": 202,
+          "p95Ms": 341,
+          "p99Ms": 361,
+          "maxMs": 361,
+          "bytes": 2878280,
+          "statuses": {
+            "200": 20
+          }
+        },
+        {
+          "route": "/yard-sales/this-weekend",
+          "requests": 20,
+          "errors": 0,
+          "p50Ms": 175,
+          "p95Ms": 271,
+          "p99Ms": 347,
+          "maxMs": 347,
+          "bytes": 2844420,
+          "statuses": {
+            "200": 20
+          }
+        }
+      ]
+    },
+    {
+      "concurrency": 20,
+      "elapsedMs": 3807,
+      "requestsPerSecond": 31.52,
+      "requests": 120,
+      "errors": 0,
+      "p50Ms": 681,
+      "p95Ms": 956,
+      "p99Ms": 1084,
+      "maxMs": 1318,
+      "bytes": 11665640,
+      "statuses": {
+        "200": 120
+      },
+      "routes": [
+        {
+          "route": "/api/search?projection=list",
+          "requests": 20,
+          "errors": 0,
+          "p50Ms": 328,
+          "p95Ms": 633,
+          "p99Ms": 644,
+          "maxMs": 644,
+          "bytes": 236600,
+          "statuses": {
+            "200": 20
+          }
+        },
+        {
+          "route": "/api/search?projection=map",
+          "requests": 20,
+          "errors": 0,
+          "p50Ms": 367,
+          "p95Ms": 637,
+          "p99Ms": 774,
+          "maxMs": 774,
+          "bytes": 474060,
+          "statuses": {
+            "200": 20
+          }
+        },
+        {
+          "route": "/search",
+          "requests": 20,
+          "errors": 0,
+          "p50Ms": 849,
+          "p95Ms": 1084,
+          "p99Ms": 1318,
+          "maxMs": 1318,
+          "bytes": 2065080,
+          "statuses": {
+            "200": 20
+          }
+        },
+        {
+          "route": "/estate-sales",
+          "requests": 20,
+          "errors": 0,
+          "p50Ms": 723,
+          "p95Ms": 956,
+          "p99Ms": 1024,
+          "maxMs": 1024,
+          "bytes": 3167200,
+          "statuses": {
+            "200": 20
+          }
+        },
+        {
+          "route": "/sales-today",
+          "requests": 20,
+          "errors": 0,
+          "p50Ms": 700,
+          "p95Ms": 885,
+          "p99Ms": 899,
+          "maxMs": 899,
+          "bytes": 2878280,
+          "statuses": {
+            "200": 20
+          }
+        },
+        {
+          "route": "/yard-sales/this-weekend",
+          "requests": 20,
+          "errors": 0,
+          "p50Ms": 713,
+          "p95Ms": 834,
+          "p99Ms": 886,
+          "maxMs": 886,
+          "bytes": 2844420,
+          "statuses": {
+            "200": 20
+          }
+        }
+      ]
+    },
+    {
+      "concurrency": 50,
+      "elapsedMs": 8940,
+      "requestsPerSecond": 33.56,
+      "requests": 300,
+      "errors": 0,
+      "p50Ms": 1418,
+      "p95Ms": 2365,
+      "p99Ms": 2826,
+      "maxMs": 3023,
+      "bytes": 29164100,
+      "statuses": {
+        "200": 300
+      },
+      "routes": [
+        {
+          "route": "/api/search?projection=list",
+          "requests": 50,
+          "errors": 0,
+          "p50Ms": 980,
+          "p95Ms": 1580,
+          "p99Ms": 1799,
+          "maxMs": 1799,
+          "bytes": 591500,
+          "statuses": {
+            "200": 50
+          }
+        },
+        {
+          "route": "/api/search?projection=map",
+          "requests": 50,
+          "errors": 0,
+          "p50Ms": 990,
+          "p95Ms": 1566,
+          "p99Ms": 1809,
+          "maxMs": 1809,
+          "bytes": 1185150,
+          "statuses": {
+            "200": 50
+          }
+        },
+        {
+          "route": "/search",
+          "requests": 50,
+          "errors": 0,
+          "p50Ms": 1947,
+          "p95Ms": 2832,
+          "p99Ms": 3023,
+          "maxMs": 3023,
+          "bytes": 5162700,
+          "statuses": {
+            "200": 50
+          }
+        },
+        {
+          "route": "/estate-sales",
+          "requests": 50,
+          "errors": 0,
+          "p50Ms": 1480,
+          "p95Ms": 1949,
+          "p99Ms": 2149,
+          "maxMs": 2149,
+          "bytes": 7918000,
+          "statuses": {
+            "200": 50
+          }
+        },
+        {
+          "route": "/sales-today",
+          "requests": 50,
+          "errors": 0,
+          "p50Ms": 1455,
+          "p95Ms": 2161,
+          "p99Ms": 2365,
+          "maxMs": 2365,
+          "bytes": 7195700,
+          "statuses": {
+            "200": 50
+          }
+        },
+        {
+          "route": "/yard-sales/this-weekend",
+          "requests": 50,
+          "errors": 0,
+          "p50Ms": 1452,
+          "p95Ms": 2155,
+          "p99Ms": 2425,
+          "maxMs": 2425,
+          "bytes": 7111050,
+          "statuses": {
+            "200": 50
+          }
+        }
+      ]
+    },
+    {
+      "concurrency": 100,
+      "elapsedMs": 15223,
+      "requestsPerSecond": 39.41,
+      "requests": 600,
+      "errors": 0,
+      "p50Ms": 2337,
+      "p95Ms": 3804,
+      "p99Ms": 4303,
+      "maxMs": 5210,
+      "bytes": 58328200,
+      "statuses": {
+        "200": 600
+      },
+      "routes": [
+        {
+          "route": "/api/search?projection=list",
+          "requests": 100,
+          "errors": 0,
+          "p50Ms": 2475,
+          "p95Ms": 3408,
+          "p99Ms": 4292,
+          "maxMs": 4429,
+          "bytes": 1183000,
+          "statuses": {
+            "200": 100
+          }
+        },
+        {
+          "route": "/api/search?projection=map",
+          "requests": 100,
+          "errors": 0,
+          "p50Ms": 2491,
+          "p95Ms": 3415,
+          "p99Ms": 4303,
+          "maxMs": 4390,
+          "bytes": 2370300,
+          "statuses": {
+            "200": 100
+          }
+        },
+        {
+          "route": "/search",
+          "requests": 100,
+          "errors": 0,
+          "p50Ms": 3344,
+          "p95Ms": 4121,
+          "p99Ms": 5145,
+          "maxMs": 5210,
+          "bytes": 10325400,
+          "statuses": {
+            "200": 100
+          }
+        },
+        {
+          "route": "/estate-sales",
+          "requests": 100,
+          "errors": 0,
+          "p50Ms": 1948,
+          "p95Ms": 2838,
+          "p99Ms": 3467,
+          "maxMs": 3754,
+          "bytes": 15836000,
+          "statuses": {
+            "200": 100
+          }
+        },
+        {
+          "route": "/sales-today",
+          "requests": 100,
+          "errors": 0,
+          "p50Ms": 2079,
+          "p95Ms": 2937,
+          "p99Ms": 3615,
+          "maxMs": 3843,
+          "bytes": 14391400,
+          "statuses": {
+            "200": 100
+          }
+        },
+        {
+          "route": "/yard-sales/this-weekend",
+          "requests": 100,
+          "errors": 0,
+          "p50Ms": 2075,
+          "p95Ms": 2934,
+          "p99Ms": 3613,
+          "maxMs": 3883,
+          "bytes": 14222100,
+          "statuses": {
+            "200": 100
+          }
+        }
+      ]
+    }
+  ],
+  "provisionalBudget": {
+    "p95Ms": 1000,
+    "errorRate": 0.01
+  },
+  "status": "capacity-review-required"
+}

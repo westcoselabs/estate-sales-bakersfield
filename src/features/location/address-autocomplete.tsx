@@ -42,6 +42,7 @@ export function AddressAutocomplete({
 }) {
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const selectedValue = useRef<string | null>(null);
   const [suggestions, setSuggestions] = useState<
     readonly ClientAddressSuggestion[]
   >([]);
@@ -51,7 +52,7 @@ export function AddressAutocomplete({
 
   useEffect(() => {
     const query = value.trim();
-    if (query.length < 4) {
+    if (query.length < 4 || value === selectedValue.current) {
       return;
     }
     const controller = new AbortController();
@@ -72,6 +73,7 @@ export function AddressAutocomplete({
             readonly suggestions?: readonly ClientAddressSuggestion[];
             readonly error?: { readonly code?: string };
           };
+          if (controller.signal.aborted) return;
           if (response.status === 429) {
             setState("rate-limited");
             setSuggestions([]);
@@ -100,6 +102,7 @@ export function AddressAutocomplete({
   }, [requestVersion, value]);
 
   function choose(suggestion: ClientAddressSuggestion) {
+    selectedValue.current = suggestion.formattedAddress;
     onSelect(suggestion);
     setSuggestions([]);
     setState("idle");
@@ -132,7 +135,7 @@ export function AddressAutocomplete({
       : state === "empty"
         ? "No matching Bakersfield-area address was found."
         : state === "unavailable"
-          ? "Address search is unavailable. You can save this draft and try again."
+          ? "Address search is unavailable. Save your draft below to continue to Photos, then confirm the address later."
           : state === "rate-limited"
             ? "Too many address searches. Wait a moment and retry."
             : "";
@@ -147,6 +150,7 @@ export function AddressAutocomplete({
         ref={inputRef}
         value={value}
         onChange={(event) => {
+          selectedValue.current = null;
           const nextValue = event.target.value;
           if (nextValue.trim().length < 4) {
             setSuggestions([]);

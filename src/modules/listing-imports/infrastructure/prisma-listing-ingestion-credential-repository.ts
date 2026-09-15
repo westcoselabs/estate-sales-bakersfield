@@ -1,7 +1,7 @@
 import "server-only";
 
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
-import { RECENT_PASSWORD_TTL_MS } from "@/modules/auth";
+import { authorizedAdministratorSession } from "@/platform/database/admin-session-authorization";
 
 import type {
   AuthenticateListingIngestionCredentialInput,
@@ -268,25 +268,12 @@ export class PrismaListingIngestionCredentialRepository implements ListingIngest
     const actorUserId = input.createdByUserId ?? input.revokedByUserId;
     if (!actorUserId) return false;
 
-    const recentPasswordCutoff = new Date(
-      input.authorizationAt.getTime() - RECENT_PASSWORD_TTL_MS,
-    );
-    const session = await transaction.session.findFirst({
-      where: {
-        id: input.actorSessionId,
+    return (
+      (await authorizedAdministratorSession(transaction, {
         userId: actorUserId,
-        expiresAt: { gt: input.authorizationAt },
-        passwordAuthenticatedAt: { gte: recentPasswordCutoff },
-        user: {
-          is: {
-            role: "SUPER_ADMIN",
-            status: "ACTIVE",
-            emailVerifiedAt: { not: null },
-          },
-        },
-      },
-      select: { id: true },
-    });
-    return session !== null;
+        sessionId: input.actorSessionId,
+        requireRecent: true,
+      })) !== null
+    );
   }
 }

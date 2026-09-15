@@ -37,9 +37,12 @@ export interface EmailCenterPort {
     subject: string;
     html: string;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }): Promise<{ id: string }>;
   saveDraft(input: {
+    actorId: string;
+    actorSessionId: string;
     id: string;
     subject: string;
     html: string;
@@ -50,12 +53,14 @@ export interface EmailCenterPort {
     digest: string;
     testedAt: Date;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }): Promise<void>;
   publish(input: {
     id: string;
     expectedVersion: number;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
     now: Date;
   }): Promise<unknown>;
@@ -63,11 +68,13 @@ export interface EmailCenterPort {
     id: string;
     revisionId: string;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }): Promise<void>;
   archive(input: {
     id: string;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }): Promise<void>;
   listCampaigns(): Promise<AdminEmailCampaignSummaryRecord[]>;
@@ -81,6 +88,7 @@ export interface EmailCenterPort {
     selectionMode: "ALL_ELIGIBLE" | "SELECTED_USERS";
     selectedUserIds: string[];
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }): Promise<{ id: string }>;
   updateCampaign(input: {
@@ -90,6 +98,7 @@ export interface EmailCenterPort {
     subject: string;
     previewText?: string;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }): Promise<void>;
   getCampaign(id: string): Promise<AdminEmailCampaignRecord | null>;
@@ -97,12 +106,14 @@ export interface EmailCenterPort {
   markCampaignTested(
     id: string,
     actorId: string,
+    actorSessionId: string,
     requestId?: string,
   ): Promise<void>;
   prepareCampaign(input: {
     id: string;
     expectedVersion: number;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }): Promise<{ recipientCount: number }>;
 }

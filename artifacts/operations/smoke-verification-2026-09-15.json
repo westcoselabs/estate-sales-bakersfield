@@ -1,0 +1,44 @@
+{
+  "schema": "prelaunch-verification-v1",
+  "dateUtc": "2026-09-15",
+  "baseCommit": "b92105e8b4ff432831748228e7e3b9edbfbe1811",
+  "workingTree": "Uncommitted launch hardening and provider/policy/operations preparation",
+  "scope": "Local production build, disposable Development schemas, captured email, fake Stripe and media adapters",
+  "credentialFree": {
+    "command": "pnpm verify:credential-free",
+    "status": "pass",
+    "unitTests": 512,
+    "providerContractTests": 32,
+    "statementCoveragePercent": 40.49,
+    "productionDependencyAudit": "No known vulnerabilities found",
+    "architectureModules": 593,
+    "architectureDependencies": 1499
+  },
+  "browser": {
+    "initialCommand": "pnpm test:e2e",
+    "initialPassed": 45,
+    "initialFailed": 2,
+    "testHelperCorrections": [
+      "Wait for completed verification and sign-in navigation before opening optional administrator MFA setup in the import test",
+      "Expect authenticated dashboard instead of mandatory MFA redirect in the super-admin test"
+    ],
+    "rerunCommand": "pnpm exec tsx scripts/with-test-schema.ts -- pnpm exec playwright test tests/e2e/listing-imports-admin.spec.ts tests/e2e/super-admin.spec.ts",
+    "rerunPassed": 2,
+    "rerunFailed": 0,
+    "uniquePassingScenarios": 47,
+    "schemasRemoved": true,
+    "status": "pass-across-full-and-targeted-runs"
+  },
+  "manualBrowserReview": {
+    "routes": ["/terms", "/privacy"],
+    "viewport": "390x844",
+    "operator": "Brandon Francis",
+    "support": "decoratedbyriley@gmail.com",
+    "status": "pass"
+  },
+  "productionDeployed": false,
+  "productionMigrationsApplied": false,
+  "hostedProviderSmoke": "not-verified",
+  "livePayments": "deferred",
+  "couponCreation": "deferred"
+}

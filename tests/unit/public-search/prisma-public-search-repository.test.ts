@@ -18,7 +18,7 @@ async function renderedSearchSql(): Promise<string> {
     range: null,
     cursor: null,
     limit: 21,
-    bounds: null,
+    bounds: { west: -119.3, south: 35.5, east: -119.2, north: 35.6 },
   });
 
   const query = queryRaw.mock.calls[0]?.[0] as { readonly sql?: unknown };
@@ -40,14 +40,23 @@ describe("PrismaPublicSearchRepository", () => {
     const [organizerBranch, externalBranch] = sql.split("UNION ALL");
 
     expect(organizerBranch).toContain(
-      `publication."snapshot" ->> 'privacyMode' = 'HIDDEN_UNTIL_START'`,
+      `search_document."privacy_mode" = 'HIDDEN_UNTIL_START'`,
     );
     expect(organizerBranch).toContain(
-      `publication."snapshot" -> 'projection' ->> 'startsAt'`,
+      `publication."snapshot" ->> 'addressRevealAt'`,
     );
+    expect(organizerBranch).toContain(`search_document."starts_at") <=`);
     expect(externalBranch).toContain(
       `listing."privacy_mode" = 'HIDDEN_UNTIL_START'`,
     );
     expect(externalBranch).toContain('listing."starts_at" <=');
+  });
+
+  it("filters protected results by the same fixed neighborhood cell as public map markers", async () => {
+    const sql = await renderedSearchSql();
+    expect(sql).toContain('FLOOR(location."longitude" *');
+    expect(sql).toContain('FLOOR(location."latitude" *');
+    expect(sql).toContain("NOT");
+    expect(sql).toContain("location.\"public_zone\" = 'bakersfield'");
   });
 });

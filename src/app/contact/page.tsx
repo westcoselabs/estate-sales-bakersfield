@@ -3,10 +3,11 @@ import Link from "next/link";
 
 import { PublicShell } from "@/components/shells/shells";
 import { Icon } from "@/components/ui/icons";
+import { getServerEnvironment } from "@/platform/config/env";
 
 const title = "Contact Estate Sales Bakersfield";
 const description =
-  "Find the current help paths for Estate Sales Bakersfield shoppers and sellers during the production beta.";
+  "Find support and help with Estate Sales Bakersfield accounts, listings, and payments.";
 
 export const metadata: Metadata = {
   title,
@@ -36,6 +37,7 @@ export const metadata: Metadata = {
 };
 
 export default function ContactPage() {
+  const supportEmail = getServerEnvironment().PUBLIC_SUPPORT_EMAIL;
   return (
     <PublicShell>
       <div className="content-page glass-page contact-page">
@@ -49,9 +51,9 @@ export default function ContactPage() {
             <p className="eyebrow">Help and support</p>
             <h1>How can we help?</h1>
             <p className="marketing-lede">
-              A direct public support channel is still being finalized for this
-              production beta. We will not ask you to use an unverified email,
-              phone number, or contact form.
+              {supportEmail
+                ? "Contact us for help with your account, listing, or payment. Include your listing link when available."
+                : "Browse the help options below while we prepare direct support for the public launch."}
             </p>
           </div>
         </header>
@@ -120,13 +122,26 @@ export default function ContactPage() {
             </span>
             <div>
               <h2 id="channel-update-title">
-                The approved contact destination will appear here.
+                {supportEmail
+                  ? "Contact support"
+                  : "Direct support is coming soon"}
               </h2>
-              <p>
-                A support email, phone number, or onsite submission form will
-                not be published until its destination, handling process, and
-                privacy expectations are approved.
-              </p>
+              {supportEmail ? (
+                <>
+                  <p>
+                    For your privacy, please leave passwords and card details
+                    out of your message.
+                  </p>
+                  <a className="ui-text-link" href={`mailto:${supportEmail}`}>
+                    {supportEmail}
+                  </a>
+                </>
+              ) : (
+                <p>
+                  A support contact will be available here before paid public
+                  launch.
+                </p>
+              )}
             </div>
           </div>
         </section>

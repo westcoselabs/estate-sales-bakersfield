@@ -48,6 +48,9 @@ describe("local Next runtime environment", () => {
       VERCEL_ENV: "",
       SENTRY_DSN: "",
       AUTH_FINGERPRINT_SECRET: "",
+      ADMIN_MFA_ENCRYPTION_KEY: "",
+      PUBLIC_INDEXING_ENABLED: "false",
+      PUBLIC_IMPORTED_INDEXING_ENABLED: "false",
     });
     expect(result.PREVIEW_DATABASE_URL).toBeUndefined();
     expect(result.PRODUCTION_DATABASE_URL).toBeUndefined();
@@ -102,6 +105,7 @@ describe("local Next runtime environment", () => {
   it.each([
     "CRON_SECRET",
     "AUTH_FINGERPRINT_SECRET",
+    "ADMIN_MFA_ENCRYPTION_KEY",
     "SENTRY_DSN",
     "NEXT_PUBLIC_SENTRY_DSN",
   ] as const)("rejects a %s value copied from Production", (name) => {
@@ -126,5 +130,31 @@ describe("local Next runtime environment", () => {
         "development",
       ),
     ).toThrow(/live Stripe/);
+  });
+
+  it("requires explicit opt-in for a shared Geoapify address lookup key", () => {
+    const configured = { ...local, GEOAPIFY_API_KEY: "shared-address-key" };
+    const deployed = { ...production, GEOAPIFY_API_KEY: "shared-address-key" };
+    expect(() =>
+      buildLocalRuntimeEnvironment(configured, deployed, "development"),
+    ).toThrow(/GEOAPIFY_API_KEY/);
+    expect(
+      buildLocalRuntimeEnvironment(
+        { ...configured, LOCAL_ALLOW_SHARED_GEOAPIFY_KEY: "true" },
+        deployed,
+        "development",
+      ).GEOAPIFY_API_KEY,
+    ).toBe("shared-address-key");
+    expect(() =>
+      buildLocalRuntimeEnvironment(
+        {
+          ...configured,
+          LOCAL_ALLOW_SHARED_GEOAPIFY_KEY: "true",
+          AUTH_FINGERPRINT_SECRET: "shared-auth",
+        },
+        { ...deployed, AUTH_FINGERPRINT_SECRET: "shared-auth" },
+        "development",
+      ),
+    ).toThrow(/AUTH_FINGERPRINT_SECRET/);
   });
 });

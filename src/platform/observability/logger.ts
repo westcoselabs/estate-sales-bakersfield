@@ -1,6 +1,18 @@
 import pino, { type Bindings, type DestinationStream, type Logger } from "pino";
 
 export const REDACTED_LOG_PATHS = [
+  "code",
+  "secret",
+  "recoveryCodes",
+  "recoveryCode",
+  "encryptedSecret",
+  "pendingEncryptedSecret",
+  "*.code",
+  "*.secret",
+  "*.recoveryCodes",
+  "*.recoveryCode",
+  "*.encryptedSecret",
+  "*.pendingEncryptedSecret",
   "authorization",
   "cookie",
   "set-cookie",

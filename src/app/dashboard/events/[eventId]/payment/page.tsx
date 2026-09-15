@@ -62,6 +62,10 @@ export default async function EventPaymentPage({ params }: Props) {
               </>
             )}
           </nav>
+          <p>
+            Listing fees are non-refundable, including if you cancel your event.
+            Read the <Link href="/terms">publishing terms</Link> before paying.
+          </p>
           {payment.displayState === "CANCELED" ? (
             <p>
               This paid publication was canceled by the organizer. Its financial

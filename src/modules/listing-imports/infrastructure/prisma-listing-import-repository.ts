@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
+import { authorizedAdministratorSession } from "@/platform/database/admin-session-authorization";
 
 import {
   batchAuditMetadata,
@@ -194,14 +195,10 @@ async function assertActor(
     }
     return;
   }
-  const administrator = await transaction.user.findUnique({
-    where: {
-      id: input.actor.adminUserId,
-      role: "SUPER_ADMIN",
-      status: "ACTIVE",
-      emailVerifiedAt: { not: null },
-    },
-    select: { id: true },
+  const administrator = await authorizedAdministratorSession(transaction, {
+    userId: input.actor.adminUserId,
+    sessionId: input.actor.adminSessionId,
+    requireRecent: true,
   });
   if (!administrator) {
     throw new ListingImportError(

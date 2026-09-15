@@ -7,6 +7,7 @@ import {
   requireIsolatedTestDatabase,
 } from "./test-database-safety";
 import { testDatabaseEnvironment } from "./test-database-run";
+import { prepareMapLibreWorkers } from "./prepare-maplibre-workers";
 
 const port = 3417;
 const capturePath = path.resolve(".tmp/e2e-auth-emails.jsonl");
@@ -28,6 +29,7 @@ function stop(exitCode: number): void {
 }
 
 async function main(): Promise<void> {
+  prepareMapLibreWorkers();
   await mkdir(path.dirname(capturePath), { recursive: true });
   await rm(capturePath, { force: true });
 
@@ -37,6 +39,7 @@ async function main(): Promise<void> {
     APP_URL: `http://127.0.0.1:${String(port)}`,
     LOG_LEVEL: "silent",
     AUTH_FINGERPRINT_SECRET: "phase-three-e2e-fingerprint-secret-32-characters",
+    ADMIN_MFA_ENCRYPTION_KEY: "11".repeat(32),
     AUTH_EMAIL_CAPTURE_PATH: capturePath,
     TEST_MEDIA_ROOT: path.resolve(`.tmp/e2e-media/${runId}`),
     TEST_MEDIA_SIGNING_SECRET:

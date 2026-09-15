@@ -14,6 +14,23 @@ export class EventValidationError extends EventError {}
 
 export class EventStateError extends EventError {}
 
+export class EventResourceLimitError extends EventError {
+  override readonly name = "EventResourceLimitError";
+
+  constructor(
+    message: string,
+    readonly code:
+      | "DRAFT_LIMIT"
+      | "MEDIA_LIMIT"
+      | "RATE_LIMITED"
+      | "PROCESSING_BUSY"
+      | "LIMITER_UNAVAILABLE",
+    readonly retryAfterSeconds = 60,
+  ) {
+    super(message);
+  }
+}
+
 export class OrganizerProfileIncompleteError extends EventStateError {
   override readonly name = "OrganizerProfileIncompleteError";
 }

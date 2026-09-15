@@ -291,6 +291,7 @@ model User {
   updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   sessions                           Session[]
+  adminMfa                           AdminMfaCredential?
   marketingPreference                MarketingPreference?
   emailVerificationTokens            EmailVerificationToken[]
   passwordResetTokens                PasswordResetToken[]
@@ -318,20 +319,50 @@ model User {
 }
 
 model Session {
-  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId                  String   @map("user_id") @db.Uuid
-  tokenHash               String   @unique @map("token_hash") @db.Char(64)
-  expiresAt               DateTime @map("expires_at") @db.Timestamptz(3)
-  passwordAuthenticatedAt DateTime @map("password_authenticated_at") @db.Timestamptz(3)
-  userAgent               String?  @map("user_agent") @db.VarChar(512)
-  deviceLabel             String?  @map("device_label") @db.VarChar(100)
-  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                  String    @map("user_id") @db.Uuid
+  tokenHash               String    @unique @map("token_hash") @db.Char(64)
+  expiresAt               DateTime  @map("expires_at") @db.Timestamptz(3)
+  passwordAuthenticatedAt DateTime  @map("password_authenticated_at") @db.Timestamptz(3)
+  mfaAuthenticatedAt      DateTime? @map("mfa_authenticated_at") @db.Timestamptz(3)
+  mfaCredentialVersion    Int?      @map("mfa_credential_version")
+  userAgent               String?   @map("user_agent") @db.VarChar(512)
+  deviceLabel             String?   @map("device_label") @db.VarChar(100)
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
   @@map("sessions")
+}
+
+model AdminMfaCredential {
+  userId                 String    @id @map("user_id") @db.Uuid
+  encryptedSecret        String?   @map("encrypted_secret") @db.VarChar(1024)
+  enabledAt              DateTime? @map("enabled_at") @db.Timestamptz(3)
+  version                Int       @default(0)
+  lastUsedStep           Int       @default(-1) @map("last_used_step")
+  pendingEncryptedSecret String?   @map("pending_encrypted_secret") @db.VarChar(1024)
+  pendingExpiresAt       DateTime? @map("pending_expires_at") @db.Timestamptz(3)
+  pendingSessionId       String?   @map("pending_session_id") @db.Uuid
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recoveryCodes AdminMfaRecoveryCode[]
+
+  @@map("admin_mfa_credentials")
+}
+
+model AdminMfaRecoveryCode {
+  id         String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String             @map("user_id") @db.Uuid
+  codeHash   String             @map("code_hash") @db.Char(64)
+  consumedAt DateTime?          @map("consumed_at") @db.Timestamptz(3)
+  credential AdminMfaCredential @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([userId, codeHash])
+  @@map("admin_mfa_recovery_codes")
 }
 
 model MarketingPreference {
@@ -413,6 +444,8 @@ model Event {
   origin                EventOrigin         @default(OWNER_CREATED)
   localStartsAt         String?             @map("local_starts_at") @db.VarChar(16)
   localEndsAt           String?             @map("local_ends_at") @db.VarChar(16)
+  scheduleDays          Json?               @map("schedule_days")
+  addressRevealAt       DateTime?           @map("address_reveal_at") @db.Timestamptz(3)
   startsAt              DateTime?           @map("starts_at") @db.Timestamptz(3)
   endsAt                DateTime?           @map("ends_at") @db.Timestamptz(3)
   timezone              String?             @db.VarChar(64)
@@ -641,34 +674,60 @@ model EventPublication {
   publishedAt      DateTime @map("published_at") @db.Timestamptz(3)
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  event          Event          @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  paymentAttempt PaymentAttempt @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
+  event          Event                      @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  paymentAttempt PaymentAttempt             @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
+  searchDocument PublicationSearchDocument?
 
   @@index([publishedAt])
   @@map("event_publications")
 }
 
+model PublicSearchRevision {
+  id       Int    @id @default(1) @db.SmallInt
+  revision BigInt @default(0)
+
+  @@map("public_search_revision")
+}
+
+model PublicationSearchDocument {
+  publicationId String             @id @map("publication_id") @db.Uuid
+  eventType     EventType          @map("event_type")
+  startsAt      DateTime           @map("starts_at") @db.Timestamptz(3)
+  endsAt        DateTime           @map("ends_at") @db.Timestamptz(3)
+  privacyMode   AddressPrivacyMode @map("privacy_mode")
+  city          String             @db.VarChar(100)
+  region        String             @db.VarChar(100)
+  publicId      String             @map("public_id") @db.VarChar(12)
+
+  publication EventPublication @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+
+  @@index([city, region, startsAt, publicId], map: "publication_search_location_order_idx")
+  @@index([city, region, eventType, startsAt, publicId], map: "publication_search_location_type_order_idx")
+  @@index([endsAt], map: "publication_search_ends_at_idx")
+  @@map("publication_search_documents")
+}
+
 model EmailDelivery {
-  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId             String              @map("user_id") @db.Uuid
-  kind               EmailDeliveryKind
-  status             EmailDeliveryStatus @default(PENDING)
-  templateRevisionId String?             @map("template_revision_id") @db.Uuid
-  paymentAttemptId   String?             @unique @map("payment_attempt_id") @db.Uuid
-  provider           String              @default("resend") @db.VarChar(50)
-  providerMessageId  String?             @map("provider_message_id") @db.VarChar(255)
-  recipientHash      String              @map("recipient_hash") @db.Char(64)
-  attempts           Int                 @default(0)
-  lastErrorCode      String?             @map("last_error_code") @db.VarChar(100)
-  sentAt             DateTime?           @map("sent_at") @db.Timestamptz(3)
-  deliveredAt        DateTime?           @map("delivered_at") @db.Timestamptz(3)
-  failedAt           DateTime?           @map("failed_at") @db.Timestamptz(3)
-  bouncedAt          DateTime?           @map("bounced_at") @db.Timestamptz(3)
-  complainedAt       DateTime?           @map("complained_at") @db.Timestamptz(3)
-  suppressedAt       DateTime?           @map("suppressed_at") @db.Timestamptz(3)
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId              String              @map("user_id") @db.Uuid
+  kind                EmailDeliveryKind
+  status              EmailDeliveryStatus @default(PENDING)
+  templateRevisionId  String?             @map("template_revision_id") @db.Uuid
+  paymentAttemptId    String?             @unique @map("payment_attempt_id") @db.Uuid
+  provider            String              @default("resend") @db.VarChar(50)
+  providerMessageId   String?             @map("provider_message_id") @db.VarChar(255)
+  recipientHash       String              @map("recipient_hash") @db.Char(64)
+  attempts            Int                 @default(0)
+  lastErrorCode       String?             @map("last_error_code") @db.VarChar(100)
+  sentAt              DateTime?           @map("sent_at") @db.Timestamptz(3)
+  deliveredAt         DateTime?           @map("delivered_at") @db.Timestamptz(3)
+  failedAt            DateTime?           @map("failed_at") @db.Timestamptz(3)
+  bouncedAt           DateTime?           @map("bounced_at") @db.Timestamptz(3)
+  complainedAt        DateTime?           @map("complained_at") @db.Timestamptz(3)
+  suppressedAt        DateTime?           @map("suppressed_at") @db.Timestamptz(3)
   providerLastEventAt DateTime?           @map("provider_last_event_at") @db.Timestamptz(3)
-  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   user             User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   templateRevision EmailTemplateRevision? @relation(fields: [templateRevisionId], references: [id], onDelete: Restrict)

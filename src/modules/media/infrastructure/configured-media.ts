@@ -1,4 +1,5 @@
 import "server-only";
+import { createHmac } from "node:crypto";
 
 import type { ImageProcessor } from "../application/image-processor";
 import type { MediaStore } from "../application/media-store";
@@ -13,6 +14,7 @@ import { getServerEnvironment } from "@/platform/config/env";
 
 import { SharpImageProcessor } from "./sharp-image-processor";
 import { TestFileMediaStore } from "./test-file-media-store";
+import { FileMediaStore } from "./file-media-store";
 import { VercelBlobMediaStore } from "./vercel-blob-media-store";
 
 class UnavailableMediaStore implements MediaStore {
@@ -62,9 +64,35 @@ export function createConfiguredMediaStore(): MediaStore {
     );
   }
   if (!environment.BLOB_READ_WRITE_TOKEN) {
+    if (
+      environment.APP_ENV === "local" &&
+      environment.AUTH_FINGERPRINT_SECRET
+    ) {
+      const signingSecret = createHmac(
+        "sha256",
+        environment.AUTH_FINGERPRINT_SECRET,
+      )
+        .update("local-private-media-v1")
+        .digest("hex");
+      return new FileMediaStore(
+        ".local/media",
+        signingSecret,
+        getServerApplicationUrl(),
+        "local",
+      );
+    }
     return new UnavailableMediaStore();
   }
   return new VercelBlobMediaStore(environment.BLOB_READ_WRITE_TOKEN);
+}
+
+export function createConfiguredLocalMediaStore(): FileMediaStore {
+  if (getServerEnvironment().APP_ENV !== "local")
+    throw new Error("Local uploads are disabled");
+  const store = createConfiguredMediaStore();
+  if (!(store instanceof FileMediaStore) || store.environment !== "local")
+    throw new Error("Local file storage is not active");
+  return store;
 }
 
 export function createConfiguredImageProcessor(): ImageProcessor {

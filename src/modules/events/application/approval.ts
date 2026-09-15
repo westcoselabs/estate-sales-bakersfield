@@ -24,6 +24,9 @@ function canonicalApprovalPayload(
     organizerId: event.organizerId,
     contentRevision: event.contentRevision,
     projection,
+    ...(event.addressRevealAt
+      ? { addressRevealAt: event.addressRevealAt.toISOString() }
+      : {}),
     privateLocationEvidence: event.location
       ? {
           normalizedAddress: event.location.normalizedAddress,

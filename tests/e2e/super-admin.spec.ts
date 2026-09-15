@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
+import { enrollAdministratorMfa } from "./admin-mfa-support";
 
 import { PrismaClient } from "@/generated/prisma/client";
 import { SYSTEM_EMAIL_DEFAULTS } from "@/modules/email/application/defaults";
@@ -58,12 +59,17 @@ async function registerAndVerify(
   await page.getByRole("button", { name: "Verify email" }).click();
 }
 
-async function login(page: Page, email: string, password: string) {
+async function login(
+  page: Page,
+  email: string,
+  password: string,
+  destination = /\/dashboard$/,
+) {
   await page.goto("/login");
   await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page).toHaveURL(destination);
 }
 
 test("guards and operates the focused owner portal on desktop and mobile", async ({
@@ -184,7 +190,7 @@ test("guards and operates the focused owner portal on desktop and mobile", async
   await prisma.$disconnect();
 
   await login(page, ownerEmail, ownerPassword);
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await enrollAdministratorMfa(page, ownerPassword);
   await page.goto("/admin");
   await expect(
     page.getByRole("heading", { name: "Website performance" }),

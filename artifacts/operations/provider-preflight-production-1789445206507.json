@@ -1,0 +1,58 @@
+{
+  "schema": "provider-preflight-v1",
+  "capturedAt": "2026-09-15T04:06:46.503Z",
+  "configurationSource": ".env",
+  "environment": "production",
+  "scope": "Read-only provider checks using a local configuration file; not an inventory of hosted Vercel variables",
+  "checks": [
+    {
+      "name": "database",
+      "status": "pass",
+      "detail": "Connection and PostGIS available; PostgreSQL 180006."
+    },
+    {
+      "name": "private-blob-token",
+      "status": "pass",
+      "detail": "Token accepted for reserved-prefix read. Upload/private-delivery smoke remains separate."
+    },
+    {
+      "name": "resend-sender-domain",
+      "status": "blocked",
+      "detail": "Sending-only key cannot inspect domains. Keep least-privilege key; verify sender DNS and inbox delivery in Resend separately."
+    },
+    {
+      "name": "geoapify",
+      "status": "pass",
+      "detail": "Public-city autocomplete succeeded. No personal address used or stored."
+    },
+    {
+      "name": "map-style",
+      "status": "pass",
+      "detail": "MapLibre style is reachable and structurally valid; individual tile delivery is not measured."
+    },
+    {
+      "name": "authentication-fingerprint",
+      "status": "blocked",
+      "detail": "Missing: AUTH_FINGERPRINT_SECRET"
+    },
+    {
+      "name": "worker-authorization",
+      "status": "pass",
+      "detail": "Setting present in supplied file; hosted configuration and delivery are unverified."
+    },
+    {
+      "name": "support-inbox",
+      "status": "blocked",
+      "detail": "Missing: PUBLIC_SUPPORT_EMAIL"
+    },
+    {
+      "name": "server-error-monitoring",
+      "status": "blocked",
+      "detail": "Missing: SENTRY_DSN"
+    }
+  ],
+  "payments": "deferred",
+  "emailSent": false,
+  "resourcesCreated": false,
+  "status": "blocked"
+}

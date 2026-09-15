@@ -7,7 +7,10 @@ import {
   AdminNotFoundError,
   createConfiguredAdminEventDetail,
 } from "@/modules/admin";
-import { getCurrentUser, requireSuperAdminPrincipal } from "@/modules/auth";
+import {
+  requireAdminPagePrincipal,
+  requireSuperAdminPrincipal,
+} from "@/modules/auth";
 
 import { ModerationActions } from "./_components/moderation-actions";
 import { CopyId } from "../../_components/copy-id";
@@ -38,7 +41,9 @@ export default async function AdminListingDetailPage({
 }: {
   params: Promise<{ eventId: string }>;
 }) {
-  const principal = requireSuperAdminPrincipal(await getCurrentUser());
+  const principal = requireSuperAdminPrincipal(
+    await requireAdminPagePrincipal(),
+  );
   const id = z
     .string()
     .uuid()

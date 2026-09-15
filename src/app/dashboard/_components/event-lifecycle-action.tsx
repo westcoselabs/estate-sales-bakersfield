@@ -120,7 +120,7 @@ export function EventLifecycleAction({
             <p id={disabledReason ? disabledDescriptionId : undefined}>
               {disabledReason ??
                 (canceling
-                  ? "The public listing and photos will be removed. Payment, publication, and audit records remain, and no refund is initiated."
+                  ? "The public listing and photos will be removed. Payment, publication, and audit records remain. Listing fees are non-refundable, including when you cancel."
                   : "The draft disappears from your account and its photos are permanently purged. This cannot be undone.")}
             </p>
           </div>
@@ -169,7 +169,9 @@ export function EventLifecycleAction({
             <div className="warning-box">
               Uploaded photos are permanently purged. Payment, publication, and
               audit records are retained.
-              {canceling ? " No refund is initiated." : ""}
+              {canceling
+                ? " Listing fees are non-refundable. Canceling this event does not qualify for a refund."
+                : ""}
             </div>
             <label htmlFor={`${kind}-event-confirmation-${eventId}`}>
               Type <strong>{phrase}</strong> to confirm

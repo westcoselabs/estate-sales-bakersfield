@@ -98,6 +98,7 @@ export interface PaymentAttemptRecord {
 export interface PublicationSnapshot {
   readonly schema: "estate-sales-publication-v1";
   readonly privacyMode: AddressPrivacyMode;
+  readonly addressRevealAt?: string | null | undefined;
   readonly projection: PublicEventProjection;
 }
 

@@ -6,7 +6,8 @@ export type AuthenticationRoute =
   | "LOGIN"
   | "RESEND_VERIFICATION"
   | "FORGOT_PASSWORD"
-  | "RESET_PASSWORD";
+  | "RESET_PASSWORD"
+  | "ADMIN_MFA";
 
 interface LimitPolicy {
   readonly ip: Pick<RateLimitInput, "limit" | "windowSeconds">;
@@ -16,6 +17,10 @@ interface LimitPolicy {
 export const AUTHENTICATION_LIMITS: Readonly<
   Record<AuthenticationRoute, LimitPolicy>
 > = {
+  ADMIN_MFA: {
+    ip: { limit: 20, windowSeconds: 15 * 60 },
+    subject: { limit: 10, windowSeconds: 15 * 60 },
+  },
   REGISTER: {
     ip: { limit: 5, windowSeconds: 15 * 60 },
     subject: { limit: 3, windowSeconds: 60 * 60 },

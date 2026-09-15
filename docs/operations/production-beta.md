@@ -29,6 +29,14 @@ authorization for live Stripe, real charges, public indexing, or public launch.
 - the existing test-mode webhook secret scoped to the stable Production
   `/api/webhooks/stripe` endpoint
 - independent Production `AUTH_FINGERPRINT_SECRET` and `CRON_SECRET`
+- optional `ADMIN_MFA_ENCRYPTION_KEY` only when an administrator elects to enroll;
+  password-only administrator access is supported. See [the MFA runbook](administrator-mfa.md)
+- `PUBLIC_INDEXING_ENABLED=false` and `PUBLIC_IMPORTED_INDEXING_ENABLED=false`
+- owner-approved `PUBLIC_SUPPORT_EMAIL` when the public support inbox is ready
+
+The search projection and MFA migrations must precede this application rollout.
+Follow the [migration prerequisites](launch-hardening-status-2026-09-15.md#migration-and-deployment-prerequisites),
+including a populated-data backfill rehearsal and administrator recovery preparation.
 
 Confirm variable names, scopes, and resource identities without displaying
 values. Do not create, rotate, copy, or replace a credential during ordinary
@@ -47,8 +55,10 @@ hour. Vercel Hobby does not guarantee a precise minute within either hour.
 Normal signed Stripe webhooks still fulfill immediately; the maintenance cron
 is the fallback for missing/delayed webhook reconciliation and also processes
 cleanup and media jobs. Queued receipts and contact synchronization may wait
-roughly one day, and a queue larger than the worker's ten-job batch can carry
-into later days. Treat sustained backlog as a stop condition and revisit the
+roughly one day, and work beyond the worker's bounded admission budget can carry
+into later days. Each invocation now admits up to 50 jobs, with concurrency two
+and a 20-second admission budget; that cap is not guaranteed throughput. See
+[worker limits](resource-limits-and-workers.md). Treat sustained backlog as a stop condition and revisit the
 scheduling plan before higher-volume launch.
 
 ## Migration gate

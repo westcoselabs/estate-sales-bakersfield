@@ -1,0 +1,37 @@
+{
+  "schema": "launch-migration-rehearsal-v1",
+  "capturedAt": "2026-09-15T02:43:13.584Z",
+  "runtime": "v24.11.1",
+  "limitations": [
+    "Synthetic populated-schema rehearsal, not a Production backup/restore or rollout.",
+    "Only the two new migrations are reversed, while the wrapper-owned schema is empty, then replayed over fixtures.",
+    "Migration SQL is executed transactionally in a DO block; Prisma deployment orchestration is outside this check.",
+    "Wall times include adapter/network overhead. No competing writers, Production inventory, or Production compute were measured."
+  ],
+  "fixtureSha256": "edf6161ddf640e467ef8258824513b2d7700c372a5f1b884bd530d0e5dd0a02b",
+  "migrations": [
+    {
+      "migration": "20260915010000_public_search_projection",
+      "sha256": "e6fe934bb5be6aaf6813e833e8269df2e41bd1d072d81239b11c4de1b58f71bd",
+      "wallMs": 313.366
+    },
+    {
+      "migration": "20260915020000_admin_mfa",
+      "sha256": "57d7989ff90a8cca633d087dafc09c6c2a78b36a9b6486df3bdedbcadc788f8f",
+      "wallMs": 206.147
+    }
+  ],
+  "evidence": {
+    "users": 100000,
+    "publications": 5000,
+    "documents": 5000,
+    "externalListings": 5000,
+    "mismatches": 0,
+    "oldUnverifiedSessions": 1,
+    "mfaCredentials": 0,
+    "mfaCascadeForeignKeys": 2,
+    "invalidIndexes": 0
+  },
+  "publicationSnapshotsUnchanged": true,
+  "status": "passed"
+}

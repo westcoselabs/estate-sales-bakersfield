@@ -71,10 +71,14 @@ only the application-owned marker DTO:
 - marker kind.
 
 Exact geometry is emitted only when the publication projection authorizes it.
-Approximate locations use a stable application-owned public-zone centroid.
-Hidden-until-start listings use that centroid before release and the confirmed
-exact point after authoritative release. Protected bounds filtering uses public
-zone geometry, never a rounded, jittered, truncated, or offset private point.
+Protected confirmed locations use the center of a fixed 0.01-degree neighborhood
+cell. Nearby houses in that cell share the same public point and a 750-meter
+area enclosing the cell. A broad map shows the point; neighborhood zoom shows
+the shaded area with a dashed outline. Unconfirmed locations retain the public
+zone centroid. Scheduled address hiding uses this protected geometry until the
+organizer-selected release instant, then the confirmed exact point. Protected
+bounds filtering uses the same public cell center, never the private point, so
+narrowing a viewport cannot disclose more than the displayed neighborhood.
 
 Title and description readiness also reject a normalized house-number and
 matching-street leak for protected privacy modes. Errors do not echo the
@@ -110,6 +114,16 @@ permanent confirmed-location storage.
 Google variables are not introduced. Mapbox configuration is removed only
 after the migration, legacy-row compatibility, deterministic suites, build,
 and hosted workflow pass verification.
+
+MapLibre 6 requires an explicit worker URL when bundled by Next.js.
+`prepare-maplibre-workers.ts` copies the installed version's worker and its
+shared module into `public/maplibre/<version>/` before local development,
+production builds, and isolated browser-test builds. Both map components use
+that same-origin worker URL. Generated worker files are ignored by Git;
+production start serves the files prepared during the build. This avoids Next
+emitting a worker asset without the sibling module it imports. The public-map
+browser test checks painted pin and neighborhood-circle pixels so a background
+with a working keyboard list cannot pass as a rendered map.
 
 ## Consequences
 

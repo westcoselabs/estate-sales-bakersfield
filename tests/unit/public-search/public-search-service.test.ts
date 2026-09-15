@@ -31,6 +31,7 @@ function source(input: {
   startsAt: string;
   eventType?: "ESTATE_SALE" | "YARD_SALE";
   privacyMode?: "EXACT_ADDRESS" | "APPROXIMATE_LOCATION" | "HIDDEN_UNTIL_START";
+  addressRevealAt?: string;
   addressKind?: "EXACT" | "APPROXIMATE";
   latitude?: number | null;
   longitude?: number | null;
@@ -77,6 +78,9 @@ function source(input: {
     snapshot: {
       schema: "estate-sales-publication-v1",
       privacyMode: input.privacyMode ?? "EXACT_ADDRESS",
+      ...(input.addressRevealAt
+        ? { addressRevealAt: input.addressRevealAt }
+        : {}),
       projection: {
         title: `Public sale ${input.publicId}`,
         description:
@@ -332,6 +336,7 @@ describe("PublicSearchService", () => {
       label: "Bakersfield, CA",
       city: "Bakersfield",
       region: "CA",
+      releasesAt: "2026-08-01T16:00:00.000Z",
     });
     expect(JSON.stringify(beforeStart)).not.toContain("123 Private Street");
   });
@@ -356,6 +361,49 @@ describe("PublicSearchService", () => {
       city: "Bakersfield",
       region: "CA",
     });
+  });
+
+  it("keeps a neighborhood marker private until the organizer-selected release instant", async () => {
+    const release = "2026-08-01T13:00:00.000Z";
+    const repository = new InMemoryPublicSearchRepository([
+      source({
+        publicId: "fed654cba321",
+        startsAt: "2026-08-01T16:00:00.000Z",
+        privacyMode: "HIDDEN_UNTIL_START",
+        addressRevealAt: release,
+        longitude: -119.023456,
+        latitude: 35.382345,
+      }),
+    ]);
+    const service = new PublicSearchService(repository);
+    const before = await service.search(
+      criteria({ view: "map" }),
+      new Date(new Date(release).getTime() - 1),
+    );
+    expect(before.items[0]?.location).toMatchObject({
+      kind: "hidden",
+      releasesAt: release,
+    });
+    expect(before.markers?.[0]).toMatchObject({
+      markerKind: "hidden",
+      geometry: { coordinates: [-119.025, 35.385] },
+      approximateRadiusMeters: 750,
+    });
+    expect(JSON.stringify(before)).not.toMatch(
+      /119\.023456|35\.382345|123 Private Street/,
+    );
+    const atRelease = await service.search(
+      criteria({ view: "map" }),
+      new Date(release),
+    );
+    expect(atRelease.items[0]?.location.kind).toBe("exact");
+    expect(atRelease.markers?.[0]).toMatchObject({
+      markerKind: "exact",
+      geometry: { coordinates: [-119.023456, 35.382345] },
+    });
+    expect(atRelease.markers?.[0]).not.toHaveProperty(
+      "approximateRadiusMeters",
+    );
   });
 
   it("returns marker IDs matching the loaded cards and protects non-exact geometry", async () => {
@@ -400,13 +448,15 @@ describe("PublicSearchService", () => {
       id: "222222222222",
       markerKind: "approximate",
       locationLabel: "Bakersfield area",
-      geometry: { coordinates: [-119.018712, 35.373292] },
+      geometry: { coordinates: [-118.665, 35.215] },
+      approximateRadiusMeters: 750,
     });
     expect(mapPage.markers?.[2]).toMatchObject({
       id: "333333333333",
       markerKind: "hidden",
       locationLabel: "Bakersfield area",
-      geometry: { coordinates: [-119.018712, 35.373292] },
+      geometry: { coordinates: [-118.775, 35.205] },
+      approximateRadiusMeters: 750,
     });
     const serialized = JSON.stringify(mapPage);
     expect(serialized).not.toContain("-118.66666");
@@ -488,7 +538,8 @@ describe("PublicSearchService", () => {
       resultKey: "external:eee111fff222",
       unclaimed: true,
       markerKind: "approximate",
-      geometry: { coordinates: [-119.018712, 35.373292] },
+      geometry: { coordinates: [-119.015, 35.375] },
+      approximateRadiusMeters: 750,
     });
   });
 

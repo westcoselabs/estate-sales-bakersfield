@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
-import { getCurrentUser, requireSuperAdminPrincipal } from "@/modules/auth";
+import {
+  requireAdminPagePrincipal,
+  requireSuperAdminPrincipal,
+} from "@/modules/auth";
 import { createConfiguredListingImportAdminQueryService } from "@/modules/listing-imports";
 
 import { CopyId } from "../../../_components/copy-id";
@@ -33,7 +36,9 @@ export default async function ExternalListingAdminPage({
 }: {
   params: Promise<{ listingId: string }>;
 }) {
-  const principal = requireSuperAdminPrincipal(await getCurrentUser());
+  const principal = requireSuperAdminPrincipal(
+    await requireAdminPagePrincipal(),
+  );
   const parsedId = z
     .string()
     .uuid()

@@ -10,6 +10,8 @@ import {
   InvalidPasswordError,
   InvalidTokenError,
   MalformedPasswordHashError,
+  MfaRequiredError,
+  MfaVerificationError,
   RateLimitExceededError,
 } from "@/modules/auth";
 import { getTrustedApplicationUrls } from "@/platform/config/application-url";
@@ -104,6 +106,20 @@ export function authenticationApiError(
   suppliedRequestId?: string,
 ): NextResponse {
   const requestId = suppliedRequestId ?? requestIdFrom(request);
+  if (
+    error instanceof MfaRequiredError ||
+    error instanceof MfaVerificationError
+  ) {
+    return authJson(
+      {
+        error: error.message,
+        code:
+          error instanceof MfaRequiredError ? "MFA_REQUIRED" : "MFA_INVALID",
+        requestId,
+      },
+      { status: error instanceof MfaRequiredError ? 403 : 401, requestId },
+    );
+  }
   if (
     error instanceof ZodError ||
     error instanceof SyntaxError ||

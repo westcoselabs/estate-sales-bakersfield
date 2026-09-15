@@ -29,7 +29,7 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   try {
-    const result = await runConfiguredJobBatch(10);
+    const result = await runConfiguredJobBatch(50);
     return Response.json(
       { requestId, ...result },
       { headers: { "cache-control": "no-store", "x-request-id": requestId } },

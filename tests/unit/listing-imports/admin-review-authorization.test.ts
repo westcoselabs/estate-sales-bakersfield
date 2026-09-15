@@ -39,6 +39,7 @@ function session(): CurrentSession {
     createdAt: new Date("2026-08-07T18:00:00.000Z"),
     expiresAt: new Date("2026-08-07T20:00:00.000Z"),
     passwordAuthenticatedAt: new Date("2026-08-07T18:00:00.000Z"),
+    mfaAuthenticatedAt: new Date("2026-08-07T18:00:00.000Z"),
     metadata: {},
     principal: {
       id: administratorId,
@@ -46,6 +47,7 @@ function session(): CurrentSession {
       email: "admin@example.test",
       emailVerifiedAt: new Date("2026-08-07T18:00:00.000Z"),
       role: "SUPER_ADMIN",
+      mfaAuthenticatedAt: new Date("2026-08-07T18:00:00.000Z"),
       status: "ACTIVE",
     },
   };

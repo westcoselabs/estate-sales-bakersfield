@@ -8,7 +8,7 @@ export function PublicListingActions({
   directionsUrl,
   title,
 }: {
-  readonly directionsUrl: string;
+  readonly directionsUrl: string | null;
   readonly title: string;
 }) {
   const [copied, setCopied] = useState(false);
@@ -33,10 +33,12 @@ export function PublicListingActions({
 
   return (
     <div className="public-listing-actions">
-      <a href={directionsUrl} target="_blank" rel="noopener noreferrer">
-        <Icon name="arrow" size={20} />
-        Get directions
-      </a>
+      {directionsUrl ? (
+        <a href={directionsUrl} target="_blank" rel="noopener noreferrer">
+          <Icon name="arrow" size={20} />
+          Get directions
+        </a>
+      ) : null}
       <button type="button" onClick={() => void shareListing()}>
         <Icon name="external" size={20} />
         {copied ? "Copied" : "Share"}

@@ -41,8 +41,8 @@ class ReleasedHiddenLocationProvider implements LocationProvider {
     return Promise.resolve({
       ...input,
       normalizedAddress: `${input.addressLine1}, ${input.city}, ${input.region} ${input.postalCode}, ${input.countryCode}`,
-      latitude: 35.55,
-      longitude: -119.25,
+      latitude: 35.55232,
+      longitude: -119.25231,
       providerPlaceId: "released-hidden-location",
       providerName: "integration-fixture",
       precision: "exact",
@@ -75,6 +75,14 @@ async function approveExternal(fixture: ReviewFixture) {
 interface OrganizerPublicationOptions {
   readonly coordinates?: readonly [longitude: number, latitude: number];
   readonly privacyMode?: "APPROXIMATE_LOCATION" | "HIDDEN_UNTIL_START";
+  readonly addressRevealAt?: string;
+  readonly scheduleDays?: readonly {
+    readonly date: string;
+    readonly startTime: string;
+    readonly endTime: string;
+    readonly startsAt: string;
+    readonly endsAt: string;
+  }[];
 }
 
 async function createPaidOrganizerPublication(
@@ -214,6 +222,9 @@ async function createPaidOrganizerPublication(
       snapshot: {
         schema: "estate-sales-publication-v1",
         privacyMode,
+        ...(options.addressRevealAt
+          ? { addressRevealAt: options.addressRevealAt }
+          : {}),
         projection: {
           title: fixture.content.title,
           description: fixture.content.description,
@@ -224,6 +235,9 @@ async function createPaidOrganizerPublication(
           timezone: fixture.content.timezone,
           localStartsAt: fixture.content.localStartsAt,
           localEndsAt: fixture.content.localEndsAt,
+          ...(options.scheduleDays
+            ? { scheduleDays: [...options.scheduleDays] }
+            : {}),
           address:
             privacyMode === "HIDDEN_UNTIL_START"
               ? {
@@ -257,6 +271,124 @@ async function createPaidOrganizerPublication(
 }
 
 describe("public search external listings", () => {
+  it("matches only selected sale dates and forwards each day's opening and closing hours", async () => {
+    const original = harness.nextFixture("Separate Sale Dates", {
+      calendarDate: "2125-11-04",
+    });
+    const fixture = {
+      ...original,
+      content: {
+        ...original.content,
+        localStartsAt: "2125-11-04T08:00",
+        localEndsAt: "2125-11-06T13:00",
+      },
+      normalized: {
+        ...original.normalized,
+        startsAt: new Date("2125-11-04T16:00:00Z"),
+        endsAt: new Date("2125-11-06T21:00:00Z"),
+      },
+    };
+    const scheduleDays = [
+      {
+        date: "2125-11-04",
+        startTime: "08:00",
+        endTime: "13:00",
+        startsAt: "2125-11-04T16:00:00.000Z",
+        endsAt: "2125-11-04T21:00:00.000Z",
+      },
+      {
+        date: "2125-11-06",
+        startTime: "08:00",
+        endTime: "13:00",
+        startsAt: "2125-11-06T16:00:00.000Z",
+        endsAt: "2125-11-06T21:00:00.000Z",
+      },
+    ];
+    const organizer = await createPaidOrganizerPublication(fixture, {
+      scheduleDays,
+    });
+    const now = new Date("2125-11-03T12:00:00Z");
+    for (const day of ["2125-11-04", "2125-11-06"]) {
+      const page = await search.search(
+        { ...criteria, date: "custom", from: day, to: day },
+        now,
+      );
+      expect(
+        page.items.find((item) => item.id === organizer.publicId)?.scheduleDays,
+      ).toEqual(scheduleDays);
+    }
+    const closedDay = await search.search(
+      { ...criteria, date: "custom", from: "2125-11-05", to: "2125-11-05" },
+      now,
+    );
+    expect(closedDay.items.some((item) => item.id === organizer.publicId)).toBe(
+      false,
+    );
+  });
+
+  it("derives immutable search fields from publication and advances cache visibility atomically", async () => {
+    const fixture = harness.nextFixture("Immutable Search Document", {
+      calendarDate: "2125-10-01",
+    });
+    const organizer = await createPaidOrganizerPublication(fixture);
+    const publication = await prisma.eventPublication.findUniqueOrThrow({
+      where: { eventId: organizer.eventId },
+      include: { searchDocument: true },
+    });
+    expect(publication.searchDocument).toMatchObject({
+      publicationId: publication.id,
+      publicId: organizer.publicId,
+      eventType: fixture.content.eventType,
+      startsAt: fixture.normalized.startsAt,
+      endsAt: fixture.normalized.endsAt,
+      city: fixture.content.city,
+      region: fixture.content.region,
+    });
+    await expect(
+      prisma.publicationSearchDocument.update({
+        where: { publicationId: publication.id },
+        data: { city: "Elsewhere" },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      prisma.publicationSearchDocument.delete({
+        where: { publicationId: publication.id },
+      }),
+    ).rejects.toThrow();
+
+    const queryCriteria: PublicSearchCriteria = {
+      ...criteria,
+      date: "custom",
+      from: "2125-10-01",
+      to: "2125-10-01",
+    };
+    const at = new Date("2125-09-30T00:00:00Z");
+    expect(
+      (await search.search(queryCriteria, at)).items.some(
+        (item) => item.id === organizer.publicId,
+      ),
+    ).toBe(true);
+    const [before] = await prisma.$queryRaw<
+      { revision: bigint }[]
+    >`SELECT "revision" FROM "public_search_revision" WHERE "id" = 1`;
+    await prisma.event.update({
+      where: { id: organizer.eventId },
+      data: {
+        canceledAt: new Date(),
+        cancellationReason: "Integration visibility check",
+      },
+    });
+    const [after] = await prisma.$queryRaw<
+      { revision: bigint }[]
+    >`SELECT "revision" FROM "public_search_revision" WHERE "id" = 1`;
+    expect(after!.revision).toBeGreaterThan(before!.revision);
+    expect(
+      (await search.search(queryCriteria, at)).items.some(
+        (item) => item.id === organizer.publicId,
+      ),
+    ).toBe(false);
+  });
+
   it("returns only currently active published external listings", async () => {
     const fixture = harness.nextFixture("Public Search Active External");
     const approved = await approveExternal(fixture);
@@ -471,10 +603,10 @@ describe("public search external listings", () => {
       ...criteria,
       view: "map",
       bounds: {
-        west: -119.3,
-        south: 35.5,
-        east: -119.2,
-        north: 35.6,
+        west: -119.253,
+        south: 35.552,
+        east: -119.252,
+        north: 35.553,
       },
     };
     const startsAt = fixture.normalized.startsAt.getTime();
@@ -506,20 +638,24 @@ describe("public search external listings", () => {
       ),
     ).toMatchObject({
       markerKind: "exact",
-      geometry: { coordinates: [-119.25, 35.55] },
+      geometry: { coordinates: [-119.25231, 35.55232] },
     });
   });
 
-  it("switches organizer bounds from the protected centroid to exact coordinates at release", async () => {
+  it("switches organizer bounds from the protected neighborhood to exact coordinates at the selected release", async () => {
     const calendarDate = "2125-09-01";
     const fixture = harness.nextFixture("Organizer Hidden Bounds", {
       calendarDate,
     });
+    const release = new Date(
+      fixture.normalized.startsAt.getTime() - 2 * 60 * 60 * 1000,
+    );
     const organizer = await createPaidOrganizerPublication(fixture, {
-      coordinates: [-119.25, 35.55],
+      coordinates: [-119.25231, 35.55232],
       privacyMode: "HIDDEN_UNTIL_START",
+      addressRevealAt: release.toISOString(),
     });
-    const startsAt = fixture.normalized.startsAt.getTime();
+    const releasesAt = release.getTime();
     const mapCriteria: PublicSearchCriteria = {
       ...criteria,
       date: "custom",
@@ -528,22 +664,22 @@ describe("public search external listings", () => {
       view: "map",
     };
     const protectedBounds = {
-      west: -119.05,
-      south: 35.35,
-      east: -119,
-      north: 35.4,
+      west: -119.256,
+      south: 35.554,
+      east: -119.254,
+      north: 35.556,
     };
     const exactBounds = {
-      west: -119.3,
-      south: 35.5,
-      east: -119.2,
-      north: 35.6,
+      west: -119.253,
+      south: 35.552,
+      east: -119.252,
+      north: 35.553,
     };
     const resultKey = `event:${organizer.publicId}`;
 
     const beforeReleaseAtProtectedBounds = await search.search(
       { ...mapCriteria, bounds: protectedBounds },
-      new Date(startsAt - 1),
+      new Date(releasesAt - 1),
     );
     expect(
       beforeReleaseAtProtectedBounds.items.find(
@@ -556,12 +692,13 @@ describe("public search external listings", () => {
       ),
     ).toMatchObject({
       markerKind: "hidden",
-      geometry: { coordinates: [-119.018712, 35.373292] },
+      geometry: { coordinates: [-119.255, 35.555] },
+      approximateRadiusMeters: 750,
     });
 
     const beforeReleaseAtExactBounds = await search.search(
       { ...mapCriteria, bounds: exactBounds },
-      new Date(startsAt - 1),
+      new Date(releasesAt - 1),
     );
     expect(
       beforeReleaseAtExactBounds.items.some(
@@ -571,7 +708,7 @@ describe("public search external listings", () => {
 
     const afterReleaseAtProtectedBounds = await search.search(
       { ...mapCriteria, bounds: protectedBounds },
-      new Date(startsAt + 1),
+      new Date(releasesAt),
     );
     expect(
       afterReleaseAtProtectedBounds.items.some(
@@ -581,7 +718,7 @@ describe("public search external listings", () => {
 
     const afterReleaseAtExactBounds = await search.search(
       { ...mapCriteria, bounds: exactBounds },
-      new Date(startsAt + 1),
+      new Date(releasesAt),
     );
     expect(
       afterReleaseAtExactBounds.items.find(
@@ -594,7 +731,7 @@ describe("public search external listings", () => {
       ),
     ).toMatchObject({
       markerKind: "exact",
-      geometry: { coordinates: [-119.25, 35.55] },
+      geometry: { coordinates: [-119.25231, 35.55232] },
     });
   });
 });

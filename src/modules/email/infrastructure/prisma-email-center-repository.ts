@@ -1,3 +1,5 @@
+import { AuthorizationError } from "@/modules/auth";
+import { authorizedAdministratorSession } from "@/platform/database/admin-session-authorization";
 import "server-only";
 
 import { MARKETING_CONSENT_VERSION } from "@/modules/auth";
@@ -72,11 +74,22 @@ export class PrismaEmailCenterRepository {
     subject: string;
     html: string;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }) {
     const html = sanitizeEmailHtml(input.html);
     const digest = emailContentDigest(input.subject, html);
     return this.prisma.$transaction(async (tx) => {
+      if (
+        !(await authorizedAdministratorSession(tx, {
+          userId: input.actorId,
+          sessionId: input.actorSessionId,
+          requireRecent: false,
+        }))
+      )
+        throw new AuthorizationError(
+          "Current administrator verification is required.",
+        );
       const created = await tx.emailTemplate.create({
         data: {
           name: input.name,
@@ -102,35 +115,52 @@ export class PrismaEmailCenterRepository {
   }
 
   async saveDraft(input: {
+    actorId: string;
+    actorSessionId: string;
     id: string;
     subject: string;
     html: string;
     expectedVersion: number;
   }) {
-    const html = sanitizeEmailHtml(input.html);
-    const digest = emailContentDigest(input.subject, html);
-    const updated = await this.prisma.emailTemplate.updateMany({
-      where: {
-        id: input.id,
-        draftVersion: input.expectedVersion,
-        archivedAt: null,
-      },
-      data: {
-        draftSubject: input.subject,
-        draftHtml: html,
-        draftDigest: digest,
-        draftVersion: { increment: 1 },
-        lastTestedAt: null,
-        lastTestedDigest: null,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      if (
+        !(await authorizedAdministratorSession(tx, {
+          userId: input.actorId,
+          sessionId: input.actorSessionId,
+        }))
+      )
+        throw new AuthorizationError(
+          "Current administrator verification is required.",
+        );
+
+      const html = sanitizeEmailHtml(input.html);
+      const digest = emailContentDigest(input.subject, html);
+      const updated = await tx.emailTemplate.updateMany({
+        where: {
+          id: input.id,
+          draftVersion: input.expectedVersion,
+          archivedAt: null,
+        },
+        data: {
+          draftSubject: input.subject,
+          draftHtml: html,
+          draftDigest: digest,
+          draftVersion: { increment: 1 },
+          lastTestedAt: null,
+          lastTestedDigest: null,
+        },
+      });
+      if (!updated.count)
+        throw new EmailApplicationError(
+          "STALE_DRAFT",
+          "This draft changed. Reload it before saving again.",
+          409,
+        );
+      return tx.emailTemplate.findUnique({
+        where: { id: input.id },
+        select: templateSelect,
+      });
     });
-    if (!updated.count)
-      throw new EmailApplicationError(
-        "STALE_DRAFT",
-        "This draft changed. Reload it before saving again.",
-        409,
-      );
-    return this.getTemplate(input.id);
   }
 
   async markTested(input: {
@@ -138,27 +168,40 @@ export class PrismaEmailCenterRepository {
     digest: string;
     testedAt: Date;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }) {
-    const updated = await this.prisma.emailTemplate.updateMany({
-      where: { id: input.id, draftDigest: input.digest, archivedAt: null },
-      data: { lastTestedDigest: input.digest, lastTestedAt: input.testedAt },
-    });
-    if (!updated.count)
-      throw new EmailApplicationError(
-        "STALE_DRAFT",
-        "The draft changed before the test completed.",
-        409,
-      );
-    await this.prisma.auditEntry.create({
-      data: {
-        actorUserId: input.actorId,
-        action: "EMAIL_TEMPLATE_TESTED",
-        targetType: "EMAIL_TEMPLATE",
-        targetId: input.id,
-        requestId: input.requestId ?? null,
-        metadata: { contentDigest: input.digest },
-      },
+    return this.prisma.$transaction(async (tx) => {
+      if (
+        !(await authorizedAdministratorSession(tx, {
+          userId: input.actorId,
+          sessionId: input.actorSessionId,
+        }))
+      )
+        throw new AuthorizationError(
+          "Current administrator verification is required.",
+        );
+
+      const updated = await tx.emailTemplate.updateMany({
+        where: { id: input.id, draftDigest: input.digest, archivedAt: null },
+        data: { lastTestedDigest: input.digest, lastTestedAt: input.testedAt },
+      });
+      if (!updated.count)
+        throw new EmailApplicationError(
+          "STALE_DRAFT",
+          "The draft changed before the test completed.",
+          409,
+        );
+      await tx.auditEntry.create({
+        data: {
+          actorUserId: input.actorId,
+          action: "EMAIL_TEMPLATE_TESTED",
+          targetType: "EMAIL_TEMPLATE",
+          targetId: input.id,
+          requestId: input.requestId ?? null,
+          metadata: { contentDigest: input.digest },
+        },
+      });
     });
   }
 
@@ -166,11 +209,22 @@ export class PrismaEmailCenterRepository {
     id: string;
     expectedVersion: number;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
     now: Date;
   }) {
     return this.prisma.$transaction(
       async (tx) => {
+        if (
+          !(await authorizedAdministratorSession(tx, {
+            userId: input.actorId,
+            sessionId: input.actorSessionId,
+            requireRecent: true,
+          }))
+        )
+          throw new AuthorizationError(
+            "Current administrator verification is required.",
+          );
         const template = await tx.emailTemplate.findUnique({
           where: { id: input.id },
           include: {
@@ -247,9 +301,20 @@ export class PrismaEmailCenterRepository {
     id: string;
     revisionId: string;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }) {
     await this.prisma.$transaction(async (tx) => {
+      if (
+        !(await authorizedAdministratorSession(tx, {
+          userId: input.actorId,
+          sessionId: input.actorSessionId,
+          requireRecent: true,
+        }))
+      )
+        throw new AuthorizationError(
+          "Current administrator verification is required.",
+        );
       const revision = await tx.emailTemplateRevision.findFirst({
         where: { id: input.revisionId, templateId: input.id },
       });
@@ -276,7 +341,12 @@ export class PrismaEmailCenterRepository {
     });
   }
 
-  async archive(input: { id: string; actorId: string; requestId?: string }) {
+  async archive(input: {
+    id: string;
+    actorId: string;
+    actorSessionId: string;
+    requestId?: string;
+  }) {
     const template = await this.prisma.emailTemplate.findUnique({
       where: { id: input.id },
       select: { key: true },
@@ -294,6 +364,16 @@ export class PrismaEmailCenterRepository {
         409,
       );
     await this.prisma.$transaction(async (tx) => {
+      if (
+        !(await authorizedAdministratorSession(tx, {
+          userId: input.actorId,
+          sessionId: input.actorSessionId,
+          requireRecent: true,
+        }))
+      )
+        throw new AuthorizationError(
+          "Current administrator verification is required.",
+        );
       await tx.emailTemplate.update({
         where: { id: input.id },
         data: { archivedAt: new Date() },
@@ -389,6 +469,7 @@ export class PrismaEmailCenterRepository {
     selectionMode: "ALL_ELIGIBLE" | "SELECTED_USERS";
     selectedUserIds: string[];
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }) {
     const options = await this.campaignComposerOptions();
@@ -418,6 +499,16 @@ export class PrismaEmailCenterRepository {
       type: listing.eventType,
     }));
     return this.prisma.$transaction(async (tx) => {
+      if (
+        !(await authorizedAdministratorSession(tx, {
+          userId: input.actorId,
+          sessionId: input.actorSessionId,
+          requireRecent: false,
+        }))
+      )
+        throw new AuthorizationError(
+          "Current administrator verification is required.",
+        );
       const created = await tx.emailCampaign.create({
         data: {
           name: input.name,
@@ -469,9 +560,20 @@ export class PrismaEmailCenterRepository {
     subject: string;
     previewText?: string;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }) {
     await this.prisma.$transaction(async (tx) => {
+      if (
+        !(await authorizedAdministratorSession(tx, {
+          userId: input.actorId,
+          sessionId: input.actorSessionId,
+          requireRecent: false,
+        }))
+      )
+        throw new AuthorizationError(
+          "Current administrator verification is required.",
+        );
       const updated = await tx.emailCampaign.updateMany({
         where: {
           id: input.id,
@@ -542,19 +644,36 @@ export class PrismaEmailCenterRepository {
     });
   }
 
-  async markCampaignTested(id: string, actorId: string, requestId?: string) {
-    await this.prisma.emailCampaign.update({
-      where: { id, status: "DRAFT" },
-      data: { testedAt: new Date() },
-    });
-    await this.prisma.auditEntry.create({
-      data: {
-        actorUserId: actorId,
-        action: "EMAIL_CAMPAIGN_TESTED",
-        targetType: "EMAIL_CAMPAIGN",
-        targetId: id,
-        requestId: requestId ?? null,
-      },
+  async markCampaignTested(
+    id: string,
+    actorId: string,
+    actorSessionId: string,
+    requestId?: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      if (
+        !(await authorizedAdministratorSession(tx, {
+          userId: actorId,
+          sessionId: actorSessionId,
+        }))
+      )
+        throw new AuthorizationError(
+          "Current administrator verification is required.",
+        );
+
+      await tx.emailCampaign.update({
+        where: { id, status: "DRAFT" },
+        data: { testedAt: new Date() },
+      });
+      await tx.auditEntry.create({
+        data: {
+          actorUserId: actorId,
+          action: "EMAIL_CAMPAIGN_TESTED",
+          targetType: "EMAIL_CAMPAIGN",
+          targetId: id,
+          requestId: requestId ?? null,
+        },
+      });
     });
   }
 
@@ -562,10 +681,21 @@ export class PrismaEmailCenterRepository {
     id: string;
     expectedVersion: number;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }) {
     return this.prisma.$transaction(
       async (tx) => {
+        if (
+          !(await authorizedAdministratorSession(tx, {
+            userId: input.actorId,
+            sessionId: input.actorSessionId,
+            requireRecent: true,
+          }))
+        )
+          throw new AuthorizationError(
+            "Current administrator verification is required.",
+          );
         const campaign = await tx.emailCampaign.findUnique({
           where: { id: input.id },
           include: { recipients: true },

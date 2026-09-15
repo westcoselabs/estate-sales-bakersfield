@@ -6,7 +6,10 @@ import { getServerEnvironment } from "@/platform/config/env";
 import { createConfiguredEmailGateway } from "./configured-email";
 import { EmailJobProcessor } from "./email-job-processor";
 
-export function runConfiguredEmailJobBatch(limit = 10) {
+export function runConfiguredEmailJobBatch(
+  limit = 50,
+  deadlineAt = new Date(Date.now() + 20_000),
+) {
   const processor = new EmailJobProcessor(
     getPrismaClient(),
     createConfiguredEmailGateway(),
@@ -56,6 +59,13 @@ export function runConfiguredEmailJobBatch(limit = 10) {
         );
       },
     },
-    { queue: "email", workerId: `email-vercel-${randomUUID()}`, limit },
+    {
+      queue: "email",
+      workerId: `email-vercel-${randomUUID()}`,
+      limit,
+      concurrency: 2,
+      drain: true,
+      deadlineAt,
+    },
   );
 }

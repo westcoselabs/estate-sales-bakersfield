@@ -1,3 +1,4 @@
+import { administratorMfaProof } from "./admin-mfa-fixtures";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import type { PrismaClient } from "@/generated/prisma/client";
@@ -210,6 +211,7 @@ export class ListingImportReviewHarness {
         actor: {
           kind: "ADMIN_USER",
           adminUserId: this.administratorId,
+          adminSessionId: this.administratorSessionId,
         },
         audit: { requestId: this.identifier("finding-six-import") },
       },
@@ -245,6 +247,11 @@ export class ListingImportReviewHarness {
           .digest("hex"),
         expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
         passwordAuthenticatedAt: now,
+        ...(await administratorMfaProof(
+          this.prisma,
+          this.administratorId,
+          now,
+        )),
       },
       select: { id: true },
     });
@@ -289,6 +296,7 @@ export async function createListingImportReviewHarness(
         .digest("hex"),
       expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
       passwordAuthenticatedAt: now,
+      ...(await administratorMfaProof(prisma, administrator.id, now)),
     },
     select: { id: true },
   });

@@ -46,6 +46,11 @@ const questions = [
       "Payment is available after the current listing revision is complete and approved. A checkout return alone does not confirm publication. The dashboard shows the authoritative payment and publication status.",
   },
   {
+    question: "Can I cancel my event, and will I receive a refund?",
+    answer:
+      "Yes. You can cancel your published event from your dashboard. The public listing is removed and its uploaded photos are scheduled for permanent removal. Listing fees are non-refundable, including when you cancel an event. Your payment and publication records are retained.",
+  },
+  {
     question: "Does the listing fee include professional estate-sale services?",
     answer:
       "No. The platform listing workflow and Simply Decorated professional estate-sale services are separate. Professional help with organizing, pricing, staging, and promotion is not included in platform checkout.",

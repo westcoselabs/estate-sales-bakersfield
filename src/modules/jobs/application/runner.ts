@@ -7,6 +7,10 @@ export interface RunJobBatchOptions {
   readonly now?: () => Date;
   readonly random?: () => number;
   readonly staleLockMs?: number;
+  readonly concurrency?: number;
+  readonly drain?: boolean;
+  readonly deadlineAt?: Date;
+  readonly minimumRemainingMs?: number;
 }
 
 export interface RunJobBatchResult {
@@ -58,19 +62,20 @@ export async function runJobBatch(
     new Date(startedAt.getTime() - (options.staleLockMs ?? 10 * 60 * 1000)),
     startedAt,
   );
-  const jobs = await repository.claim({
-    queue: options.queue,
-    workerId: options.workerId,
-    limit: Math.min(Math.max(options.limit ?? 10, 1), 50),
-    now: startedAt,
-  });
-
+  const limit = Math.min(Math.max(Math.floor(options.limit ?? 10), 1), 50);
+  const concurrency = Math.min(
+    Math.max(Math.floor(options.concurrency ?? 1), 1),
+    4,
+  );
+  let claimed = 0;
   let succeeded = 0;
   let retried = 0;
   let dead = 0;
   let lostLocks = 0;
 
-  for (const job of jobs) {
+  async function processJob(
+    job: Awaited<ReturnType<DurableJobRepository["claim"]>>[number],
+  ) {
     try {
       const handler = handlers[job.type];
       if (!handler) throw new Error(`No handler is registered for ${job.type}`);
@@ -101,8 +106,37 @@ export async function runJobBatch(
     }
   }
 
+  do {
+    // Claim only work that can start now. A deadline never strands a large
+    // preclaimed batch while previous handlers wait on external providers.
+    if (
+      options.deadlineAt &&
+      options.deadlineAt.getTime() - now().getTime() <=
+        (options.minimumRemainingMs ?? 5_000)
+    )
+      break;
+    const jobs = await repository.claim({
+      queue: options.queue,
+      workerId: options.workerId,
+      limit: options.drain ? Math.min(concurrency, limit - claimed) : limit,
+      now: now(),
+    });
+    if (jobs.length === 0) break;
+    claimed += jobs.length;
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, jobs.length) }, async () => {
+        while (next < jobs.length) {
+          const job = jobs[next++];
+          if (job) await processJob(job);
+        }
+      }),
+    );
+    if (!options.drain) break;
+  } while (claimed < limit);
+
   return {
-    claimed: jobs.length,
+    claimed,
     succeeded,
     retried,
     dead,

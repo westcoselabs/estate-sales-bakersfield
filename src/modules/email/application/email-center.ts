@@ -42,6 +42,7 @@ export class EmailCenterService {
     return this.repository.createTemplate({
       ...input,
       actorId: actor.id,
+      actorSessionId: session!.id,
       ...(requestId ? { requestId } : {}),
     });
   }
@@ -51,7 +52,7 @@ export class EmailCenterService {
     id: string,
     input: { subject: string; html: string; expectedVersion: number },
   ) {
-    requireSuperAdminPrincipal(session?.principal ?? null);
+    const actor = requireSuperAdminPrincipal(session?.principal ?? null);
     const html = sanitizeEmailHtml(input.html);
     if (!input.subject.trim())
       throw new EmailApplicationError(
@@ -60,6 +61,8 @@ export class EmailCenterService {
         400,
       );
     return this.repository.saveDraft({
+      actorId: actor.id,
+      actorSessionId: session!.id,
       id,
       subject: input.subject.trim(),
       html,
@@ -122,6 +125,7 @@ export class EmailCenterService {
       digest: template.draftDigest,
       testedAt: new Date(),
       actorId: actor.id,
+      actorSessionId: session!.id,
       ...(requestId ? { requestId } : {}),
     });
   }
@@ -143,6 +147,7 @@ export class EmailCenterService {
       id,
       expectedVersion: input.expectedVersion,
       actorId: recent.principal.id,
+      actorSessionId: recent.id,
       now: new Date(),
       ...(requestId ? { requestId } : {}),
     });
@@ -159,6 +164,7 @@ export class EmailCenterService {
       id,
       revisionId,
       actorId: recent.principal.id,
+      actorSessionId: recent.id,
       ...(requestId ? { requestId } : {}),
     });
   }
@@ -168,6 +174,7 @@ export class EmailCenterService {
     return this.repository.archive({
       id,
       actorId: recent.principal.id,
+      actorSessionId: recent.id,
       ...(requestId ? { requestId } : {}),
     });
   }
@@ -199,6 +206,7 @@ export class EmailCenterService {
     return this.repository.createCampaign({
       ...input,
       actorId: actor.id,
+      actorSessionId: session!.id,
       ...(requestId ? { requestId } : {}),
     });
   }
@@ -219,6 +227,7 @@ export class EmailCenterService {
       id,
       ...input,
       actorId: actor.id,
+      actorSessionId: session!.id,
       ...(requestId ? { requestId } : {}),
     });
   }
@@ -270,7 +279,12 @@ export class EmailCenterService {
       idempotencyKey: `campaign-test-${campaign.id}-${campaign.version}-${requestId ?? actor.id}`,
       tags: { type: "campaign-test" },
     });
-    await this.repository.markCampaignTested(id, actor.id, requestId);
+    await this.repository.markCampaignTested(
+      id,
+      actor.id,
+      session!.id,
+      requestId,
+    );
   }
 
   sendCampaign(
@@ -297,6 +311,7 @@ export class EmailCenterService {
       id,
       expectedVersion: input.expectedVersion,
       actorId: recent.principal.id,
+      actorSessionId: recent.id,
       ...(requestId ? { requestId } : {}),
     });
   }

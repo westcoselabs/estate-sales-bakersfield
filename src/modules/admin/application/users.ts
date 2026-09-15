@@ -147,8 +147,13 @@ export class AdminUserManagement {
       requestId?: string;
     },
   ) {
-    const admin = authorizeRecentAdminService(session).principal;
-    return this.repository.restrict({ ...input, actorId: admin.id });
+    const recent = authorizeRecentAdminService(session);
+    const admin = recent.principal;
+    return this.repository.restrict({
+      ...input,
+      actorId: admin.id,
+      actorSessionId: recent.id,
+    });
   }
 
   async restore(
@@ -159,16 +164,26 @@ export class AdminUserManagement {
       requestId?: string;
     },
   ) {
-    const admin = authorizeRecentAdminService(session).principal;
-    return this.repository.restore({ ...input, actorId: admin.id });
+    const recent = authorizeRecentAdminService(session);
+    const admin = recent.principal;
+    return this.repository.restore({
+      ...input,
+      actorId: admin.id,
+      actorSessionId: recent.id,
+    });
   }
 
   async revokeSessions(
     session: CurrentSession | null,
     input: { targetId: string; requestId?: string },
   ) {
-    const admin = authorizeRecentAdminService(session).principal;
-    return this.repository.revokeSessions({ ...input, actorId: admin.id });
+    const recent = authorizeRecentAdminService(session);
+    const admin = recent.principal;
+    return this.repository.revokeSessions({
+      ...input,
+      actorId: admin.id,
+      actorSessionId: recent.id,
+    });
   }
 
   async resendTarget(principal: AuthPrincipal | null, targetId: string) {
@@ -218,7 +233,8 @@ export class AdminMarketingExport {
     search: string,
     requestId: string,
   ) {
-    const admin = authorizeRecentAdminService(session).principal;
+    const recent = authorizeRecentAdminService(session);
+    const admin = recent.principal;
     const rows = await this.repository.contactExport(search, 10_001);
     if (rows.length > 10_000) throw new AdminExportLimitError();
     const data = rows.map((user) => {
@@ -239,6 +255,7 @@ export class AdminMarketingExport {
     });
     await this.repository.auditExport({
       actorId: admin.id,
+      actorSessionId: recent.id,
       requestId,
       searched: Boolean(search),
       rowCount: data.length,

@@ -42,11 +42,19 @@ export interface PublicListingCardProjection {
   readonly localStartsAt: string;
   readonly localEndsAt: string;
   readonly timezone: string;
+  readonly scheduleDays?: readonly {
+    readonly date: string;
+    readonly startTime: string;
+    readonly endTime: string;
+    readonly startsAt: string;
+    readonly endsAt: string;
+  }[];
   readonly location: {
     readonly kind: "exact" | "approximate" | "hidden";
     readonly label: string;
     readonly city: string;
     readonly region: string;
+    readonly releasesAt?: string;
   };
   readonly coverPhotoUrl: string;
 }
@@ -65,6 +73,7 @@ export interface PublicMapMarkerProjection {
   readonly localStartsAt: string;
   readonly localEndsAt: string;
   readonly timezone: string;
+  readonly scheduleDays?: PublicListingCardProjection["scheduleDays"];
   readonly locationLabel: string;
   readonly coverPhotoUrl: string;
   readonly geometry: {
@@ -72,6 +81,7 @@ export interface PublicMapMarkerProjection {
     readonly coordinates: readonly [longitude: number, latitude: number];
   };
   readonly markerKind: "exact" | "approximate" | "hidden";
+  readonly approximateRadiusMeters?: number;
 }
 
 export interface PublicSearchPage {

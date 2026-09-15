@@ -17,7 +17,7 @@ import {
   InvalidTokenError,
   MalformedPasswordHashError,
 } from "../domain/errors";
-import { requireSuperAdminPrincipal } from "./guards";
+import { requireSuperAdminIdentity } from "./guards";
 import type {
   AccountSummary,
   AuthPrincipal,
@@ -180,7 +180,7 @@ export class AuthenticationWorkflowService {
     metadata: SessionMetadata = {},
     audit: AuditContext = {},
   ): Promise<SessionGrant> {
-    const administrator = requireSuperAdminPrincipal(principal);
+    const administrator = requireSuperAdminIdentity(principal);
     const account = await this.accounts.findByNormalizedEmail(
       administrator.email,
     );

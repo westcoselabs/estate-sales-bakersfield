@@ -27,7 +27,7 @@ export async function completeOrganizerProfile(
   await page.goto("/dashboard");
 }
 
-export async function chooseSingleDaySchedule(
+export async function chooseSaleDate(
   page: Page,
   dateKey: string,
 ): Promise<void> {
@@ -57,13 +57,22 @@ export async function chooseSingleDaySchedule(
 
   const day = calendar.getByRole("button", { name: targetDay });
   await day.click();
-  await day.click();
+  await expect(day).toHaveAttribute("aria-pressed", "true");
+}
+
+export async function chooseSingleDaySchedule(
+  page: Page,
+  dateKey: string,
+): Promise<void> {
+  await chooseSaleDate(page, dateKey);
   await expect(
     page.getByRole("region", { name: "Sale schedule details" }),
-  ).toContainText("Sale:");
-  await expect(page.getByRole("textbox", { name: "Timezone" })).toHaveValue(
-    "America/Los_Angeles",
-  );
+  ).toContainText("1 sale day selected");
+  await expect(page.getByLabel(/^Start time for/)).toHaveValue("08:00");
+  await expect(page.getByLabel(/^End time for/)).toHaveValue("13:00");
+  await expect(
+    page.getByText("All dates and times are in Pacific Time (US/Pacific)."),
+  ).toBeVisible();
 }
 
 export async function choosePhotoCover(

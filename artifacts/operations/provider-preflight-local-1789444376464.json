@@ -1,0 +1,58 @@
+{
+  "schema": "provider-preflight-v1",
+  "capturedAt": "2026-09-15T03:52:56.463Z",
+  "configurationSource": ".env.local",
+  "environment": "local",
+  "scope": "Read-only provider checks using a local configuration file; not an inventory of hosted Vercel variables",
+  "checks": [
+    {
+      "name": "database",
+      "status": "pass",
+      "detail": "Connection and PostGIS available; PostgreSQL 180006."
+    },
+    {
+      "name": "private-blob-token",
+      "status": "blocked",
+      "detail": "Missing: BLOB_READ_WRITE_TOKEN"
+    },
+    {
+      "name": "resend-sender-domain",
+      "status": "blocked",
+      "detail": "Missing: RESEND_API_KEY, RESEND_FROM"
+    },
+    {
+      "name": "geoapify",
+      "status": "blocked",
+      "detail": "Missing: GEOAPIFY_API_KEY"
+    },
+    {
+      "name": "map-style",
+      "status": "pass",
+      "detail": "MapLibre style is reachable and structurally valid; individual tile delivery is not measured."
+    },
+    {
+      "name": "authentication-fingerprint",
+      "status": "pass",
+      "detail": "Setting present in supplied file; hosted configuration and delivery are unverified."
+    },
+    {
+      "name": "worker-authorization",
+      "status": "pass",
+      "detail": "Setting present in supplied file; hosted configuration and delivery are unverified."
+    },
+    {
+      "name": "support-inbox",
+      "status": "pass",
+      "detail": "Setting present in supplied file; hosted configuration and delivery are unverified."
+    },
+    {
+      "name": "server-error-monitoring",
+      "status": "blocked",
+      "detail": "Missing: SENTRY_DSN"
+    }
+  ],
+  "payments": "deferred",
+  "emailSent": false,
+  "resourcesCreated": false,
+  "status": "blocked"
+}

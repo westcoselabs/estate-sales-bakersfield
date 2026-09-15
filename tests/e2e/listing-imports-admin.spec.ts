@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { enrollAdministratorMfa } from "./admin-mfa-support";
 
 import { PrismaClient } from "@/generated/prisma/client";
 import { listingContentHash } from "@/modules/listing-imports/application/content-hash";
@@ -55,6 +56,7 @@ async function registerAndVerify(
   const action = new URL(captured!.actionUrl);
   await page.goto(`${action.pathname}${action.search}`);
   await page.getByRole("button", { name: "Verify email" }).click();
+  await expect(page).toHaveURL(/\/login\?verified=1$/u);
 }
 
 async function login(page: Page, email: string, password: string) {
@@ -62,6 +64,9 @@ async function login(page: Page, email: string, password: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
+  // Wait for the session cookie/navigation before opening optional MFA setup.
+  // A second page.goto can otherwise abort the in-flight sign-in request.
+  await expect(page).toHaveURL(/\/dashboard$/u);
 }
 
 function externalListingCard(parent: Locator | Page, title: string) {
@@ -90,17 +95,31 @@ async function expectExternalListingCard(
 }
 
 function manualImportEnvelope(suffix: string) {
+  const now = new Date();
+  const localCalendar = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  // The shared geocoder gives every browser fixture the same confirmed point.
+  // Keep this sale separate from the owned-draft fixture on tomorrow's date;
+  // overlapping dates correctly trigger duplicate review after geocoding.
+  const startsOn = localCalendar.format(
+    new Date(now.getTime() + 3 * 86_400_000),
+  );
+  const endsOn = localCalendar.format(new Date(now.getTime() + 4 * 86_400_000));
   const item = {
     sourceListingId: `e2e-${suffix}`,
     sourceUrl: `https://fixture.invalid/listings/e2e-${suffix}`,
-    retrievedAt: "2026-08-07T16:00:00.000Z",
+    retrievedAt: now.toISOString(),
     contentHash: "",
     eventType: "ESTATE_SALE" as const,
     title: "E2E Fixture Estate Sale",
     description:
       "A deterministic browser fixture with furniture, books, and household goods.",
-    localStartsAt: "2026-09-12T09:00",
-    localEndsAt: "2026-09-13T15:00",
+    localStartsAt: `${startsOn}T09:00`,
+    localEndsAt: `${endsOn}T15:00`,
     timezone: "America/Los_Angeles",
     addressLine1: "101 Example Avenue",
     addressLine2: null,
@@ -166,7 +185,7 @@ test("reviews a manual listing import and manages a one-time ingestion credentia
       });
     });
     await login(page, email, password);
-    await expect(page).toHaveURL(/\/dashboard$/u);
+    await enrollAdministratorMfa(page, password);
     await page.goto("/admin/imports");
     await expect(
       page.getByRole("heading", { name: "Listing Imports" }),

@@ -104,6 +104,6 @@ describe("AuthenticationAbuseControl", () => {
     expect(
       new Set(limiter.consume.mock.calls.map(([input]) => input.namespace))
         .size,
-    ).toBe(10);
+    ).toBe(Object.keys(AUTHENTICATION_LIMITS).length * 2);
   });
 });

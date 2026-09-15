@@ -58,6 +58,7 @@ function session(passwordAuthenticatedAt = new Date()): CurrentSession {
     createdAt: new Date(Date.now() - 60_000),
     expiresAt: new Date(Date.now() + 60_000),
     passwordAuthenticatedAt,
+    mfaAuthenticatedAt: new Date(),
     metadata: {},
     principal: {
       id: administratorId,
@@ -65,6 +66,7 @@ function session(passwordAuthenticatedAt = new Date()): CurrentSession {
       email: "admin@example.test",
       emailVerifiedAt: new Date(),
       role: "SUPER_ADMIN",
+      mfaAuthenticatedAt: new Date(),
       status: "ACTIVE",
     },
   };
@@ -145,7 +147,11 @@ describe("super-admin listing import routes", () => {
     );
     expect(mocks.importBatch).toHaveBeenCalledWith(input, {
       transport: "MANUAL_JSON",
-      actor: { kind: "ADMIN_USER", adminUserId: administratorId },
+      actor: {
+        kind: "ADMIN_USER",
+        adminUserId: administratorId,
+        adminSessionId: "10000000-0000-4000-8000-000000000001",
+      },
       audit: { requestId: "admin-import-route-unit" },
     });
   });

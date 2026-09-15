@@ -11,6 +11,7 @@ import {
   EventNotFoundError,
   OrganizerProfileIncompleteError,
   EventStateError,
+  EventResourceLimitError,
   EventValidationError,
   PhotoProcessingError,
 } from "@/modules/events";
@@ -32,6 +33,14 @@ export function eventApiError(
   operation: string,
 ) {
   const requestId = requestIdFrom(request);
+  if (error instanceof EventResourceLimitError) {
+    const response = authJson(
+      { error: error.message, code: error.code, requestId },
+      { status: error.code === "LIMITER_UNAVAILABLE" ? 503 : 429, requestId },
+    );
+    response.headers.set("Retry-After", String(error.retryAfterSeconds));
+    return response;
+  }
   if (
     error instanceof ZodError ||
     error instanceof SyntaxError ||
@@ -157,7 +166,10 @@ export function eventApiError(
     );
     return authJson(
       {
-        error: "This provider operation is temporarily unavailable.",
+        error:
+          error instanceof MediaStoreError
+            ? "Photo storage is temporarily unavailable. Please try again."
+            : "Address search is temporarily unavailable. Please try again.",
         requestId,
       },
       { status: 503, requestId },

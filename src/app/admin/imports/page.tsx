@@ -1,6 +1,9 @@
 import Link from "next/link";
 
-import { getCurrentUser, requireSuperAdminPrincipal } from "@/modules/auth";
+import {
+  requireAdminPagePrincipal,
+  requireSuperAdminPrincipal,
+} from "@/modules/auth";
 import {
   createConfiguredListingImportAdminQueryService,
   listingImportAdminLandingCriteria,
@@ -225,7 +228,9 @@ export default async function ListingImportsPage({
 }: {
   searchParams: Promise<{ view?: string; cursor?: string; limit?: string }>;
 }) {
-  const principal = requireSuperAdminPrincipal(await getCurrentUser());
+  const principal = requireSuperAdminPrincipal(
+    await requireAdminPagePrincipal(),
+  );
   const criteria = listingImportAdminLandingCriteria(await searchParams);
   const result = await createConfiguredListingImportAdminQueryService().landing(
     principal,

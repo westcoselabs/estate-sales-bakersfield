@@ -17,6 +17,10 @@ describe("SharpImageProcessor", () => {
       .jpeg()
       .toBuffer();
     const result = await new SharpImageProcessor().process(source);
+    expect(result).toMatchObject({ width: 600, height: 900 });
+    expect(
+      await sharp(result.variants.coverDisplay.bytes).metadata(),
+    ).toMatchObject({ width: 600, height: 900 });
     expect(Object.keys(result.variants)).toEqual([
       "dashboardThumbnail",
       "listingCard",
@@ -72,4 +76,61 @@ describe("SharpImageProcessor", () => {
       ),
     ).rejects.toThrow(/could not be decoded safely/);
   });
+
+  it.each([
+    [1800, 3000],
+    [3000, 1800],
+  ])(
+    "keeps every corner and the full aspect ratio in a %i×%i cover",
+    async (width, height) => {
+      const source = await sharp({
+        create: { width, height, channels: 3, background: "white" },
+      })
+        .composite([
+          {
+            input: {
+              create: {
+                width: 120,
+                height: 120,
+                channels: 3,
+                background: "red",
+              },
+            },
+            top: 0,
+            left: 0,
+          },
+          {
+            input: {
+              create: {
+                width: 120,
+                height: 120,
+                channels: 3,
+                background: "blue",
+              },
+            },
+            top: height - 120,
+            left: width - 120,
+          },
+        ])
+        .png()
+        .toBuffer();
+      const result = await new SharpImageProcessor().process(source);
+      const cover = await sharp(result.variants.coverDisplay.bytes)
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      expect(cover.info.width / cover.info.height).toBeCloseTo(
+        width / height,
+        2,
+      );
+      expect(Math.max(cover.info.width, cover.info.height)).toBe(2400);
+      const firstPixel = [...cover.data.subarray(0, 3)];
+      const lastPixel = [...cover.data.subarray(cover.data.length - 3)];
+      expect(firstPixel[0]).toBeGreaterThan(220);
+      expect(firstPixel[1]).toBeLessThan(30);
+      expect(firstPixel[2]).toBeLessThan(30);
+      expect(lastPixel[2]).toBeGreaterThan(220);
+      expect(lastPixel[0]).toBeLessThan(30);
+      expect(lastPixel[1]).toBeLessThan(30);
+    },
+  );
 });

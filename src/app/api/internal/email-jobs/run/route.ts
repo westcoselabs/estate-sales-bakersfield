@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     );
   try {
     return Response.json(
-      { requestId, ...(await runConfiguredEmailJobBatch(10)) },
+      { requestId, ...(await runConfiguredEmailJobBatch(50)) },
       { headers: { "cache-control": "no-store", "x-request-id": requestId } },
     );
   } catch {

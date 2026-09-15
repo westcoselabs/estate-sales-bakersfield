@@ -8,6 +8,10 @@ export interface AuthPrincipal {
   readonly emailVerifiedAt: Date | null;
   readonly role: UserRole;
   readonly status: AccountStatus;
+  /** MFA is optional until this account completes authenticator enrollment. */
+  readonly mfaEnabled?: boolean;
+  /** Present only when the current session proves the active MFA credential. */
+  readonly mfaAuthenticatedAt?: Date | null;
 }
 
 export interface SessionMetadata {
@@ -21,6 +25,7 @@ export interface CurrentSession {
   readonly expiresAt: Date;
   readonly createdAt: Date;
   readonly passwordAuthenticatedAt: Date;
+  readonly mfaAuthenticatedAt?: Date | null;
   readonly principal: AuthPrincipal;
   readonly metadata: SessionMetadata;
 }

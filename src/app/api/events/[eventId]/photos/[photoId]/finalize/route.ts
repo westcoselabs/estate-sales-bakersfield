@@ -13,6 +13,9 @@ import {
 } from "../../../../../auth/_shared";
 import { eventApiError } from "../../../../_shared";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 interface Context {
   readonly params: Promise<{ eventId: string; photoId: string }>;
 }

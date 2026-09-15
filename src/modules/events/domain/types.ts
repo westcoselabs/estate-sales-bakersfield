@@ -19,6 +19,17 @@ export type EventPhotoStatus =
 export type EventPhotoVariant = "thumbnail" | "card" | "gallery" | "cover";
 export type EventOrigin = "OWNER_CREATED" | "ADMIN_IMPORTED" | "PARTNER_FEED";
 
+export interface EventScheduleDay {
+  readonly date: string;
+  readonly startTime: string;
+  readonly endTime: string;
+}
+
+export interface PublicEventScheduleDay extends EventScheduleDay {
+  readonly startsAt: string;
+  readonly endsAt: string;
+}
+
 export interface EventLocationRecord {
   readonly id: string;
   readonly eventId: string;
@@ -89,6 +100,8 @@ export interface EventRecord {
   readonly origin: EventOrigin;
   readonly localStartsAt: string | null;
   readonly localEndsAt: string | null;
+  readonly scheduleDays?: readonly EventScheduleDay[] | null;
+  readonly addressRevealAt?: Date | null;
   readonly startsAt: Date | null;
   readonly endsAt: Date | null;
   readonly timezone: string | null;
@@ -167,7 +180,7 @@ export interface VercelClientPhotoReservationDto extends EventPhotoReservationBa
 }
 
 export interface TestDirectPhotoReservationDto extends EventPhotoReservationBaseDto {
-  readonly transport: "test-direct";
+  readonly transport: "test-direct" | "local-direct";
   readonly uploadUrl: string;
   readonly method: "PUT";
   readonly uploadHeaders: Readonly<Record<string, string>>;
@@ -186,6 +199,9 @@ export interface EventEditorDto {
   readonly eventType: EventType;
   readonly localStartsAt: string | null;
   readonly localEndsAt: string | null;
+  readonly scheduleDays?: readonly EventScheduleDay[] | null;
+  readonly addressRevealAt?: string | null;
+  readonly localAddressRevealAt?: string | null;
   readonly startsAt: string | null;
   readonly endsAt: string | null;
   readonly timezone: string | null;
@@ -259,6 +275,7 @@ export type PublicAddressProjection =
       readonly kind: "HIDDEN";
       readonly city: string;
       readonly region: string;
+      readonly postalCode?: string | undefined;
       readonly countryCode: string;
       readonly releasesAt: string;
     };
@@ -273,6 +290,7 @@ export interface PublicEventProjection {
   readonly timezone: string;
   readonly localStartsAt: string;
   readonly localEndsAt: string;
+  readonly scheduleDays?: readonly PublicEventScheduleDay[] | undefined;
   readonly address: PublicAddressProjection;
   readonly organizer: {
     readonly displayName: string | null;

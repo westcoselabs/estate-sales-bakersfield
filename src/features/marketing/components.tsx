@@ -128,7 +128,7 @@ export async function SelectedListings({
   let result: PublicSearchPage | null = null;
   try {
     result = await createConfiguredPublicSearchService().search(
-      criteria,
+      { ...criteria, view: "list" },
       new Date(),
       limit,
     );

@@ -62,7 +62,20 @@ export const serverEnvironmentSchema = z
     NODE_ENV: z.enum(["development", "test", "production"]),
     APP_ENV: appEnvironmentSchema,
     PRODUCTION_BETA_MODE: optionalBooleanFlag,
+    PUBLIC_INDEXING_ENABLED: optionalBooleanFlag,
+    PUBLIC_IMPORTED_INDEXING_ENABLED: optionalBooleanFlag,
+    // Daily Hobby workers may start within the scheduled hour. Revisit on Pro.
+    JOB_MAX_QUEUE_DELAY_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10080)
+      .default(1500),
     APP_URL: applicationUrl,
+    PUBLIC_SUPPORT_EMAIL: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.email().max(254).optional(),
+    ),
     LOG_LEVEL: z.enum([
       "silent",
       "fatal",
@@ -112,6 +125,13 @@ export const serverEnvironmentSchema = z
     AUTH_FINGERPRINT_SECRET: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z.string().min(32).optional(),
+    ),
+    ADMIN_MFA_ENCRYPTION_KEY: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z
+        .string()
+        .regex(/^[a-fA-F0-9]{64}$/)
+        .optional(),
     ),
     RESEND_API_KEY: z.preprocess(
       (value) => (value === "" ? undefined : value),
@@ -189,6 +209,30 @@ export const serverEnvironmentSchema = z
     SENTRY_DSN: optionalUrl,
   })
   .superRefine((environment, context) => {
+    if (
+      environment.PUBLIC_IMPORTED_INDEXING_ENABLED &&
+      !environment.PUBLIC_INDEXING_ENABLED
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "Imported indexing also requires the public launch indexing gate",
+        path: ["PUBLIC_IMPORTED_INDEXING_ENABLED"],
+      });
+    }
+    if (
+      environment.PUBLIC_INDEXING_ENABLED &&
+      (environment.APP_ENV !== "production" ||
+        environment.PRODUCTION_BETA_MODE ||
+        environment.STRIPE_MODE !== "live")
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "Public indexing requires a live Production launch outside beta mode",
+        path: ["PUBLIC_INDEXING_ENABLED"],
+      });
+    }
     if (
       environment.APP_ENV === "production" &&
       environment.VERCEL_ENV !== "production"

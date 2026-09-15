@@ -5,6 +5,7 @@ import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import { configuredMapStyle } from "./map-style";
+import { configureMapWorker } from "./map-worker";
 
 export default function LocationConfirmationMap({
   latitude,
@@ -20,6 +21,7 @@ export default function LocationConfirmationMap({
 
   useEffect(() => {
     if (!container.current) return;
+    configureMapWorker();
     const map = new maplibregl.Map({
       container: container.current,
       style: configuredMapStyle(),

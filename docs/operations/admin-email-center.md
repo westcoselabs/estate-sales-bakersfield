@@ -23,8 +23,10 @@ persisted or logged.
    `/api/internal/email-jobs/run` at `0 10 * * *`. Vercel evaluates these in
    UTC, may invoke a Hobby cron anywhere in the configured hour, and sends the
    configured `CRON_SECRET` automatically. Queued receipts and contact sync can
-   therefore wait roughly one day; at the current batch limit of 10, larger
-   backlogs carry into later runs. Campaigns remain disabled during beta.
+   therefore wait roughly one day. The worker admits up to 50 jobs with
+   concurrency two and a 20-second admission budget; larger or slower
+   backlogs carry into later runs. See [worker limits](resource-limits-and-workers.md).
+   Campaigns remain disabled during beta.
 6. In Production only, confirm `RESEND_RESOURCE_ENV=production`, then set
    `EMAIL_CAMPAIGNS_ENABLED=true` and deploy. Preview never dispatches a
    campaign.
@@ -32,7 +34,8 @@ persisted or logged.
 ## Recipient policy
 
 Campaign recipients are ordinary active users with verified email addresses
-who have not unsubscribed. Missing marketing-preference records are included.
+with recorded marketing consent who have not unsubscribed. Missing consent or
+marketing-preference records are excluded.
 The owner, restricted or disabled users, unverified users, and locally or
 provider-unsubscribed contacts are excluded at send time. Resend suppression
 remains an additional final delivery guard.

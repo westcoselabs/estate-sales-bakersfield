@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 import { OrganizerForm } from "@/app/_components/auth-forms";
 import { AccountAvatar } from "@/components/shells/account-menu";
@@ -8,7 +9,17 @@ import { createConfiguredOrganizerService } from "@/modules/organizers";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProfilePage() {
+export default async function ProfilePage({
+  searchParams,
+}: {
+  readonly searchParams: Promise<{ returnTo?: string | string[] }>;
+}) {
+  const { returnTo } = await searchParams;
+  const returnHref =
+    typeof returnTo === "string" &&
+    /^\/dashboard\/events\/[0-9a-f-]{36}\/edit$/.test(returnTo)
+      ? returnTo
+      : undefined;
   const user = await getCurrentUser();
   if (!user || user.status === "DISABLED")
     redirect("/login?next=/dashboard/profile");
@@ -28,6 +39,11 @@ export default async function ProfilePage() {
             <p className="eyebrow">Account</p>
             <h1>Profile</h1>
             <p>Complete your organizer identity before approving an event.</p>
+            {returnHref ? (
+              <Link className="button-link" href={returnHref}>
+                Back to your event
+              </Link>
+            ) : null}
           </div>
         </header>
         <div className="profile-layout">
@@ -58,7 +74,10 @@ export default async function ProfilePage() {
               email are required for account operations and remain private.
               Phone and website are optional.
             </p>
-            <OrganizerForm initial={organizer} />
+            <OrganizerForm
+              initial={organizer}
+              {...(returnHref ? { returnHref } : {})}
+            />
           </section>
         </div>
       </div>

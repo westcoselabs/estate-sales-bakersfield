@@ -203,13 +203,15 @@ export class AdminListingModeration {
       requestId?: string;
     },
   ) {
-    const admin = authorizeRecentAdminService(session).principal;
+    const recent = authorizeRecentAdminService(session);
+    const admin = recent.principal;
     const result = await this.repository.remove({
       id: input.id,
       expectedVersion: input.expectedVersion,
       reason: input.reason,
       confirmation: input.confirmation,
       actorId: admin.id,
+      actorSessionId: recent.id,
       ...(input.requestId ? { requestId: input.requestId } : {}),
     });
     if (!result.idempotent) {
@@ -232,12 +234,14 @@ export class AdminListingModeration {
       requestId?: string;
     },
   ) {
-    const admin = authorizeRecentAdminService(session).principal;
+    const recent = authorizeRecentAdminService(session);
+    const admin = recent.principal;
     const event = await this.repository.restore({
       id: input.id,
       expectedVersion: input.expectedVersion,
       confirmation: input.confirmation,
       actorId: admin.id,
+      actorSessionId: recent.id,
       ...(input.requestId ? { requestId: input.requestId } : {}),
     });
     if (!event.publication) throw new AdminNotFoundError();

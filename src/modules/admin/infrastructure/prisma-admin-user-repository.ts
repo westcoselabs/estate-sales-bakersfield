@@ -1,3 +1,6 @@
+import { AuthorizationError } from "@/modules/auth";
+import { authorizedAdministratorSession } from "@/platform/database/admin-session-authorization";
+import { lockSessionUser } from "@/platform/database/session-user-lock";
 import "server-only";
 
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
@@ -203,10 +206,21 @@ export class PrismaAdminUserRepository {
     expectedUpdatedAt: Date;
     reason: string;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }) {
     return this.prisma.$transaction(
       async (transaction) => {
+        if (
+          !(await authorizedAdministratorSession(transaction, {
+            userId: input.actorId,
+            sessionId: input.actorSessionId,
+            requireRecent: true,
+          }))
+        )
+          throw new AuthorizationError(
+            "Current administrator verification is required.",
+          );
         const user = await transaction.user.findUnique({
           where: { id: input.targetId },
         });
@@ -258,10 +272,21 @@ export class PrismaAdminUserRepository {
     targetId: string;
     expectedUpdatedAt: Date;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }) {
     return this.prisma.$transaction(
       async (transaction) => {
+        if (
+          !(await authorizedAdministratorSession(transaction, {
+            userId: input.actorId,
+            sessionId: input.actorSessionId,
+            requireRecent: true,
+          }))
+        )
+          throw new AuthorizationError(
+            "Current administrator verification is required.",
+          );
         const user = await transaction.user.findUnique({
           where: { id: input.targetId },
         });
@@ -307,9 +332,21 @@ export class PrismaAdminUserRepository {
   async revokeSessions(input: {
     targetId: string;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }) {
     return this.prisma.$transaction(async (transaction) => {
+      if (
+        !(await authorizedAdministratorSession(transaction, {
+          userId: input.actorId,
+          sessionId: input.actorSessionId,
+          requireRecent: true,
+        }))
+      )
+        throw new AuthorizationError(
+          "Current administrator verification is required.",
+        );
+      await lockSessionUser(transaction, input.targetId);
       const user = await transaction.user.findUnique({
         where: { id: input.targetId },
         select: { role: true },
@@ -354,23 +391,36 @@ export class PrismaAdminUserRepository {
 
   async auditExport(input: {
     actorId: string;
+    actorSessionId: string;
     requestId: string;
     searched: boolean;
     rowCount: number;
   }) {
-    await this.prisma.auditEntry.create({
-      data: {
-        actorUserId: input.actorId,
-        action: "MARKETING_CONTACTS_EXPORTED",
-        targetType: "MARKETING_SEGMENT",
-        targetId: "ALL_REGISTERED_USERS",
-        requestId: input.requestId,
-        metadata: {
-          segment: "ALL_REGISTERED_USERS",
-          searchApplied: input.searched,
-          rowCount: input.rowCount,
+    await this.prisma.$transaction(async (transaction) => {
+      if (
+        !(await authorizedAdministratorSession(transaction, {
+          userId: input.actorId,
+          sessionId: input.actorSessionId,
+          requireRecent: true,
+        }))
+      )
+        throw new AuthorizationError(
+          "Current administrator verification is required.",
+        );
+      await transaction.auditEntry.create({
+        data: {
+          actorUserId: input.actorId,
+          action: "MARKETING_CONTACTS_EXPORTED",
+          targetType: "MARKETING_SEGMENT",
+          targetId: "ALL_REGISTERED_USERS",
+          requestId: input.requestId,
+          metadata: {
+            segment: "ALL_REGISTERED_USERS",
+            searchApplied: input.searched,
+            rowCount: input.rowCount,
+          },
         },
-      },
+      });
     });
   }
 }

@@ -5,7 +5,10 @@ import {
   createConfiguredAdminUserDirectory,
   userDirectoryCriteria,
 } from "@/modules/admin";
-import { getCurrentUser, requireSuperAdminPrincipal } from "@/modules/auth";
+import {
+  requireAdminPagePrincipal,
+  requireSuperAdminPrincipal,
+} from "@/modules/auth";
 
 import { MarketingExport } from "./_components/marketing-export";
 
@@ -39,7 +42,9 @@ export default async function AdminUsersPage({
     limit?: string;
   }>;
 }) {
-  const principal = requireSuperAdminPrincipal(await getCurrentUser());
+  const principal = requireSuperAdminPrincipal(
+    await requireAdminPagePrincipal(),
+  );
   const raw = await searchParams;
   const criteria = userDirectoryCriteria(raw);
   const directory = await createConfiguredAdminUserDirectory().list(

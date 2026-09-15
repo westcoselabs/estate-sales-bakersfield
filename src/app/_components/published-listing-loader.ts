@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import type { PublicEventProjection } from "@/modules/events";
 import { createConfiguredPaymentService } from "@/modules/payments";
 import type { PublishedListing } from "@/modules/payments";
@@ -32,6 +34,7 @@ export interface ExternalPublicListing {
     readonly timezone: string;
     readonly localStartsAt: string;
     readonly localEndsAt: string;
+    readonly scheduleDays?: PublicEventProjection["scheduleDays"];
     readonly address: PublicAddressProjection;
     readonly coverPhotoUrl: typeof EXTERNAL_LISTING_PLACEHOLDER;
     readonly gallery: readonly [];
@@ -69,6 +72,31 @@ function record(value: unknown): Readonly<Record<string, unknown>> | null {
   return prototype === Object.prototype || prototype === null
     ? (value as Readonly<Record<string, unknown>>)
     : null;
+}
+
+export function externalListingAttribution(listing: {
+  readonly attribution: unknown;
+  readonly primarySourceRecord: {
+    readonly sourceListingId: string;
+    readonly source: { readonly id: string; readonly key: string };
+  };
+}): { readonly sourceName: string; readonly originalUrl: string } | null {
+  const attribution = record(listing.attribution);
+  const originalUrl = sourceUrl(attribution?.sourceUrl);
+  const sourceName = attribution?.sourceName;
+  if (
+    attribution?.schema !== "external-listing-attribution.v1" ||
+    attribution.sourceId !== listing.primarySourceRecord.source.id ||
+    attribution.sourceKey !== listing.primarySourceRecord.source.key ||
+    attribution.sourceListingId !==
+      listing.primarySourceRecord.sourceListingId ||
+    typeof sourceName !== "string" ||
+    sourceName.length < 1 ||
+    sourceName.length > 120 ||
+    !originalUrl
+  )
+    return null;
+  return { sourceName, originalUrl };
 }
 
 function addressProjection(
@@ -125,6 +153,8 @@ async function loadExternalListing(
       publicId,
       status: "PUBLISHED",
       endsAt: { gt: now },
+      removedAt: null,
+      primarySourceRecord: { linkedEventId: null },
     },
     select: {
       id: true,
@@ -185,22 +215,9 @@ async function loadExternalListing(
     return null;
   }
 
-  const attribution = record(listing.attribution);
-  const originalUrl = sourceUrl(attribution?.sourceUrl);
-  const sourceName = attribution?.sourceName;
-  if (
-    attribution?.schema !== "external-listing-attribution.v1" ||
-    attribution.sourceId !== listing.primarySourceRecord.source.id ||
-    attribution.sourceKey !== listing.primarySourceRecord.source.key ||
-    attribution.sourceListingId !==
-      listing.primarySourceRecord.sourceListingId ||
-    typeof sourceName !== "string" ||
-    sourceName.length < 1 ||
-    sourceName.length > 120 ||
-    !originalUrl
-  ) {
-    return null;
-  }
+  const attribution = externalListingAttribution(listing);
+  if (!attribution) return null;
+  const { sourceName, originalUrl } = attribution;
 
   return {
     sourceKind: "EXTERNAL",
@@ -274,6 +291,15 @@ export async function loadPublishedListing(
     external,
   );
 }
+
+// React cache is scoped to one server render. Primitive arguments share the
+// metadata/page lookup and the same privacy-release instant without retaining
+// listings or addresses between requests.
+export const listingRequestTime = cache(() => new Date());
+export const loadPublishedListingForRequest = cache(
+  (eventType: PublicEventType, value: string) =>
+    loadPublishedListing(eventType, value, listingRequestTime()),
+);
 
 export function toOrganizerPublicListing(
   listing: PublishedListing,

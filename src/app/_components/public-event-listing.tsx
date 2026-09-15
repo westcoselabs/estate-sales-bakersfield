@@ -4,11 +4,18 @@ import Link from "next/link";
 import { Icon } from "@/components/ui/icons";
 import type { PublishedListing } from "@/modules/payments";
 import { getServerApplicationUrl } from "@/platform/config/application-url";
+import {
+  importedListingIndexingEnabled,
+  prelaunchRobots,
+  publicRobots,
+} from "@/platform/seo/indexing-policy";
 
 import type { PublicListingDetail } from "./published-listing-loader";
 import { toOrganizerPublicListing } from "./published-listing-loader";
 import { PublicListingActions } from "./public-listing-actions";
 import { PublicListingDetailTabs } from "./public-listing-detail-tabs";
+import { publicListingStructuredData } from "./public-listing-structured-data";
+import { PublicSaleSchedule } from "./public-sale-schedule";
 
 function locationLabel(listing: PublicListingDetail): string {
   return `${listing.projection.address.city}, ${listing.projection.address.region}`;
@@ -23,6 +30,10 @@ export function publicListingMetadata(listing: PublicListingDetail): Metadata {
     title: `${projection.title} | ${kind} in ${location}`,
     description: `${projection.description.slice(0, 140)}. ${kind} in ${location}.`,
     alternates: { canonical: listing.canonicalPath },
+    robots:
+      listing.sourceKind === "EXTERNAL" && !importedListingIndexingEnabled()
+        ? prelaunchRobots
+        : publicRobots(),
     openGraph: {
       type: "website",
       title: `${projection.title} | ${location}`,
@@ -31,27 +42,6 @@ export function publicListingMetadata(listing: PublicListingDetail): Metadata {
       images: [{ url: projection.coverPhotoUrl, alt: projection.title }],
     },
   };
-}
-
-function structuredAddress(listing: PublicListingDetail) {
-  const address = listing.projection.address;
-  return address.kind === "EXACT"
-    ? {
-        "@type": "PostalAddress",
-        streetAddress: [address.addressLine1, address.addressLine2]
-          .filter(Boolean)
-          .join(", "),
-        addressLocality: address.city,
-        addressRegion: address.region,
-        postalCode: address.postalCode,
-        addressCountry: address.countryCode,
-      }
-    : {
-        "@type": "PostalAddress",
-        addressLocality: address.city,
-        addressRegion: address.region,
-        addressCountry: address.countryCode,
-      };
 }
 
 function visibleAddress(listing: PublicListingDetail): {
@@ -79,8 +69,19 @@ function visibleAddress(listing: PublicListingDetail): {
     };
   }
   return {
-    primary: `${address.city}, ${address.region}`,
-    secondary: "Address releases when the sale starts",
+    primary: `${address.city}, ${address.region}${address.postalCode ? ` ${address.postalCode}` : ""}`,
+    secondary: `Full address will be shown on ${new Intl.DateTimeFormat(
+      "en-US",
+      {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        timeZoneName: "short",
+        timeZone: listing.projection.timezone,
+      },
+    ).format(new Date(address.releasesAt))}.`,
     directionsQuery: `${address.city}, ${address.region}`,
   };
 }
@@ -128,11 +129,6 @@ export function PublicListing({
     listing.sourceKind === "ORGANIZER" ? listing.projection.organizer : null;
   const verifiedEmail =
     listing.sourceKind === "ORGANIZER" ? listing.verifiedEmail : null;
-  const format = new Intl.DateTimeFormat("en-US", {
-    dateStyle: "full",
-    timeStyle: "short",
-    timeZone: projection.timezone,
-  });
   const kind =
     projection.eventType === "ESTATE_SALE" ? "Estate sale" : "Yard sale";
   const listingTypePath =
@@ -146,35 +142,7 @@ export function PublicListing({
     verifiedEmail || organizer?.displayName || organizer?.websiteUrl,
   );
   const applicationUrl = getServerApplicationUrl();
-  const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "Event",
-    name: projection.title,
-    description: projection.description,
-    startDate: projection.startsAt,
-    endDate: projection.endsAt,
-    eventStatus: "https://schema.org/EventScheduled",
-    eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
-    url: new URL(listing.canonicalPath, applicationUrl).toString(),
-    image: [new URL(projection.coverPhotoUrl, applicationUrl).toString()],
-    location: {
-      "@type": "Place",
-      name: locationLabel(listing),
-      address: structuredAddress(listing),
-    },
-    ...(listing.sourceKind === "EXTERNAL"
-      ? { sameAs: listing.sourceUrl }
-      : hasContactDetails && organizer
-        ? {
-            organizer: {
-              "@type": organizer.displayName ? "Organization" : "Person",
-              ...(organizer.displayName ? { name: organizer.displayName } : {}),
-              ...(verifiedEmail ? { email: verifiedEmail } : {}),
-              ...(organizer.websiteUrl ? { url: organizer.websiteUrl } : {}),
-            },
-          }
-        : {}),
-  };
+  const structuredData = publicListingStructuredData(listing, applicationUrl);
 
   return (
     <div className="preview-shell public-listing-page">
@@ -204,12 +172,7 @@ export function PublicListing({
                 <span aria-hidden="true">
                   <Icon name="calendar" size={24} />
                 </span>
-                <p>
-                  <strong>
-                    {format.format(new Date(projection.startsAt))}
-                  </strong>
-                  <span>{format.format(new Date(projection.endsAt))}</span>
-                </p>
+                <PublicSaleSchedule projection={projection} />
               </div>
               <div>
                 <span aria-hidden="true">
@@ -266,7 +229,9 @@ export function PublicListing({
             </div>
 
             <PublicListingActions
-              directionsUrl={directionsUrl}
+              directionsUrl={
+                projection.address.kind === "EXACT" ? directionsUrl : null
+              }
               title={projection.title}
             />
           </div>
@@ -307,7 +272,7 @@ export function PublicListing({
               <Icon name="clock" size={24} />
               <p>
                 <strong>Exact timing</strong>
-                <span>Server-validated sale hours</span>
+                <span>Plan your visit around the sale hours</span>
               </p>
             </div>
             <div>

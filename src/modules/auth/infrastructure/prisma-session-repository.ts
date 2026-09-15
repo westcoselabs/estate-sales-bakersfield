@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { PrismaClient } from "@/generated/prisma/client";
+import { lockSessionUser } from "@/platform/database/session-user-lock";
 
 import type {
   AuditContext,
@@ -17,6 +18,7 @@ const principalSelection = {
   emailVerifiedAt: true,
   role: true,
   status: true,
+  adminMfa: { select: { enabledAt: true, version: true } },
 } as const;
 
 type StoredSession = Awaited<
@@ -29,16 +31,23 @@ type StoredSession = Awaited<
     emailVerifiedAt: Date | null;
     role: "USER" | "SUPER_ADMIN";
     status: "ACTIVE" | "RESTRICTED" | "DISABLED";
+    adminMfa?: { enabledAt: Date | null; version: number } | null;
   };
 };
 
 function mapSession(session: StoredSession): CurrentSession {
+  const mfaAuthenticatedAt =
+    session.user.adminMfa?.enabledAt &&
+    session.user.adminMfa.version === session.mfaCredentialVersion
+      ? session.mfaAuthenticatedAt
+      : null;
   return {
     id: session.id,
     userId: session.userId,
     expiresAt: session.expiresAt,
     createdAt: session.createdAt,
     passwordAuthenticatedAt: session.passwordAuthenticatedAt,
+    mfaAuthenticatedAt,
     metadata: {
       ...(session.userAgent ? { userAgent: session.userAgent } : {}),
       ...(session.deviceLabel ? { deviceLabel: session.deviceLabel } : {}),
@@ -50,6 +59,8 @@ function mapSession(session: StoredSession): CurrentSession {
       emailVerifiedAt: session.user.emailVerifiedAt,
       role: session.user.role,
       status: session.user.status,
+      mfaEnabled: Boolean(session.user.adminMfa?.enabledAt),
+      mfaAuthenticatedAt,
     },
   };
 }
@@ -112,6 +123,13 @@ export class PrismaSessionRepository implements SessionRepository {
     input: RotateStoredSessionInput,
   ): Promise<CurrentSession | null> {
     return this.prisma.$transaction(async (transaction) => {
+      const owner = await transaction.session.findUnique({
+        where: { tokenHash: input.currentTokenHash },
+        select: { userId: true },
+      });
+      if (!owner) return null;
+      await lockSessionUser(transaction, owner.userId);
+      // The original may have been revoked while the user lock was pending.
       const current = await transaction.session.findFirst({
         where: {
           tokenHash: input.currentTokenHash,
@@ -128,6 +146,8 @@ export class PrismaSessionRepository implements SessionRepository {
           tokenHash: input.replacementTokenHash,
           expiresAt: input.replacementExpiresAt,
           passwordAuthenticatedAt: current.passwordAuthenticatedAt,
+          mfaAuthenticatedAt: current.mfaAuthenticatedAt,
+          mfaCredentialVersion: current.mfaCredentialVersion,
           ...(input.metadata.userAgent
             ? { userAgent: input.metadata.userAgent }
             : {}),
@@ -158,6 +178,12 @@ export class PrismaSessionRepository implements SessionRepository {
     input: Parameters<SessionRepository["reauthenticate"]>[0],
   ): Promise<CurrentSession | null> {
     return this.prisma.$transaction(async (transaction) => {
+      const owner = await transaction.session.findUnique({
+        where: { tokenHash: input.currentTokenHash },
+        select: { userId: true },
+      });
+      if (!owner) return null;
+      await lockSessionUser(transaction, owner.userId);
       const current = await transaction.session.findFirst({
         where: {
           tokenHash: input.currentTokenHash,
@@ -178,6 +204,8 @@ export class PrismaSessionRepository implements SessionRepository {
           tokenHash: input.replacementTokenHash,
           expiresAt: current.expiresAt,
           passwordAuthenticatedAt: input.now,
+          mfaAuthenticatedAt: current.mfaAuthenticatedAt,
+          mfaCredentialVersion: current.mfaCredentialVersion,
           ...(input.metadata.userAgent
             ? { userAgent: input.metadata.userAgent }
             : {}),
@@ -252,6 +280,7 @@ export class PrismaSessionRepository implements SessionRepository {
 
   async deleteAllForUser(userId: string, audit: AuditContext): Promise<number> {
     return this.prisma.$transaction(async (transaction) => {
+      await lockSessionUser(transaction, userId);
       const deletion = await transaction.session.deleteMany({
         where: { userId },
       });

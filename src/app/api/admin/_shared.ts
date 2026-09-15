@@ -17,6 +17,7 @@ import {
   AuthenticationError,
   AuthenticationServiceUnavailableError,
   AuthorizationError,
+  MfaRequiredError,
   RateLimitExceededError,
 } from "@/modules/auth";
 import { getTrustedApplicationUrls } from "@/platform/config/application-url";
@@ -118,6 +119,11 @@ export function adminApiError(
     status = 401;
     code = "AUTHENTICATION_REQUIRED";
     message = "Authentication is required.";
+  } else if (error instanceof MfaRequiredError) {
+    status = 403;
+    code = "MFA_REQUIRED";
+    message =
+      "Confirm two-step verification at /account/security, then retry this action.";
   } else if (
     error instanceof AuthorizationError ||
     error instanceof TrustedOriginError

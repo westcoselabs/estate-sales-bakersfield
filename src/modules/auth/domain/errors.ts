@@ -55,3 +55,10 @@ export class EmailDeliveryError extends Error {
     super("Transactional email delivery failed", options);
   }
 }
+export class MfaRequiredError extends AuthorizationError {
+  override readonly name = "MfaRequiredError";
+}
+
+export class MfaVerificationError extends AuthenticationError {
+  override readonly name = "MfaVerificationError";
+}

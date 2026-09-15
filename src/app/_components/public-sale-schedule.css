@@ -1,0 +1,37 @@
+.public-sale-schedule {
+  min-width: 0;
+}
+
+.public-sale-schedule > strong {
+  display: block;
+  margin-bottom: 0.6rem;
+}
+
+.public-sale-schedule small {
+  font-weight: 400;
+}
+
+.public-sale-schedule ul {
+  display: grid;
+  gap: 0.45rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.public-sale-schedule li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.7rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.public-sale-schedule li > span {
+  white-space: nowrap;
+}
+
+.public-sale-schedule__legacy {
+  display: grid;
+  gap: 0.3rem;
+}

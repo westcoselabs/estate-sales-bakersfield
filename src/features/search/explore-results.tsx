@@ -62,7 +62,7 @@ export function ExploreResultsShell({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [view, setView] = useState<PublicSearchView>(criteria.view);
+  const view = criteria.view;
   const [mapVisited, setMapVisited] = useState(criteria.view === "map");
   const [lastSuccessfulResult, setLastSuccessfulResult] =
     useState<PublicSearchPage | null>(result);
@@ -73,17 +73,6 @@ export function ExploreResultsShell({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLastSuccessfulResult(result);
   }, [result]);
-
-  useEffect(() => {
-    function restoreView() {
-      const restored = new URLSearchParams(window.location.search).get("view");
-      const nextView: PublicSearchView = restored === "list" ? "list" : "map";
-      setView(nextView);
-      if (nextView === "map") setMapVisited(true);
-    }
-    window.addEventListener("popstate", restoreView);
-    return () => window.removeEventListener("popstate", restoreView);
-  }, []);
 
   useEffect(() => {
     if (view !== "map") return;
@@ -123,13 +112,10 @@ export function ExploreResultsShell({
 
   function changeView(nextView: PublicSearchView) {
     if (nextView === view) return;
-    setView(nextView);
     if (nextView === "map") setMapVisited(true);
-    const href = buildSearchHref(
-      { ...criteria, view },
-      { view: nextView, cursor: null },
-    );
-    window.history.pushState({ exploreView: nextView }, "", href);
+    // The server omits markers in list mode. Navigation must refresh that
+    // projection as well as the URL, including on browser Back/Forward.
+    navigate({ view: nextView, cursor: null });
   }
 
   const shownResult = result ?? lastSuccessfulResult;
@@ -147,7 +133,11 @@ export function ExploreResultsShell({
         pending={pending}
         onNavigate={navigate}
       />
-      <section className="explore-results-main" aria-labelledby="explore-title">
+      <section
+        className="explore-results-main"
+        aria-labelledby="explore-title"
+        aria-busy={pending}
+      >
         <MobileFilterControls
           criteria={{ ...criteria, view }}
           view={view}
@@ -178,9 +168,17 @@ export function ExploreResultsShell({
           issue={issue}
           criteria={{ ...criteria, view }}
           view={view}
-          mapVisited={mapVisited}
+          mapVisited={mapVisited || view === "map"}
+          pending={pending || stale}
+          onNavigate={navigate}
           onClear={() =>
-            navigate({ sale: "all", date: "all", from: null, to: null })
+            navigate({
+              sale: "all",
+              date: "all",
+              from: null,
+              to: null,
+              bounds: null,
+            })
           }
         />
       </section>

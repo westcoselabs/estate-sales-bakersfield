@@ -1,9 +1,9 @@
-import { getCurrentSession } from "@/modules/auth";
+import { requireAdminPageSession } from "@/modules/auth";
 import { createConfiguredEmailCenter } from "@/modules/email";
 import { CampaignComposer } from "./campaign-composer";
 export default async function NewCampaignPage() {
   const options = await createConfiguredEmailCenter().campaignComposerOptions(
-    await getCurrentSession(),
+    await requireAdminPageSession(),
   );
   return (
     <div className="admin-page admin-page--wide">

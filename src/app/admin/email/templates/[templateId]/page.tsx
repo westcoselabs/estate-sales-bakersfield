@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getCurrentSession } from "@/modules/auth";
+import { requireAdminPageSession } from "@/modules/auth";
 import { createConfiguredEmailCenter } from "@/modules/email";
 import { EmailTemplateEditor } from "./template-editor";
 
@@ -10,7 +10,7 @@ export default async function EmailTemplatePage({
 }) {
   const { templateId } = await params;
   const template = await createConfiguredEmailCenter().getTemplate(
-    await getCurrentSession(),
+    await requireAdminPageSession(),
     templateId,
   );
   if (!template) notFound();

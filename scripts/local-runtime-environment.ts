@@ -12,6 +12,7 @@ const sensitiveNames = [
   "DIRECT_URL",
   "CRON_SECRET",
   "AUTH_FINGERPRINT_SECRET",
+  "ADMIN_MFA_ENCRYPTION_KEY",
   "BLOB_READ_WRITE_TOKEN",
   "RESEND_API_KEY",
   "RESEND_FROM",
@@ -68,6 +69,13 @@ export function buildLocalRuntimeEnvironment(
   });
 
   for (const name of sensitiveNames) {
+    // Explicit local opt-in for address lookups using a shared provider quota.
+    // It does not relax database identity or other credential checks.
+    if (
+      name === "GEOAPIFY_API_KEY" &&
+      local.LOCAL_ALLOW_SHARED_GEOAPIFY_KEY === "true"
+    )
+      continue;
     if (local[name] && production[name] && local[name] === production[name]) {
       throw new Error(
         `Local command rejected because ${name} matches the Production environment`,
@@ -94,6 +102,8 @@ export function buildLocalRuntimeEnvironment(
     DIRECT_URL: database.baseDirectUrl,
     DATABASE_RESOURCE_ENV: "development",
     PRODUCTION_BETA_MODE: "false",
+    PUBLIC_INDEXING_ENABLED: "false",
+    PUBLIC_IMPORTED_INDEXING_ENABLED: "false",
     EMAIL_CAMPAIGNS_ENABLED: "false",
     VERCEL_ENV: "",
     VERCEL_OIDC_TOKEN: "",
@@ -102,7 +112,10 @@ export function buildLocalRuntimeEnvironment(
     environment[name] ??= "";
   }
   for (const name of Object.keys(environment)) {
-    if (name.startsWith("PRODUCTION_") || name.startsWith("PREVIEW_")) {
+    if (
+      (name.startsWith("PRODUCTION_") && name !== "PRODUCTION_BETA_MODE") ||
+      name.startsWith("PREVIEW_")
+    ) {
       delete environment[name];
     }
   }

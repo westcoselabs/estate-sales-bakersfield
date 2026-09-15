@@ -13,15 +13,23 @@ import {
 
 import { ExploreMapLoader } from "./explore-map-loader";
 import { ListingCard } from "./listing-card";
+import type { SearchMapBounds } from "./map-bounds";
 
 function MapResults({
   result,
   active,
+  criteria,
+  pending,
+  onNavigate,
 }: {
   readonly result: PublicSearchPage;
   readonly active: boolean;
+  readonly criteria: PublicSearchCriteria;
+  readonly pending: boolean;
+  readonly onNavigate: (changes: Partial<PublicSearchCriteria>) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [viewport, setViewport] = useState<SearchMapBounds | null>(null);
   const selectedMarker =
     result.markers?.find((marker) => marker.resultKey === selectedId) ?? null;
   const selectedListing =
@@ -35,7 +43,37 @@ function MapResults({
         selectedId={effectiveSelectedId}
         active={active}
         onSelect={setSelectedId}
+        initialBounds={criteria.bounds ?? null}
+        onViewportChange={setViewport}
       />
+      <div className="explore-map-actions" aria-label="Map search controls">
+        {viewport ? (
+          <button
+            className="ui-button ui-button--secondary"
+            type="button"
+            disabled={pending}
+            onClick={() => onNavigate({ bounds: viewport, cursor: null })}
+          >
+            Search this area
+          </button>
+        ) : null}
+        {criteria.bounds ? (
+          <button
+            className="ui-button ui-button--secondary"
+            type="button"
+            disabled={pending}
+            onClick={() => onNavigate({ bounds: null, cursor: null })}
+          >
+            All Bakersfield
+          </button>
+        ) : null}
+        <ResultPagination
+          result={result}
+          criteria={criteria}
+          pending={pending}
+          onNavigate={onNavigate}
+        />
+      </div>
       {result.items.length === 0 ? <ExploreEmptyState compact /> : null}
       {selectedListing && selectedMarker ? (
         <div className="explore-map-preview">
@@ -49,6 +87,56 @@ function MapResults({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function ResultPagination({
+  result,
+  criteria,
+  pending,
+  onNavigate,
+}: {
+  readonly result: PublicSearchPage;
+  readonly criteria: PublicSearchCriteria;
+  readonly pending: boolean;
+  readonly onNavigate: (changes: Partial<PublicSearchCriteria>) => void;
+}) {
+  if (!criteria.cursor && !result.pageInfo.hasNext) return null;
+  return (
+    <nav
+      className="search-pagination"
+      aria-label="Result pages"
+      aria-busy={pending}
+    >
+      {criteria.cursor ? (
+        <Link
+          className="ui-button ui-button--secondary"
+          href={buildSearchHref(criteria, { cursor: null })}
+          aria-disabled={pending}
+          onNavigate={(event) => {
+            event.preventDefault();
+            if (!pending) onNavigate({ cursor: null });
+          }}
+        >
+          First results
+        </Link>
+      ) : null}
+      {result.pageInfo.hasNext && result.pageInfo.nextCursor ? (
+        <Link
+          className="ui-button ui-button--secondary"
+          href={buildSearchHref(criteria, {
+            cursor: result.pageInfo.nextCursor,
+          })}
+          aria-disabled={pending}
+          onNavigate={(event) => {
+            event.preventDefault();
+            if (!pending) onNavigate({ cursor: result.pageInfo.nextCursor });
+          }}
+        >
+          Next results <Icon name="arrow" size={18} />
+        </Link>
+      ) : null}
+    </nav>
   );
 }
 
@@ -94,6 +182,8 @@ export function SearchResults({
   view,
   mapVisited,
   onClear,
+  pending,
+  onNavigate,
 }: {
   readonly result: PublicSearchPage | null;
   readonly issue?: PublicSearchIssue | null | undefined;
@@ -101,6 +191,8 @@ export function SearchResults({
   readonly view: "map" | "list";
   readonly mapVisited: boolean;
   readonly onClear: () => void;
+  readonly pending: boolean;
+  readonly onNavigate: (changes: Partial<PublicSearchCriteria>) => void;
 }) {
   if (issue) {
     return (
@@ -146,7 +238,13 @@ export function SearchResults({
         hidden={view !== "map"}
       >
         {mapVisited ? (
-          <MapResults result={result} active={view === "map"} />
+          <MapResults
+            result={result}
+            active={view === "map"}
+            criteria={criteria}
+            pending={pending}
+            onNavigate={onNavigate}
+          />
         ) : null}
       </div>
       <div
@@ -169,20 +267,12 @@ export function SearchResults({
         ) : (
           <ExploreEmptyState onClear={onClear} />
         )}
-        {result.pageInfo.hasNext && result.pageInfo.nextCursor ? (
-          <nav className="search-pagination" aria-label="Result pages">
-            <Link
-              className="ui-button ui-button--secondary"
-              href={buildSearchHref(
-                { ...criteria, view },
-                { cursor: result.pageInfo.nextCursor },
-              )}
-            >
-              Next results
-              <Icon name="arrow" size={18} />
-            </Link>
-          </nav>
-        ) : null}
+        <ResultPagination
+          result={result}
+          criteria={criteria}
+          pending={pending}
+          onNavigate={onNavigate}
+        />
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 
 import type { PublicMapMarkerProjection } from "@/modules/public-search/client";
+import type { SearchMapBounds } from "./map-bounds";
 
 const ExploreMap = dynamic(() => import("./explore-map"), {
   ssr: false,
@@ -20,11 +21,15 @@ export function ExploreMapLoader({
   selectedId,
   active,
   onSelect,
+  initialBounds,
+  onViewportChange,
 }: {
   readonly markers: readonly PublicMapMarkerProjection[];
   readonly selectedId: string | null;
   readonly active: boolean;
   readonly onSelect: (id: string | null) => void;
+  readonly initialBounds: SearchMapBounds | null;
+  readonly onViewportChange: (bounds: SearchMapBounds) => void;
 }) {
   return (
     <ExploreMap
@@ -32,6 +37,8 @@ export function ExploreMapLoader({
       selectedId={selectedId}
       active={active}
       onSelect={onSelect}
+      initialBounds={initialBounds}
+      onViewportChange={onViewportChange}
     />
   );
 }

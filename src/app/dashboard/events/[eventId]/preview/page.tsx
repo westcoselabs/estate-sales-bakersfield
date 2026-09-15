@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { PublicEventListing } from "@/app/_components/public-event-listing";
+import { EventReadinessNotice } from "@/app/_components/event-readiness-notice";
 import { BuilderShell } from "@/components/shells/shells";
 import { getCurrentUser } from "@/modules/auth";
 import { createConfiguredEventService } from "@/modules/events";
@@ -35,12 +36,11 @@ export default async function EventPreviewPage({ params }: Props) {
         backLabel="Return to editor"
       >
         <section>
-          <p>Complete these server-validated requirements:</p>
-          <ul>
-            {editor.readiness.missing.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
+          <p>Complete these details to preview your listing.</p>
+          <EventReadinessNotice
+            eventId={eventId}
+            missing={editor.readiness.missing}
+          />
         </section>
       </BuilderShell>
     );
@@ -97,8 +97,17 @@ export default async function EventPreviewPage({ params }: Props) {
       editor.privacyMode === "HIDDEN_UNTIL_START" ? (
         <p className="notice">
           You are reviewing the exact address that will be released to the
-          public at the event start time. Anonymous visitors will see it as
-          hidden before then.
+          public on{" "}
+          {new Intl.DateTimeFormat("en-US", {
+            dateStyle: "full",
+            timeStyle: "short",
+            timeZone: editor.timezone ?? "America/Los_Angeles",
+          }).format(
+            new Date(
+              editor.addressRevealAt ?? editor.startsAt ?? preview.startsAt,
+            ),
+          )}
+          . Visitors will see an approximate area before then.
         </p>
       ) : null}
       <PublicEventListing

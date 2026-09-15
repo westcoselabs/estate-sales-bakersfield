@@ -68,7 +68,7 @@ describe("external public listing detail", () => {
     );
   });
 
-  it("uses the external canonical URL and placeholder in indexable metadata", () => {
+  it("uses the external canonical URL and keeps imported metadata noindex until approved", () => {
     const metadata = publicListingMetadata(externalListing);
 
     expect(metadata.alternates).toEqual({
@@ -83,6 +83,6 @@ describe("external public listing detail", () => {
         },
       ],
     });
-    expect(metadata.robots).toBeUndefined();
+    expect(metadata.robots).toMatchObject({ index: false, follow: true });
   });
 });

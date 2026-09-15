@@ -3949,7 +3949,8 @@ button {
   aspect-ratio: 4 / 3;
   margin-bottom: var(--space-4);
   border-radius: var(--radius-card);
-  object-fit: cover;
+  object-fit: contain;
+  background: var(--color-surface-muted);
 }
 
 .builder-preview-placeholder {
@@ -6094,7 +6095,8 @@ button {
   width: 10rem;
   height: 7.5rem;
   border-radius: 0.65rem;
-  object-fit: cover;
+  object-fit: contain;
+  background: var(--color-surface-muted);
 }
 
 .photo-cover-card > div:last-child {
@@ -7234,6 +7236,19 @@ button {
   height: 1.25rem;
   margin-top: 0.1rem;
   accent-color: var(--color-primary);
+}
+
+.admin-mfa-confirmation {
+  align-items: center;
+  min-height: 44px;
+  margin-block: var(--space-3);
+  cursor: pointer;
+}
+
+.admin-mfa-confirmation input {
+  min-height: 1.25rem;
+  padding: 0;
+  margin: 0;
 }
 
 .admin-dialog {

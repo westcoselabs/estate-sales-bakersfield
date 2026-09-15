@@ -1,3 +1,5 @@
+import { AuthorizationError } from "@/modules/auth";
+import { authorizedAdministratorSession } from "@/platform/database/admin-session-authorization";
 import "server-only";
 
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
@@ -253,10 +255,21 @@ export class PrismaAdminListingRepository {
     reason: string;
     confirmation: string;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }) {
     return this.prisma.$transaction(
       async (transaction) => {
+        if (
+          !(await authorizedAdministratorSession(transaction, {
+            userId: input.actorId,
+            sessionId: input.actorSessionId,
+            requireRecent: true,
+          }))
+        )
+          throw new AuthorizationError(
+            "Current administrator verification is required.",
+          );
         await transaction.$queryRaw(
           Prisma.sql`SELECT "id" FROM "events" WHERE "id" = ${input.id}::uuid FOR UPDATE`,
         );
@@ -318,10 +331,21 @@ export class PrismaAdminListingRepository {
     expectedVersion: number;
     confirmation: string;
     actorId: string;
+    actorSessionId: string;
     requestId?: string;
   }) {
     return this.prisma.$transaction(
       async (transaction) => {
+        if (
+          !(await authorizedAdministratorSession(transaction, {
+            userId: input.actorId,
+            sessionId: input.actorSessionId,
+            requireRecent: true,
+          }))
+        )
+          throw new AuthorizationError(
+            "Current administrator verification is required.",
+          );
         await transaction.$queryRaw(
           Prisma.sql`SELECT "id" FROM "events" WHERE "id" = ${input.id}::uuid FOR UPDATE`,
         );

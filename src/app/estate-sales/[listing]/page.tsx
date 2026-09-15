@@ -5,7 +5,7 @@ import {
   PublicListing,
   publicListingMetadata,
 } from "@/app/_components/public-event-listing";
-import { loadPublishedListing } from "@/app/_components/published-listing-loader";
+import { loadPublishedListingForRequest as loadPublishedListing } from "@/app/_components/published-listing-loader";
 import { PublicShell } from "@/components/shells/shells";
 
 export const dynamic = "force-dynamic";

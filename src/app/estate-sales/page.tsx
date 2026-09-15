@@ -6,25 +6,26 @@ import { Icon } from "@/components/ui/icons";
 import {
   Breadcrumbs,
   EstateHelpCallout,
-  SelectedListings,
   SelectedListingsSkeleton,
   SellerCallout,
 } from "@/features/marketing/components";
-import { marketingMetadata } from "@/features/marketing/metadata";
-import { normalizeSearchQuery } from "@/modules/public-search";
+import { SalesHubListings } from "@/app/_components/sales-hub-listings";
+import {
+  salesHubCursor,
+  salesHubMetadata,
+} from "@/app/_components/sales-hub-data";
+import type { PublicSearchRawQuery } from "@/modules/public-search";
 import { getServerApplicationUrl } from "@/platform/config/application-url";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = marketingMetadata({
-  title: "Upcoming Estate Sales in Bakersfield, CA",
-  description:
-    "Learn what to expect at Bakersfield estate sales, view selected upcoming listings, and open estate-sale results.",
-  path: "/estate-sales",
-});
+type Props = { readonly searchParams: Promise<PublicSearchRawQuery> };
+export async function generateMetadata({ searchParams }: Props) {
+  return salesHubMetadata("estate", await searchParams);
+}
 
-export default function EstateSalesHubPage() {
-  const criteria = normalizeSearchQuery({ sale: "estate" }).criteria;
+export default async function EstateSalesHubPage({ searchParams }: Props) {
+  const cursor = salesHubCursor(await searchParams);
   const applicationUrl = getServerApplicationUrl();
   const breadcrumbData = {
     "@context": "https://schema.org",
@@ -66,7 +67,7 @@ export default function EstateSalesHubPage() {
               </Link>
               <Link
                 className="ui-button ui-button--secondary"
-                href="/search?sale=estate&date=weekend"
+                href="/estate-sales/this-weekend"
               >
                 This weekend
               </Link>
@@ -93,13 +94,7 @@ export default function EstateSalesHubPage() {
             />
           }
         >
-          <SelectedListings
-            criteria={criteria}
-            limit={3}
-            title="Selected upcoming estate sales"
-            description="A look at the next estate sales currently published in the directory."
-            moreHref="/search?sale=estate"
-          />
+          <SalesHubListings hubKey="estate" cursor={cursor} />
         </Suspense>
 
         <section

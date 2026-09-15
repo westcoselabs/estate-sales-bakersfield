@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { getCurrentSession } from "@/modules/auth";
+import { requireAdminPageSession } from "@/modules/auth";
 import { createConfiguredEmailCenter } from "@/modules/email";
 
 export default async function EmailTemplatesPage() {
   const templates = await createConfiguredEmailCenter().listTemplates(
-    await getCurrentSession(),
+    await requireAdminPageSession(),
   );
   return (
     <div className="admin-page">

@@ -27,7 +27,7 @@ export interface VercelClientUploadAuthorization extends UploadAuthorizationBase
 }
 
 export interface TestDirectUploadAuthorization extends UploadAuthorizationBase {
-  readonly transport: "test-direct";
+  readonly transport: "test-direct" | "local-direct";
   readonly uploadUrl: URL;
   readonly method: "PUT";
   readonly headers: Readonly<Record<string, string>>;

@@ -1,5 +1,6 @@
 import { EventStateError } from "../domain/errors";
 import { futurePublicPath } from "../domain/slug";
+import { utcToLocalDateTime, validatedScheduleDays } from "../domain/schedule";
 import type {
   EventEditorDto,
   EventPhotoDto,
@@ -10,7 +11,7 @@ import type {
   PublicEventProjection,
 } from "../domain/types";
 
-export const PUBLISHING_TERMS_VERSION = "2026-07-phase3-v1";
+export const PUBLISHING_TERMS_VERSION = "2026-09-15-v1";
 
 const STREET_SUFFIXES: Readonly<Record<string, string>> = {
   avenue: "ave",
@@ -254,6 +255,14 @@ export function toEventEditorDto(event: EventRecord): EventEditorDto {
     eventType: event.eventType,
     localStartsAt: event.localStartsAt,
     localEndsAt: event.localEndsAt,
+    scheduleDays: event.scheduleDays ?? null,
+    addressRevealAt: event.addressRevealAt?.toISOString() ?? null,
+    localAddressRevealAt:
+      event.addressRevealAt && event.timezone
+        ? utcToLocalDateTime(event.addressRevealAt, event.timezone)
+        : event.privacyMode === "HIDDEN_UNTIL_START"
+          ? event.localStartsAt
+          : null,
     startsAt: event.startsAt?.toISOString() ?? null,
     endsAt: event.endsAt?.toISOString() ?? null,
     timezone: event.timezone,
@@ -308,6 +317,7 @@ function addressProjection(
     );
   }
   const location = event.location;
+  const releasesAt = event.addressRevealAt ?? event.startsAt;
   if (event.privacyMode === "APPROXIMATE_LOCATION") {
     return {
       kind: "APPROXIMATE",
@@ -319,14 +329,15 @@ function addressProjection(
   }
   if (
     event.privacyMode === "HIDDEN_UNTIL_START" &&
-    now.getTime() < event.startsAt.getTime()
+    now.getTime() < releasesAt.getTime()
   ) {
     return {
       kind: "HIDDEN",
       city: location.city,
       region: location.region,
+      postalCode: location.postalCode,
       countryCode: location.countryCode,
-      releasesAt: event.startsAt.toISOString(),
+      releasesAt: releasesAt.toISOString(),
     };
   }
   return {
@@ -375,6 +386,14 @@ export function publicEventProjection(
     timezone: event.timezone,
     localStartsAt: event.localStartsAt,
     localEndsAt: event.localEndsAt,
+    ...(event.scheduleDays?.length
+      ? {
+          scheduleDays: validatedScheduleDays(
+            event.scheduleDays,
+            event.timezone,
+          ),
+        }
+      : {}),
     address: addressProjection(event, now),
     organizer: {
       displayName: event.organizerDisplayName,
@@ -399,5 +418,12 @@ export function futurePublicEventProjection(
   if (!event.startsAt) {
     throw new EventStateError("The event schedule is incomplete.");
   }
-  return publicEventProjection(event, event.startsAt);
+  // The private approval snapshot contains the eventual full address; its public
+  // projection is redacted until the selected release instant.
+  return publicEventProjection(
+    event,
+    new Date(
+      Math.max(event.startsAt.getTime(), event.addressRevealAt?.getTime() ?? 0),
+    ),
+  );
 }

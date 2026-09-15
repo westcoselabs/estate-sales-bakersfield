@@ -1,4 +1,5 @@
 import { EventValidationError } from "./errors";
+import type { EventScheduleDay, PublicEventScheduleDay } from "./types";
 
 const LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
 
@@ -135,4 +136,77 @@ export function validatedSchedule(input: {
     throw new EventValidationError("The event must end after it starts.");
   }
   return { startsAt, endsAt };
+}
+
+export function utcToLocalDateTime(value: Date, timezone: string): string {
+  const parts = formattedParts(value, timezone);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${String(parts.year).padStart(4, "0")}-${pad(parts.month)}-${pad(parts.day)}T${pad(parts.hour)}:${pad(parts.minute)}`;
+}
+
+export function validatedScheduleDays(
+  days: readonly EventScheduleDay[],
+  timezone: string,
+): readonly PublicEventScheduleDay[] {
+  if (days.length === 0 || days.length > 366) {
+    throw new EventValidationError("Select between 1 and 366 event dates.");
+  }
+  const dates = new Set<string>();
+  return [...days]
+    .sort((left, right) => left.date.localeCompare(right.date))
+    .map((day) => {
+      if (dates.has(day.date)) {
+        throw new EventValidationError("Each event date can only appear once.");
+      }
+      dates.add(day.date);
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(day.date) ||
+        !/^\d{2}:\d{2}$/.test(day.startTime) ||
+        !/^\d{2}:\d{2}$/.test(day.endTime)
+      ) {
+        throw new EventValidationError(
+          "Use a complete date and opening and closing times for each day.",
+        );
+      }
+      if (day.endTime <= day.startTime) {
+        throw new EventValidationError(
+          "Each day's closing time must be after its opening time on the same day.",
+        );
+      }
+      const schedule = validatedSchedule({
+        localStartsAt: `${day.date}T${day.startTime}`,
+        localEndsAt: `${day.date}T${day.endTime}`,
+        timezone,
+      });
+      return {
+        date: day.date,
+        startTime: day.startTime,
+        endTime: day.endTime,
+        startsAt: schedule.startsAt.toISOString(),
+        endsAt: schedule.endsAt.toISOString(),
+      };
+    });
+}
+
+/** Accepts stored JSON without inventing daily opening hours for legacy events. */
+export function readScheduleDays(
+  value: unknown,
+): readonly EventScheduleDay[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  if (
+    !value.every(
+      (day) =>
+        day &&
+        typeof day === "object" &&
+        typeof day.date === "string" &&
+        typeof day.startTime === "string" &&
+        typeof day.endTime === "string",
+    )
+  )
+    return null;
+  return value.map((day: EventScheduleDay) => ({
+    date: day.date,
+    startTime: day.startTime,
+    endTime: day.endTime,
+  }));
 }

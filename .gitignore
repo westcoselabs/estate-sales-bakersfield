@@ -6,10 +6,12 @@ coverage/
 playwright-report/
 test-results/
 src/generated/prisma/
+public/maplibre/
 
 # Local runtime data
 .cache/
 .tmp/
+.local/
 *.log
 *.tsbuildinfo
 

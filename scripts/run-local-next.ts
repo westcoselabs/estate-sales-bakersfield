@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 
 import { prepareLocalRuntimeEnvironment } from "./local-runtime-environment";
+import { prepareMapLibreWorkers } from "./prepare-maplibre-workers";
 
 const command = process.argv[2];
 if (command !== "dev" && command !== "start") {
@@ -9,6 +10,7 @@ if (command !== "dev" && command !== "start") {
 const environment = prepareLocalRuntimeEnvironment(
   command === "dev" ? "development" : "production",
 );
+if (command === "dev") prepareMapLibreWorkers();
 const isWindows = process.platform === "win32";
 const result = spawnSync(
   isWindows ? (process.env.ComSpec ?? "cmd.exe") : "pnpm",

@@ -147,6 +147,8 @@ describe("published listing detail loader", () => {
           publicId: PUBLIC_ID,
           status: "PUBLISHED",
           endsAt: { gt: NOW },
+          removedAt: null,
+          primarySourceRecord: { linkedEventId: null },
         },
       }),
     );

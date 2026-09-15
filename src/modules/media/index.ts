@@ -16,6 +16,7 @@ export {
   createConfiguredImageProcessor,
   createConfiguredMediaStore,
   createConfiguredTestMediaStore,
+  createConfiguredLocalMediaStore,
 } from "./infrastructure/configured-media";
 export type {
   BatchDeleteResult,

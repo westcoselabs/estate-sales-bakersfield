@@ -32,6 +32,7 @@ export {
   EventNotFoundError,
   OrganizerProfileIncompleteError,
   EventStateError,
+  EventResourceLimitError,
   EventValidationError,
   PhotoProcessingError,
 } from "./domain/errors";
@@ -43,9 +44,11 @@ export type {
   EventEditorDto,
   EventListItemDto,
   EventRecord,
+  EventScheduleDay,
   EventPhotoReservationDto,
   EventStepReadiness,
   EventType,
   PublicEventProjection,
+  PublicEventScheduleDay,
 } from "./domain/types";
 export { MAXIMUM_EVENT_PHOTOS } from "./domain/types";

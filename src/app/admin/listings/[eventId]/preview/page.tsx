@@ -6,7 +6,10 @@ import {
   AdminNotFoundError,
   createConfiguredAdminEventDetail,
 } from "@/modules/admin";
-import { getCurrentUser, requireSuperAdminPrincipal } from "@/modules/auth";
+import {
+  requireAdminPagePrincipal,
+  requireSuperAdminPrincipal,
+} from "@/modules/auth";
 
 export default async function AdminListingPreviewPage({
   params,
@@ -15,7 +18,9 @@ export default async function AdminListingPreviewPage({
   params: Promise<{ eventId: string }>;
   searchParams: Promise<{ mode?: string }>;
 }) {
-  const principal = requireSuperAdminPrincipal(await getCurrentUser());
+  const principal = requireSuperAdminPrincipal(
+    await requireAdminPagePrincipal(),
+  );
   const id = z
     .string()
     .uuid()

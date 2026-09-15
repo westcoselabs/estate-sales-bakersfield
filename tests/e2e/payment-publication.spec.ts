@@ -47,6 +47,32 @@ async function verifyLatestEmail(page: Page, email: string) {
   await page.getByRole("button", { name: "Verify email" }).click();
 }
 
+async function visibleMapPixels(
+  page: Page,
+  kind: "pin" | "area",
+): Promise<number> {
+  // Inspect rendered pixels rather than only the keyboard marker list: that
+  // list still works when a missing worker leaves the actual map blank.
+  const screenshot = await page.locator(".maplibregl-canvas").screenshot();
+  const { data, info } = await sharp(screenshot)
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let matching = 0;
+  for (let index = 0; index < data.length; index += info.channels) {
+    const red = data[index]!;
+    const green = data[index + 1]!;
+    const blue = data[index + 2]!;
+    if (
+      kind === "pin"
+        ? red >= 160 && red <= 205 && green >= 95 && green <= 145 && blue < 60
+        : red >= 175 && red > green * 1.8 && red > blue * 1.8
+    )
+      matching += 1;
+  }
+  return matching;
+}
+
 async function createAccount(page: Page): Promise<string> {
   const suffix = crypto.randomUUID();
   const email = `${runId}-phase4-browser-${suffix}@example.test`;
@@ -76,6 +102,7 @@ async function buildApprovedEvent(
   page: Page,
   title: string,
   date: string,
+  additionalDates: readonly string[] = [],
 ): Promise<EventResponse["event"]> {
   await page.goto("/dashboard");
   await page.getByLabel("Sale type").selectOption("ESTATE_SALE");
@@ -92,13 +119,28 @@ async function buildApprovedEvent(
     );
   await page.getByRole("button", { name: "Save and continue" }).click();
   await chooseSingleDaySchedule(page, date);
+  for (const additionalDate of additionalDates) {
+    const label = new Intl.DateTimeFormat("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(`${additionalDate}T12:00:00Z`));
+    await page
+      .getByRole("region", { name: "Choose your sale dates" })
+      .getByRole("button", { name: label, exact: true })
+      .click();
+  }
   await page.getByRole("button", { name: "Save and continue" }).click();
   await page
     .getByLabel("Search the sale property address")
     .fill("123 Baker Street");
   await page.getByRole("option").getByRole("button").click();
   await page.getByLabel("I confirm this is the sale property.").check();
-  await page.getByLabel("Hide exact address until the event starts").check();
+  await page.getByLabel("Hide address until", { exact: true }).check();
+  await page.getByLabel("Address reveal date").fill(date);
+  await page.getByLabel("Address reveal time").fill("06:00");
   await page.getByRole("button", { name: "Save and continue" }).click();
 
   const image = await sharp({
@@ -129,7 +171,9 @@ async function buildApprovedEvent(
   ).toBeVisible();
   await choosePhotoCover(page, "phase4-estate-photo.jpg");
   await page.getByRole("button", { name: "Save and continue" }).click();
-  await page.getByLabel(/I accept publishing terms version/).check();
+  await page
+    .getByLabel(/I accept publishing terms and approve this event for payment/)
+    .check();
   await page.getByRole("button", { name: "Approve exact revision" }).click();
   await expect(page).toHaveURL(
     new RegExp(`/dashboard/events/${eventId}/payment`),
@@ -142,7 +186,7 @@ async function buildApprovedEvent(
 
 test("pays and publishes from a fake signed webhook while stale paid revisions remain private", async ({
   page,
-}) => {
+}, testInfo) => {
   test.setTimeout(180_000);
   await page.context().setExtraHTTPHeaders({
     "x-forwarded-for": `e2e-payment-${crypto.randomUUID()}`,
@@ -155,6 +199,7 @@ test("pays and publishes from a fake signed webhook while stale paid revisions r
     page,
     "Seven Oaks Phase Four Sale",
     "2027-08-28",
+    ["2027-08-29", "2027-08-30"],
   );
   expect((await page.request.get(publishable.futurePublicPath)).status()).toBe(
     404,
@@ -196,9 +241,7 @@ test("pays and publishes from a fake signed webhook while stale paid revisions r
   await expect(
     page.getByRole("heading", { name: "Seven Oaks Phase Four Sale" }),
   ).toBeVisible();
-  await expect(
-    page.getByText("Address releases when the sale starts"),
-  ).toBeVisible();
+  await expect(page.getByText(/Full address will be shown on/)).toBeVisible();
   await expect(page.getByText("123 Baker Street")).toHaveCount(0);
   await expect(page.getByRole("link", { name: email })).toHaveAttribute(
     "href",
@@ -207,6 +250,70 @@ test("pays and publishes from a fake signed webhook while stale paid revisions r
   await expect(
     page.getByText("Listed by Phase Four Estate Sales"),
   ).toBeVisible();
+  await expect(
+    page.getByRole("list", { name: "Daily sale hours" }).locator("li"),
+  ).toHaveCount(3);
+  await expect(
+    page.getByRole("list", { name: "Daily sale hours" }),
+  ).toContainText("1:00 PM");
+  await page.screenshot({
+    path: testInfo.outputPath("public-address-reveal.png"),
+    fullPage: true,
+  });
+
+  // List responses deliberately omit map markers. Switching to Map must load
+  // the public projection, while preserving this sale's hidden address.
+  await page.goto(
+    "/search?view=list&date=custom&from=2027-08-28&to=2027-08-28",
+  );
+  await expect(page.locator(".explore-list")).toContainText(
+    "Seven Oaks Phase Four Sale",
+  );
+  await expect(page.locator(".maplibregl-canvas")).toHaveCount(0);
+  await page.getByRole("button", { name: "Map View" }).first().click();
+  const saleMarker = page.getByRole("button", {
+    name: "Show Seven Oaks Phase Four Sale on the map",
+  });
+  await saleMarker.focus();
+  await saleMarker.press("Enter");
+  const preview = page.locator(".explore-map-preview");
+  await expect(preview).toContainText("Seven Oaks Phase Four Sale");
+  await expect(preview).toContainText("Address available");
+  await expect(preview).toContainText("6:00 AM PDT");
+  await expect(
+    preview.getByRole("link", { name: /Get directions/ }),
+  ).toHaveCount(0);
+  await expect(page.getByText("123 Baker Street")).toHaveCount(0);
+  await expect
+    .poll(() => visibleMapPixels(page, "pin"), {
+      message: "The protected sale pin must actually render on the map",
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(200);
+  await page.screenshot({
+    path: testInfo.outputPath("hidden-sale-map-overview.png"),
+  });
+  const zoomIn = page.getByRole("button", { name: "Zoom in", exact: true });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (let zoom = 0; zoom < 4; zoom += 1) {
+    await zoomIn.click();
+  }
+  await expect
+    .poll(() => visibleMapPixels(page, "area"), {
+      message: "Zooming in must render the dashed approximate-location circle",
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(300);
+  await page.screenshot({
+    path: testInfo.outputPath("hidden-sale-map-neighborhood.png"),
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(preview.getByText(/Address available/)).toBeVisible();
+  await expect(preview.getByText(/8:00 AM to 1:00 PM daily/)).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("hidden-sale-map-mobile.png"),
+  });
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   await page.goto(`/dashboard/events/${publishable.id}/edit`);
   await expect(page.getByText("This listing is published.")).toBeVisible();

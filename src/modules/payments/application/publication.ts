@@ -33,6 +33,7 @@ const addressSchema = z.discriminatedUnion("kind", [
     region: z.string().min(1).max(100),
     countryCode: z.string().length(2),
     releasesAt: z.iso.datetime(),
+    postalCode: z.string().max(20).optional(),
   }),
 ]);
 
@@ -48,6 +49,18 @@ const publicProjectionSchema = z.object({
   timezone: z.string().min(1).max(64),
   localStartsAt: z.string().min(1).max(16),
   localEndsAt: z.string().min(1).max(16),
+  scheduleDays: z
+    .array(
+      z.object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        startTime: z.string().regex(/^\d{2}:\d{2}$/),
+        endTime: z.string().regex(/^\d{2}:\d{2}$/),
+        startsAt: z.iso.datetime(),
+        endsAt: z.iso.datetime(),
+      }),
+    )
+    .max(366)
+    .optional(),
   address: addressSchema,
   organizer: z.object({
     displayName: z.string().min(1).max(100).nullable(),
@@ -71,6 +84,7 @@ const publicationSnapshotSchema = z.object({
     "APPROXIMATE_LOCATION",
     "HIDDEN_UNTIL_START",
   ]),
+  addressRevealAt: z.iso.datetime().nullable().optional(),
   projection: publicProjectionSchema,
 });
 
@@ -83,6 +97,9 @@ export function createPublicationSnapshot(
   return publicationSnapshotSchema.parse({
     schema: "estate-sales-publication-v1",
     privacyMode: event.privacyMode,
+    ...(event.addressRevealAt
+      ? { addressRevealAt: event.addressRevealAt.toISOString() }
+      : {}),
     projection: futurePublicEventProjection(event),
   });
 }
@@ -96,9 +113,10 @@ export function projectionAt(
   now: Date,
 ): PublicationSnapshot["projection"] {
   const projection = snapshot.projection;
+  const releasesAt = snapshot.addressRevealAt ?? projection.startsAt;
   if (
     snapshot.privacyMode !== "HIDDEN_UNTIL_START" ||
-    now.getTime() >= new Date(projection.startsAt).getTime() ||
+    now.getTime() >= new Date(releasesAt).getTime() ||
     projection.address.kind !== "EXACT"
   ) {
     return projection;
@@ -110,7 +128,8 @@ export function projectionAt(
       city: projection.address.city,
       region: projection.address.region,
       countryCode: projection.address.countryCode,
-      releasesAt: projection.startsAt,
+      releasesAt,
+      postalCode: projection.address.postalCode,
     },
   };
 }

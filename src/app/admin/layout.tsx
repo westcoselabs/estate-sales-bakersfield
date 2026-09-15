@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { AdminShell } from "@/components/shells/admin-shell";
 import {
   AuthorizationError,
+  MfaRequiredError,
   getCurrentUser,
   requireSuperAdminPrincipal,
 } from "@/modules/auth";
@@ -25,6 +26,8 @@ export default async function AdminLayout({
   try {
     administrator = requireSuperAdminPrincipal(current);
   } catch (error) {
+    if (error instanceof MfaRequiredError)
+      redirect("/account/security?next=%2Fadmin");
     if (error instanceof AuthorizationError) notFound();
     throw error;
   }

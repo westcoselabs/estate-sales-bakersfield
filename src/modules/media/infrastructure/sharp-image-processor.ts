@@ -44,33 +44,44 @@ export class SharpImageProcessor implements ImageProcessor {
           "The uploaded file is not a supported image",
         );
       }
-      const normalized = source.clone().rotate().toColourspace("srgb");
-      const [dashboardThumbnail, listingCard, gallery, coverDisplay] =
-        await Promise.all([
-          normalized
-            .clone()
-            .resize(320, 240, { fit: "cover", withoutEnlargement: true })
-            .webp({ quality: 78 })
-            .toBuffer(),
-          normalized
-            .clone()
-            .resize(800, 600, { fit: "cover", withoutEnlargement: true })
-            .webp({ quality: 82 })
-            .toBuffer(),
-          normalized
-            .clone()
-            .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
-            .webp({ quality: 84 })
-            .toBuffer(),
-          normalized
-            .clone()
-            .resize(2400, 1350, { fit: "cover", withoutEnlargement: true })
-            .webp({ quality: 86 })
-            .toBuffer(),
-        ]);
+      // Decode and orient the original once. Every rendition shares this
+      // bounded, uncompressed image rather than decoding an up-to-80 MP upload
+      // four times. At most 2400 × 2400 × 4 bytes (~22 MiB) are retained here.
+      const normalized = await source
+        .rotate()
+        .resize(2400, 2400, { fit: "inside", withoutEnlargement: true })
+        .toColourspace("srgb")
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      const rendition = () =>
+        sharp(normalized.data, {
+          raw: {
+            width: normalized.info.width,
+            height: normalized.info.height,
+            channels: normalized.info.channels,
+          },
+        });
+      // Keep encodes sequential so native processing stays within the existing
+      // runtime/account memory limits. Effort 1 favors throughput over a small
+      // additional reduction in file size without lowering the quality setting.
+      const dashboardThumbnail = await rendition()
+        .resize(320, 240, { fit: "cover", withoutEnlargement: true })
+        .webp({ quality: 78, effort: 1 })
+        .toBuffer();
+      const listingCard = await rendition()
+        .resize(800, 600, { fit: "cover", withoutEnlargement: true })
+        .webp({ quality: 82, effort: 1 })
+        .toBuffer();
+      const gallery = await rendition()
+        .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 84, effort: 1 })
+        .toBuffer();
+      const coverDisplay = await rendition()
+        .webp({ quality: 86, effort: 1 })
+        .toBuffer();
       return {
-        width: metadata.width,
-        height: metadata.height,
+        width: metadata.autoOrient.width,
+        height: metadata.autoOrient.height,
         variants: {
           dashboardThumbnail: variant(dashboardThumbnail),
           listingCard: variant(listingCard),

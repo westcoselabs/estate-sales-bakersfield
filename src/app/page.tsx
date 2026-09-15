@@ -1,3 +1,4 @@
+import "@/features/marketing/home-refinements.css";
 import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -9,6 +10,7 @@ import {
   SelectedListings,
   SelectedListingsSkeleton,
 } from "@/features/marketing/components";
+import { HeroSearch } from "@/features/marketing/hero-search";
 import { HeroMarquee } from "@/features/marketing/hero-marquee";
 import { marketingMetadata } from "@/features/marketing/metadata";
 import { normalizeSearchQuery } from "@/modules/public-search";
@@ -62,38 +64,12 @@ export default function HomePage() {
               <Icon name="pin" size={18} />
               Bakersfield, California
             </p>
-            <h1 id="home-title">
-              Discover local sales and one-of-a-kind finds.
-            </h1>
+            <h1 id="home-title">Local Sales, All in One Place.</h1>
             <p>
-              Browse upcoming estate and yard sales in Bakersfield and plan your
-              route to amazing finds.
+              Explore upcoming estate and yard sales across Kern County and find
+              something worth taking home.
             </p>
-            <form className="home-hero__search" action="/search" method="get">
-              <div className="home-hero__location-field">
-                <Icon name="pin" size={21} />
-                <span>Bakersfield, CA</span>
-              </div>
-              <label className="home-hero__date-field">
-                <span className="sr-only">Sale dates</span>
-                <Icon name="calendar" size={20} />
-                <select name="date" defaultValue="all">
-                  <option value="all">Select dates</option>
-                  <option value="today">Today</option>
-                  <option value="weekend">This weekend</option>
-                  <option value="next-7-days">Next 7 days</option>
-                </select>
-                <Icon
-                  className="home-hero__date-chevron"
-                  name="chevron"
-                  size={18}
-                />
-              </label>
-              <button type="submit" aria-label="Search sales">
-                <Icon name="search" size={21} />
-                <span>Search</span>
-              </button>
-            </form>
+            <HeroSearch />
           </div>
           <HeroMarquee />
         </section>
@@ -230,13 +206,10 @@ export default function HomePage() {
           <div className="marketing-section__heading">
             <div>
               <p className="eyebrow">Clear by design</p>
-              <h2 id="trust-title">
-                You only ever see what is genuinely ready
-              </h2>
+              <h2 id="trust-title">Local sales, clear details</h2>
               <p>
-                Nothing reaches this page early. Every listing is either
-                published by its organizer or explicitly reviewed before it
-                appears here.
+                Find the hours, photos, and location details you need to plan
+                your next stop.
               </p>
             </div>
           </div>
@@ -248,11 +221,11 @@ export default function HomePage() {
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="shield" />
               </span>
-              <h3>Public locations stay privacy-safe</h3>
+              <h3>Address privacy, made clear</h3>
               <p>
-                Organizer choices and reviewed external-listing defaults keep
-                exact addresses, approximate areas, and start-time-hidden
-                locations consistent across cards, maps, and details.
+                Some addresses stay private until the organizer’s chosen time.
+                You’ll see the general area and when the full address will
+                appear.
               </p>
             </article>
             <article
@@ -262,10 +235,10 @@ export default function HomePage() {
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="check" />
               </span>
-              <h3>Published only</h3>
+              <h3>Live listings</h3>
               <p>
-                Private drafts and unreviewed imports never surface in public
-                search or on this page.
+                Browse sales that are ready to share, with the key details in
+                one place.
               </p>
             </article>
             <article
@@ -275,10 +248,10 @@ export default function HomePage() {
               <span className="marketing-card__icon" aria-hidden="true">
                 <Icon name="status" />
               </span>
-              <h3>Confirmed, not assumed</h3>
+              <h3>Know before you go</h3>
               <p>
-                A sale appears only after confirmed organizer publication or
-                explicit external-listing review.
+                Check each day’s opening hours and address availability before
+                heading out.
               </p>
             </article>
           </div>
@@ -338,9 +311,9 @@ export default function HomePage() {
               <div className="content-faq__answer">
                 <div>
                   <p>
-                    It depends on the organizer&apos;s approved privacy setting.
-                    Some listings show only an area, and some hold the address
-                    back until the sale starts.
+                    Organizers can show their address immediately or choose a
+                    date and time to reveal it. Until then, the listing shows
+                    the general area and when the full address will appear.
                   </p>
                 </div>
               </div>

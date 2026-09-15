@@ -10,6 +10,7 @@ import {
   AuthenticationError,
   AuthorizationError,
   EmailVerificationRequiredError,
+  MfaRequiredError,
 } from "@/modules/auth/domain/errors";
 import type { AuthPrincipal } from "@/modules/auth/domain/types";
 
@@ -33,6 +34,8 @@ describe("authorization guards", () => {
       ...user,
       role: "SUPER_ADMIN" as const,
       emailVerifiedAt: now,
+      mfaEnabled: true,
+      mfaAuthenticatedAt: now,
     };
     const session = {
       id: "session-1",
@@ -40,6 +43,7 @@ describe("authorization guards", () => {
       createdAt: new Date("2026-07-30T04:00:00.000Z"),
       expiresAt: new Date("2026-07-30T20:00:00.000Z"),
       passwordAuthenticatedAt: new Date("2026-07-30T11:46:00.000Z"),
+      mfaAuthenticatedAt: now,
       metadata: {},
       principal,
     };
@@ -53,6 +57,15 @@ describe("authorization guards", () => {
         now,
       ),
     ).toThrow(AuthorizationError);
+    expect(() =>
+      requireRecentSuperAdminSession(
+        {
+          ...session,
+          mfaAuthenticatedAt: new Date(now.getTime() - 15 * 60 * 1000 - 1),
+        },
+        now,
+      ),
+    ).toThrow(MfaRequiredError);
   });
 
   it("rejects missing, disabled, and restricted principals", () => {
@@ -73,6 +86,7 @@ describe("authorization guards", () => {
         role: "SUPER_ADMIN",
         status: "RESTRICTED",
         emailVerifiedAt: new Date(),
+        mfaAuthenticatedAt: new Date(),
       }),
     ).toThrow(AuthorizationError);
     expect(() =>
@@ -83,8 +97,29 @@ describe("authorization guards", () => {
         ...user,
         role: "SUPER_ADMIN",
         emailVerifiedAt: new Date(),
+        mfaAuthenticatedAt: new Date(),
       }).role,
     ).toBe("SUPER_ADMIN");
+  });
+
+  it("allows a verified administrator who has not enrolled in optional MFA", () => {
+    const principal = {
+      ...user,
+      role: "SUPER_ADMIN" as const,
+      emailVerifiedAt: new Date(),
+    };
+    expect(requireSuperAdminPrincipal(principal)).toBe(principal);
+  });
+
+  it("rejects password-only sessions after the administrator enrolls in MFA", () => {
+    expect(() =>
+      requireSuperAdminPrincipal({
+        ...user,
+        role: "SUPER_ADMIN",
+        emailVerifiedAt: new Date(),
+        mfaEnabled: true,
+      }),
+    ).toThrow(MfaRequiredError);
   });
 
   it("requires verification only for publishing-sensitive commands", () => {

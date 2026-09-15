@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 
 import type { PublicSearchRepository } from "../application/ports";
+import { APPROXIMATE_LOCATION_GRID_SCALE } from "../domain/approximate-location";
 
 interface PublicSearchRow {
   readonly sourceKind: string;
@@ -27,6 +28,90 @@ interface PublicSearchRow {
   readonly publicZone: string;
 }
 
+type SearchInput = Parameters<PublicSearchRepository["search"]>[0];
+
+function pagePredicate(input: SearchInput, source: "ORGANIZER" | "EXTERNAL") {
+  const organizer = source === "ORGANIZER";
+  const startsAt = organizer
+    ? Prisma.sql`search_document."starts_at"`
+    : Prisma.sql`listing."starts_at"`;
+  const endsAt = organizer
+    ? Prisma.sql`search_document."ends_at"`
+    : Prisma.sql`listing."ends_at"`;
+  const publicId = organizer
+    ? Prisma.sql`search_document."public_id"`
+    : Prisma.sql`listing."public_id"`;
+  const city = organizer
+    ? Prisma.sql`search_document."city"`
+    : Prisma.sql`location."city"`;
+  const region = organizer
+    ? Prisma.sql`search_document."region"`
+    : Prisma.sql`location."region"`;
+  const dateRange = !input.range
+    ? Prisma.sql`TRUE`
+    : organizer
+      ? Prisma.sql`(
+          CASE WHEN jsonb_array_length(COALESCE(publication."snapshot" -> 'projection' -> 'scheduleDays', '[]'::jsonb)) > 0
+          THEN EXISTS (
+            SELECT 1 FROM jsonb_array_elements(publication."snapshot" -> 'projection' -> 'scheduleDays') AS sale_day
+            WHERE (sale_day ->> 'startsAt')::timestamptz < ${input.range.endsAt}
+              AND (sale_day ->> 'endsAt')::timestamptz > ${input.range.startsAt}
+          )
+          ELSE (${startsAt} < ${input.range.endsAt} AND ${endsAt} > ${input.range.startsAt}) END
+        )`
+      : Prisma.sql`(${startsAt} < ${input.range.endsAt} AND ${endsAt} > ${input.range.startsAt})`;
+  return Prisma.sql`
+    ${endsAt} > ${input.activeAfter}
+    AND ${city} = ${input.location.city} AND ${region} = ${input.location.region}
+    AND ${dateRange}
+    AND ${
+      input.cursor
+        ? Prisma.sql`(${startsAt}, ${source}::text, ${publicId}::text) >
+      (${input.cursor.startsAt}::timestamptz, ${input.cursor.sourceKind}::text, ${input.cursor.publicId}::text)`
+        : Prisma.sql`TRUE`
+    }
+  `;
+}
+
+function publicBoundsPredicate(
+  input: SearchInput,
+  source: "organizer" | "external",
+) {
+  const bounds = input.bounds;
+  if (!bounds) return Prisma.sql`TRUE`;
+  const exact =
+    source === "organizer"
+      ? Prisma.sql`(search_document."privacy_mode" = 'EXACT_ADDRESS' OR
+        (search_document."privacy_mode" = 'HIDDEN_UNTIL_START' AND
+          COALESCE((publication."snapshot" ->> 'addressRevealAt')::timestamptz, search_document."starts_at") <= ${input.activeAfter}))`
+      : Prisma.sql`(listing."privacy_mode" = 'EXACT_ADDRESS' OR
+        (listing."privacy_mode" = 'HIDDEN_UNTIL_START' AND listing."starts_at" <= ${input.activeAfter}))`;
+  const includesPublicZone =
+    bounds.west <= -119.018712 &&
+    bounds.east >= -119.018712 &&
+    bounds.south <= 35.373292 &&
+    bounds.north >= 35.373292;
+  // The same fixed cell used by the public marker is also the only protected
+  // position used for viewport filtering. Private bounds would allow callers to
+  // recover a house's coordinates by repeatedly narrowing a search rectangle.
+  const confirmed = Prisma.sql`(location."confirmation_status" = 'CONFIRMED'
+    AND location."longitude" IS NOT NULL AND location."latitude" IS NOT NULL)`;
+  const approximateLongitude = Prisma.sql`((FLOOR(location."longitude" * ${APPROXIMATE_LOCATION_GRID_SCALE}) + 0.5) / ${APPROXIMATE_LOCATION_GRID_SCALE})`;
+  const approximateLatitude = Prisma.sql`((FLOOR(location."latitude" * ${APPROXIMATE_LOCATION_GRID_SCALE}) + 0.5) / ${APPROXIMATE_LOCATION_GRID_SCALE})`;
+  return Prisma.sql`(
+    (${exact} AND location."confirmation_status" = 'CONFIRMED'
+      AND location."coordinates"::public.geometry OPERATOR(public.&&) public.ST_MakeEnvelope(
+        ${bounds.west}, ${bounds.south}, ${bounds.east}, ${bounds.north}, 4326)
+      AND location."longitude" BETWEEN ${bounds.west} AND ${bounds.east}
+      AND location."latitude" BETWEEN ${bounds.south} AND ${bounds.north})
+    OR (NOT ${exact} AND location."public_zone" = 'bakersfield' AND (
+      (${confirmed} AND ${approximateLongitude} BETWEEN ${bounds.west} AND ${bounds.east}
+        AND ${approximateLatitude} BETWEEN ${bounds.south} AND ${bounds.north})
+      OR (NOT ${confirmed} AND ${includesPublicZone})
+    ))
+  )`;
+}
+
 export class PrismaPublicSearchRepository implements PublicSearchRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -34,54 +119,32 @@ export class PrismaPublicSearchRepository implements PublicSearchRepository {
     input: Parameters<PublicSearchRepository["search"]>[0],
   ): Promise<Awaited<ReturnType<PublicSearchRepository["search"]>>> {
     const limit = Math.min(Math.max(input.limit, 1), 25);
-    const cursorSourceKind = input.cursor?.sourceKind ?? null;
-
     const rows = await this.prisma.$queryRaw<PublicSearchRow[]>(Prisma.sql`
       WITH public_results AS (
-        SELECT
+        (SELECT
           'ORGANIZER'::text AS "sourceKind",
-          publication."public_id" AS "publicId",
+          search_document."public_id" AS "publicId",
           publication."canonical_path" AS "canonicalPath",
           publication."snapshot" AS "snapshot",
-          publication."snapshot" -> 'projection' ->> 'eventType' AS "eventType",
-          (publication."snapshot" -> 'projection' ->> 'startsAt')::timestamptz AS "startsAt",
-          (publication."snapshot" -> 'projection' ->> 'endsAt')::timestamptz AS "endsAt",
+          search_document."event_type"::text AS "eventType",
+          search_document."starts_at" AS "startsAt",
+          search_document."ends_at" AS "endsAt",
           NULL::text AS "title",
           NULL::text AS "localStartsAt",
           NULL::text AS "localEndsAt",
           NULL::text AS "timezone",
-          publication."snapshot" ->> 'privacyMode' AS "privacyMode",
-          publication."snapshot" -> 'projection' -> 'address' ->> 'city' AS "city",
-          publication."snapshot" -> 'projection' -> 'address' ->> 'region' AS "region",
+          search_document."privacy_mode"::text AS "privacyMode",
+          search_document."city" AS "city",
+          search_document."region" AS "region",
           NULL::text AS "sourceLabel",
           NULL::text AS "coverPhotoUrl",
           location."latitude" AS "latitude",
           location."longitude" AS "longitude",
           location."confirmation_status" AS "confirmationStatus",
-          location."public_zone" AS "publicZone",
-          CASE
-            WHEN publication."snapshot" ->> 'privacyMode' = 'EXACT_ADDRESS'
-              OR (
-                publication."snapshot" ->> 'privacyMode' = 'HIDDEN_UNTIL_START'
-                AND (
-                  publication."snapshot" -> 'projection' ->> 'startsAt'
-                )::timestamptz <= ${input.activeAfter}
-              )
-              THEN location."longitude"
-            ELSE -119.018712
-          END AS "publicLongitude",
-          CASE
-            WHEN publication."snapshot" ->> 'privacyMode' = 'EXACT_ADDRESS'
-              OR (
-                publication."snapshot" ->> 'privacyMode' = 'HIDDEN_UNTIL_START'
-                AND (
-                  publication."snapshot" -> 'projection' ->> 'startsAt'
-                )::timestamptz <= ${input.activeAfter}
-              )
-              THEN location."latitude"
-            ELSE 35.373292
-          END AS "publicLatitude"
+          location."public_zone" AS "publicZone"
         FROM "event_publications" AS publication
+        INNER JOIN "publication_search_documents" AS search_document
+          ON search_document."publication_id" = publication."id"
         INNER JOIN "events" AS source_event
           ON source_event."id" = publication."event_id"
         INNER JOIN "organizer_profiles" AS source_organizer
@@ -94,10 +157,16 @@ export class PrismaPublicSearchRepository implements PublicSearchRepository {
           AND source_event."deleted_at" IS NULL
           AND source_event."removed_at" IS NULL
           AND source_user."status" = 'ACTIVE'
+          AND (${input.eventType}::"event_type" IS NULL
+            OR search_document."event_type" = ${input.eventType}::"event_type")
+          AND ${publicBoundsPredicate(input, "organizer")}
+          AND ${pagePredicate(input, "ORGANIZER")}
+        ORDER BY search_document."starts_at", search_document."public_id"
+        LIMIT ${limit})
 
         UNION ALL
 
-        SELECT
+        (SELECT
           'EXTERNAL'::text AS "sourceKind",
           listing."public_id" AS "publicId",
           listing."canonical_path" AS "canonicalPath",
@@ -117,33 +186,22 @@ export class PrismaPublicSearchRepository implements PublicSearchRepository {
           location."latitude" AS "latitude",
           location."longitude" AS "longitude",
           location."confirmation_status" AS "confirmationStatus",
-          location."public_zone" AS "publicZone",
-          CASE
-            WHEN listing."privacy_mode" = 'EXACT_ADDRESS'
-              OR (
-                listing."privacy_mode" = 'HIDDEN_UNTIL_START'
-                AND listing."starts_at" <= ${input.activeAfter}
-              )
-              THEN location."longitude"
-            ELSE -119.018712
-          END AS "publicLongitude",
-          CASE
-            WHEN listing."privacy_mode" = 'EXACT_ADDRESS'
-              OR (
-                listing."privacy_mode" = 'HIDDEN_UNTIL_START'
-                AND listing."starts_at" <= ${input.activeAfter}
-              )
-              THEN location."latitude"
-            ELSE 35.373292
-          END AS "publicLatitude"
+          location."public_zone" AS "publicZone"
         FROM "external_listings" AS listing
         INNER JOIN "external_listing_locations" AS location
           ON location."listing_id" = listing."id"
         INNER JOIN "listing_source_records" AS source_record
           ON source_record."id" = listing."primary_source_record_id"
         WHERE listing."status" = 'PUBLISHED'
+          AND (${input.eventType}::"event_type" IS NULL
+            OR listing."event_type" = ${input.eventType}::"event_type")
           AND listing."ends_at" > ${input.activeAfter}
+          AND listing."removed_at" IS NULL
           AND source_record."linked_event_id" IS NULL
+          AND ${publicBoundsPredicate(input, "external")}
+          AND ${pagePredicate(input, "EXTERNAL")}
+        ORDER BY listing."starts_at", listing."public_id"
+        LIMIT ${limit})
       )
       SELECT
         result."sourceKind",
@@ -167,40 +225,6 @@ export class PrismaPublicSearchRepository implements PublicSearchRepository {
         result."confirmationStatus",
         result."publicZone"
       FROM public_results AS result
-      WHERE result."endsAt" > ${input.activeAfter}
-        AND (
-          ${input.eventType}::text IS NULL
-          OR result."eventType" = ${input.eventType}::text
-        )
-        AND result."city" = ${input.location.city}
-        AND result."region" = ${input.location.region}
-        AND (
-          ${input.bounds?.west ?? null}::numeric IS NULL
-          OR (
-            result."publicLongitude" BETWEEN ${input.bounds?.west ?? null} AND ${input.bounds?.east ?? null}
-            AND result."publicLatitude" BETWEEN ${input.bounds?.south ?? null} AND ${input.bounds?.north ?? null}
-          )
-        )
-        AND (
-          ${input.range?.endsAt ?? null}::timestamptz IS NULL
-          OR (
-            result."startsAt" < ${input.range?.endsAt ?? null}::timestamptz
-            AND result."endsAt" > ${input.range?.startsAt ?? null}::timestamptz
-          )
-        )
-        AND (
-          ${input.cursor?.startsAt ?? null}::timestamptz IS NULL
-          OR result."startsAt" > ${input.cursor?.startsAt ?? null}::timestamptz
-          OR (
-            result."startsAt" = ${input.cursor?.startsAt ?? null}::timestamptz
-            AND result."sourceKind" > ${cursorSourceKind}::text
-          )
-          OR (
-            result."startsAt" = ${input.cursor?.startsAt ?? null}::timestamptz
-            AND result."sourceKind" = ${cursorSourceKind}::text
-            AND result."publicId" > ${input.cursor?.publicId ?? null}::text
-          )
-        )
       ORDER BY
         result."startsAt" ASC,
         result."sourceKind" ASC,

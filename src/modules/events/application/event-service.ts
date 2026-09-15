@@ -26,7 +26,11 @@ import {
   type PhotoProcessingStage,
 } from "../domain/errors";
 import { eventSlug } from "../domain/slug";
-import { validatedSchedule } from "../domain/schedule";
+import {
+  localDateTimeToUtc,
+  validatedSchedule,
+  validatedScheduleDays,
+} from "../domain/schedule";
 import type {
   EventEditorDto,
   EventListItemDto,
@@ -38,6 +42,7 @@ import type {
 } from "../domain/types";
 import { approvalDigest } from "./approval";
 import type { EventAuditContext, EventRepository } from "./ports";
+import type { EventWorkLimiter } from "./work-limiter";
 import {
   draftWorkflowState,
   eventReadiness,
@@ -146,6 +151,7 @@ export class EventService {
     private readonly images: ImageProcessor,
     private readonly environment: MediaEnvironment,
     private readonly now: () => Date = () => new Date(),
+    private readonly workLimiter?: EventWorkLimiter,
   ) {}
 
   private async loadOwned(
@@ -201,6 +207,7 @@ export class EventService {
     audit: EventAuditContext = {},
   ): Promise<EventEditorDto> {
     const user = requireUserPrincipal(principal);
+    await this.workLimiter?.consume(user.id, "create");
     const event = await this.events.createOwned({
       ownerUserId: user.id,
       eventType,
@@ -419,10 +426,34 @@ export class EventService {
     this.assertEditable(current);
     if (current.version !== input.expectedVersion)
       throw new EventConflictError();
+    const daily = input.scheduleDays
+      ? validatedScheduleDays(input.scheduleDays, input.timezone)
+      : null;
+    const firstDay = daily?.[0];
+    const lastDay = daily?.[daily.length - 1];
+    const localStartsAt = firstDay
+      ? `${firstDay.date}T${firstDay.startTime}`
+      : input.localStartsAt;
+    const localEndsAt = lastDay
+      ? `${lastDay.date}T${lastDay.endTime}`
+      : input.localEndsAt;
+    if (!localStartsAt || !localEndsAt) {
+      throw new EventValidationError(
+        "Select event dates and opening and closing times.",
+      );
+    }
+    const scheduleDays =
+      daily?.map(({ date, startTime, endTime }) => ({
+        date,
+        startTime,
+        endTime,
+      })) ?? null;
     if (
-      current.localStartsAt === input.localStartsAt &&
-      current.localEndsAt === input.localEndsAt &&
-      current.timezone === input.timezone
+      current.localStartsAt === localStartsAt &&
+      current.localEndsAt === localEndsAt &&
+      current.timezone === input.timezone &&
+      JSON.stringify(current.scheduleDays ?? null) ===
+        JSON.stringify(scheduleDays)
     ) {
       return toEventEditorDto(current);
     }
@@ -431,10 +462,15 @@ export class EventService {
         "The schedule timezone must match the validated address timezone.",
       );
     }
-    const schedule = validatedSchedule(input);
+    const schedule = validatedSchedule({
+      localStartsAt,
+      localEndsAt,
+      timezone: input.timezone,
+    });
     const hypothetical = withChanges(current, {
-      localStartsAt: input.localStartsAt,
-      localEndsAt: input.localEndsAt,
+      localStartsAt,
+      localEndsAt,
+      scheduleDays,
       startsAt: schedule.startsAt,
       endsAt: schedule.endsAt,
       timezone: input.timezone,
@@ -444,8 +480,9 @@ export class EventService {
       eventId,
       userId: user.id,
       expectedVersion: input.expectedVersion,
-      localStartsAt: input.localStartsAt,
-      localEndsAt: input.localEndsAt,
+      localStartsAt,
+      localEndsAt,
+      scheduleDays,
       startsAt: schedule.startsAt,
       endsAt: schedule.endsAt,
       timezone: input.timezone,
@@ -472,6 +509,22 @@ export class EventService {
       );
     }
     const selected = input.confirmed ? input.selectedLocation : undefined;
+    const addressRevealAt =
+      input.privacyMode === "HIDDEN_UNTIL_START"
+        ? input.localAddressRevealAt
+          ? localDateTimeToUtc(input.localAddressRevealAt, input.timezone)
+          : input.localAddressRevealAt === undefined
+            ? (current.addressRevealAt ?? null)
+            : null
+        : null;
+    if (
+      input.privacyMode === "HIDDEN_UNTIL_START" &&
+      input.localAddressRevealAt === null
+    ) {
+      throw new EventValidationError(
+        "Choose the date and time when the full address will be shown.",
+      );
+    }
     const currentLocation = current.location;
     const addressUnchanged = Boolean(
       currentLocation &&
@@ -485,7 +538,12 @@ export class EventService {
       currentLocation.timezone === input.timezone &&
       currentLocation.confirmationStatus === "CONFIRMED",
     );
-    if (addressUnchanged && current.privacyMode === input.privacyMode) {
+    if (
+      addressUnchanged &&
+      current.privacyMode === input.privacyMode &&
+      (current.addressRevealAt?.getTime() ?? null) ===
+        (addressRevealAt?.getTime() ?? null)
+    ) {
       return toEventEditorDto(current);
     }
     if (input.confirmed && !selected && !addressUnchanged) {
@@ -561,6 +619,7 @@ export class EventService {
     const hypothetical = withChanges(current, {
       location: { id: "pending", eventId, ...location },
       privacyMode: input.privacyMode,
+      addressRevealAt,
       approvalStatus: "NOT_APPROVED",
     });
     const result = await this.events.updateLocation({
@@ -569,6 +628,7 @@ export class EventService {
       expectedVersion: input.expectedVersion,
       location,
       privacyMode: input.privacyMode,
+      addressRevealAt,
       workflowState: draftWorkflowState(hypothetical),
       audit,
     });
@@ -586,6 +646,7 @@ export class EventService {
   ): Promise<EventPhotoReservationDto> {
     const user = requireUserPrincipal(principal);
     this.assertEditable(await this.loadOwned(eventId, user.id));
+    await this.workLimiter?.consume(user.id, "reserve");
     const reservationId = randomUUID();
     const photoId = randomUUID();
     const expiresAt = new Date(Date.now() + 10 * 60_000);
@@ -619,7 +680,7 @@ export class EventService {
             transport: "vercel-client" as const,
           } as const)
         : ({
-            transport: "test-direct" as const,
+            transport: authorization.transport,
             uploadUrl: authorization.uploadUrl.toString(),
             method: authorization.method,
             uploadHeaders: {
@@ -655,8 +716,9 @@ export class EventService {
     const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
-    if (current.version !== input.expectedVersion)
-      throw new EventConflictError();
+    // Token authorization is read-only and belongs to this owner-scoped
+    // reservation. Sibling uploads may have advanced the event meanwhile.
+    if (current.version < input.expectedVersion) throw new EventConflictError();
     const reservation = await this.events.findPhotoReservation({
       reservationId: input.reservationId,
       photoId: input.photoId,
@@ -688,6 +750,35 @@ export class EventService {
   }
 
   async finalizePhoto(
+    principal: AuthPrincipal | null,
+    eventId: string,
+    photoId: string,
+    input: {
+      readonly reservationId: string;
+      readonly expectedVersion: number;
+      readonly pathname: string;
+    },
+    audit: EventAuditContext = {},
+  ): Promise<EventEditorDto> {
+    const user = requireUserPrincipal(principal);
+    await this.workLimiter?.consume(user.id, "finalize");
+    // Acquire before downloading or consuming the upload reservation. A busy
+    // runtime leaves the original upload intact for a later retry.
+    const release = this.workLimiter?.acquireProcessing();
+    try {
+      return await this.finalizePhotoWithSlot(
+        principal,
+        eventId,
+        photoId,
+        input,
+        audit,
+      );
+    } finally {
+      release?.();
+    }
+  }
+
+  private async finalizePhotoWithSlot(
     principal: AuthPrincipal | null,
     eventId: string,
     photoId: string,
@@ -1033,6 +1124,15 @@ export class EventService {
     if (current.organizerStatus !== "COMPLETE") {
       throw new OrganizerProfileIncompleteError(
         "Complete your organizer profile before approving this event.",
+      );
+    }
+    if (
+      current.photos.some((photo) =>
+        ["RESERVED", "UPLOADED", "PROCESSING"].includes(photo.status),
+      )
+    ) {
+      throw new EventStateError(
+        "Wait for all photo uploads to finish before approving this event.",
       );
     }
     const now = this.now();

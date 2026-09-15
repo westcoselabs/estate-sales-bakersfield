@@ -1,0 +1,7 @@
+{
+  "schema": "backup-restore-rehearsal-v1",
+  "capturedAt": "2026-09-15T03:56:19.409Z",
+  "scope": "Synthetic disposable Development schema; Production backup/restore is not verified",
+  "status": "failed",
+  "failure": "Backup/restore rehearsal failed. Raw command output is withheld because it can contain connection details."
+}

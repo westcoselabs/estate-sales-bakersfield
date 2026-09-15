@@ -1,6 +1,9 @@
 import "server-only";
 
 import { cookies } from "next/headers";
+import { cache } from "react";
+import { redirect, notFound } from "next/navigation";
+import { AuthorizationError, MfaRequiredError } from "../domain/errors";
 
 import {
   requireSuperAdminPrincipal,
@@ -29,9 +32,13 @@ export async function getCurrentSessionToken(): Promise<string | undefined> {
     ?.value;
 }
 
-export async function getCurrentSession(): Promise<CurrentSession | null> {
-  return createConfiguredSessionService().read(await getCurrentSessionToken());
-}
+export const getCurrentSession = cache(
+  async (): Promise<CurrentSession | null> => {
+    return createConfiguredSessionService().read(
+      await getCurrentSessionToken(),
+    );
+  },
+);
 
 export async function getCurrentUser(): Promise<AuthPrincipal | null> {
   return (await getCurrentSession())?.principal ?? null;
@@ -43,6 +50,24 @@ export async function requireUser(): Promise<AuthPrincipal> {
 
 export async function requireSuperAdmin(): Promise<AuthPrincipal> {
   return requireSuperAdminPrincipal(await getCurrentUser());
+}
+
+export async function requireAdminPageSession(): Promise<CurrentSession> {
+  const session = await getCurrentSession();
+  if (!session) redirect("/login?next=%2Fadmin");
+  try {
+    requireSuperAdminPrincipal(session.principal);
+  } catch (error) {
+    if (error instanceof MfaRequiredError)
+      redirect("/account/security?next=%2Fadmin");
+    if (error instanceof AuthorizationError) notFound();
+    throw error;
+  }
+  return session;
+}
+
+export async function requireAdminPagePrincipal(): Promise<AuthPrincipal> {
+  return (await requireAdminPageSession()).principal;
 }
 
 export async function requireVerifiedPublishingUser(): Promise<AuthPrincipal> {

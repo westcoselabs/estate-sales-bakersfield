@@ -66,6 +66,7 @@ export async function POST(request: Request) {
         actor: {
           kind: "ADMIN_USER",
           adminUserId: session.principal.id,
+          adminSessionId: session.id,
         },
         audit: { requestId },
       },

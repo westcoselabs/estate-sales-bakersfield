@@ -8,68 +8,56 @@ import { Icon } from "@/components/ui/icons";
 
 const showcaseCards = [
   {
-    kind: "image",
     src: "/images/Bakersfield-sign.webp",
     label: "Bakersfield estate sale sign",
     position: "center",
   },
   {
-    kind: "image",
     src: "/images/estate-sales-bakersfield (5).webp",
     label: "Local Bakersfield estate sale inventory",
     position: "center",
   },
-  { kind: "message" },
   {
-    kind: "image",
     src: "/images/estate-sales-bakersfield (2).webp",
     label: "Estate sale furniture in Bakersfield",
     position: "center",
   },
   {
-    kind: "image",
     src: "/images/estate-sales-bakersfield (8).webp",
     label: "Bakersfield estate sale decor",
     position: "center",
   },
   {
-    kind: "image",
     src: "/images/estate-sales-bakersfield (3).webp",
     label: "Collected home decor at a Bakersfield sale",
     position: "center",
   },
   {
-    kind: "image",
     src: "/images/estate-sales-bakersfield (10).webp",
     label: "Local estate sale treasures in Bakersfield",
     position: "center",
   },
   {
-    kind: "image",
     src: "/images/estate-sales-bakersfield (1).webp",
     label: "Estate sale find in Bakersfield",
     position: "center",
   },
   {
-    kind: "image",
     src: "/images/estate-sales-bakersfield (7).webp",
     label: "Furniture and decor from a Bakersfield estate sale",
     position: "center",
   },
   {
-    kind: "image",
     src: "/images/estate-sales-bakersfield (4).webp",
     label: "Vintage home goods at an estate sale",
     position: "center",
   },
   {
-    kind: "image",
     src: "/images/estate-sales-bakersfield (9).webp",
     label: "Estate sale artwork and furnishings",
     position: "center",
   },
   {
-    kind: "image",
     src: "/images/estate-sales-bakersfield (6).webp",
     label: "Estate sale room display in Bakersfield",
     position: "center",
@@ -79,40 +67,26 @@ const showcaseCards = [
 function MarqueeGroup({ duplicate = false }: { readonly duplicate?: boolean }) {
   return (
     <div className="hero-marquee__group" aria-hidden={duplicate || undefined}>
-      {showcaseCards.map((card, index) =>
-        card.kind === "message" ? (
-          <div
-            className="hero-marquee__card hero-marquee__card--message"
-            key={`message-${String(index)}`}
-          >
-            <small>Good finds</small>
-            <strong>
-              Timeless pieces,
-              <br />
-              great prices.
-            </strong>
-          </div>
-        ) : (
-          <figure
-            className="hero-marquee__card"
-            key={card.src}
-            style={
-              {
-                "--hero-image-position": card.position,
-              } as CSSProperties
-            }
-          >
-            <Image
-              alt=""
-              aria-hidden="true"
-              fill
-              sizes="(max-width: 767px) 10rem, 15rem"
-              src={card.src}
-            />
-            <figcaption className="sr-only">{card.label}</figcaption>
-          </figure>
-        ),
-      )}
+      {showcaseCards.map((card) => (
+        <figure
+          className="hero-marquee__card"
+          key={card.src}
+          style={
+            {
+              "--hero-image-position": card.position,
+            } as CSSProperties
+          }
+        >
+          <Image
+            alt=""
+            aria-hidden="true"
+            fill
+            sizes="(max-width: 390px) 11.25rem, (max-width: 767px) 12.5rem, 15rem"
+            src={card.src}
+          />
+          <figcaption className="sr-only">{card.label}</figcaption>
+        </figure>
+      ))}
     </div>
   );
 }
@@ -132,16 +106,26 @@ export function HeroMarquee() {
       marquee.querySelectorAll<HTMLElement>(".hero-marquee__card"),
     );
     const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const track = marquee.querySelector<HTMLElement>(".hero-marquee__track");
     let animationFrame = 0;
+    let visible = false;
+
+    const canAnimate = () =>
+      visible && !paused && !document.hidden && !motionQuery.matches;
 
     const updateCardRotation = () => {
+      animationFrame = 0;
+      if (!canAnimate()) return;
       const viewportCenter = window.innerWidth / 2;
       const halfViewport = Math.max(viewportCenter, 1);
       const isMobileViewport = window.innerWidth < 768;
       const maxRise = isMobileViewport ? 38 : 40;
 
-      for (const card of cards) {
-        const cardBounds = card.getBoundingClientRect();
+      // Read all geometry before writing any style. Interleaving these forces
+      // the browser to recalculate layout for each of the 24 cards.
+      const bounds = cards.map((card) => card.getBoundingClientRect());
+      cards.forEach((card, index) => {
+        const cardBounds = bounds[index]!;
         const position =
           (cardBounds.left + cardBounds.width / 2 - viewportCenter) /
           halfViewport;
@@ -155,13 +139,17 @@ export function HeroMarquee() {
           `${rotation.toFixed(2)}deg`,
         );
         card.style.setProperty("--hero-card-rise", `-${rise.toFixed(1)}px`);
-      }
+      });
 
       animationFrame = window.requestAnimationFrame(updateCardRotation);
     };
 
-    const setMotionPreference = () => {
+    const synchronizeMotion = () => {
       window.cancelAnimationFrame(animationFrame);
+      animationFrame = 0;
+      const playState = canAnimate() ? "running" : "paused";
+      if (track && track.style.animationPlayState !== playState)
+        track.style.animationPlayState = playState;
 
       if (motionQuery.matches) {
         for (const card of cards) {
@@ -172,17 +160,26 @@ export function HeroMarquee() {
         return;
       }
 
-      updateCardRotation();
+      if (canAnimate())
+        animationFrame = window.requestAnimationFrame(updateCardRotation);
     };
 
-    setMotionPreference();
-    motionQuery.addEventListener("change", setMotionPreference);
+    const observer = new IntersectionObserver(([entry]) => {
+      visible = entry?.isIntersecting ?? false;
+      synchronizeMotion();
+    });
+    observer.observe(marquee);
+    synchronizeMotion();
+    motionQuery.addEventListener("change", synchronizeMotion);
+    document.addEventListener("visibilitychange", synchronizeMotion);
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
-      motionQuery.removeEventListener("change", setMotionPreference);
+      observer.disconnect();
+      motionQuery.removeEventListener("change", synchronizeMotion);
+      document.removeEventListener("visibilitychange", synchronizeMotion);
     };
-  }, []);
+  }, [paused]);
 
   return (
     <div

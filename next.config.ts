@@ -46,9 +46,16 @@ const sensitivePagePaths = [
   "/reset-password",
   "/dashboard/:path*",
   "/admin/:path*",
+  "/account/security",
+  "/api/auth/mfa",
 ];
 
-const tokenPagePaths = ["/verify-email", "/reset-password"];
+const tokenPagePaths = [
+  "/verify-email",
+  "/reset-password",
+  "/account/security",
+  "/api/auth/mfa",
+];
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,

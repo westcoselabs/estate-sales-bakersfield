@@ -252,6 +252,10 @@ export function testDatabaseEnvironment(
     TEST_SCHEMA_NAME: database.schemaName,
     CRON_SECRET: undefined,
     AUTH_FINGERPRINT_SECRET: undefined,
+    ADMIN_MFA_ENCRYPTION_KEY: "",
+    PRODUCTION_BETA_MODE: "false",
+    PUBLIC_INDEXING_ENABLED: "false",
+    PUBLIC_IMPORTED_INDEXING_ENABLED: "false",
     AUTH_EMAIL_CAPTURE_PATH: undefined,
     BLOB_READ_WRITE_TOKEN: undefined,
     BLOB_RESOURCE_ENV: undefined,
@@ -276,7 +280,8 @@ export function testDatabaseEnvironment(
       name.startsWith("VERCEL_") ||
       name.startsWith("PREVIEW_") ||
       (name.startsWith("PRODUCTION_") &&
-        name !== "PRODUCTION_NEON_ENDPOINT_ID") ||
+        name !== "PRODUCTION_NEON_ENDPOINT_ID" &&
+        name !== "PRODUCTION_BETA_MODE") ||
       name.startsWith("NEXT_PUBLIC_")
     ) {
       delete environment[name];

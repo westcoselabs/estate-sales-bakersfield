@@ -8,6 +8,7 @@ import { PUBLISHING_TERMS_VERSION } from "@/modules/events/application/policy";
 
 import {
   choosePhotoCover,
+  chooseSaleDate,
   chooseSingleDaySchedule,
   completeOrganizerProfile,
 } from "./event-builder-support";
@@ -105,6 +106,281 @@ async function sameOriginPost(
     { endpoint: url, payload: body },
   );
 }
+
+test("addresslookupoutage preserves the draft and allows photos until the address can be confirmed", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const suffix = crypto.randomUUID();
+  const email = `${runId}-address-outage-${suffix}@example.test`;
+  const password = "address-outage-browser-password";
+  await page
+    .context()
+    .setExtraHTTPHeaders({ "x-forwarded-for": `e2e-address-outage-${suffix}` });
+  await registerAndVerify(page, email, "Address outage owner", password);
+  await login(page, email, password);
+  await completeOrganizerProfile(page, {
+    displayName: "Address Outage Sales",
+    contactName: "Address outage owner",
+    contactEmail: email,
+  });
+  await page.getByRole("button", { name: "Create event" }).click();
+  await expect(page).toHaveURL(/\/dashboard\/events\/[0-9a-f-]+\/edit$/);
+  const eventId = page.url().match(/events\/([^/]+)\/edit/)?.[1];
+  await page.getByLabel("Public title").fill("Address outage sale");
+  await page
+    .getByLabel("Public description")
+    .fill(
+      "Furniture, books, and household items for our neighborhood estate sale.",
+    );
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  const now = new Date();
+  const date = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 4),
+  )
+    .toISOString()
+    .slice(0, 10);
+  await chooseSingleDaySchedule(page, date);
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await page.route("**/api/locations/autocomplete", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ error: { code: "PROVIDER_UNAVAILABLE" } }),
+    }),
+  );
+  await page
+    .getByLabel("Search the sale property address")
+    .fill("5305 Cameron Ct");
+  await expect(page.getByText(/Address search is unavailable/)).toBeVisible();
+  await page.getByLabel("Show exact address", { exact: true }).check();
+  await page
+    .getByRole("button", { name: "Save draft and continue to Photos" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Photos", exact: true }),
+  ).toBeVisible();
+  const stored = (
+    await (await page.request.get(`/api/events/${eventId}`)).json()
+  ).event;
+  expect(stored.location).toMatchObject({
+    addressLine1: "5305 Cameron Ct",
+    latitude: null,
+    longitude: null,
+    confirmationStatus: "UNCONFIRMED",
+  });
+  expect(stored.steps.locationComplete).toBe(false);
+  const photo = await sharp({
+    create: { width: 800, height: 600, channels: 3, background: "#657665" },
+  })
+    .jpeg()
+    .toBuffer();
+  await page.getByLabel(/Event photos/).setInputFiles({
+    name: "outage-photo.jpg",
+    mimeType: "image/jpeg",
+    buffer: photo,
+  });
+  await expect(
+    page.locator(".photo-manager__list > li[data-status='ready']"),
+  ).toHaveCount(1, { timeout: 30_000 });
+  await choosePhotoCover(page, "outage-photo.jpg");
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(
+    page.getByRole("button", { name: "Approve exact revision" }),
+  ).toBeDisabled();
+  await page.reload();
+  await expect(page.getByLabel("Search the sale property address")).toHaveValue(
+    "5305 Cameron Ct, Bakersfield, California, US",
+  );
+  await page.unroute("**/api/locations/autocomplete");
+  await page
+    .getByLabel("Search the sale property address")
+    .fill("123 Baker Street");
+  await page.getByRole("option").getByRole("button").click();
+  await page.getByLabel("I confirm this is the sale property.").check();
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Photos", exact: true }),
+  ).toBeVisible();
+  const confirmed = (
+    await (await page.request.get(`/api/events/${eventId}`)).json()
+  ).event;
+  expect(confirmed.location).toMatchObject({
+    addressLine1: "123 Baker Street",
+    confirmationStatus: "CONFIRMED",
+  });
+  expect(confirmed.steps.locationComplete).toBe(true);
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(
+    page.getByRole("button", { name: "Approve exact revision" }),
+  ).toBeEnabled();
+});
+
+test("saves daily sale hours and a custom address reveal time across reloads", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  const suffix = crypto.randomUUID();
+  const email = `${runId}-daily-hours-${suffix}@example.test`;
+  const password = "daily-sale-hours-browser-password";
+  await page
+    .context()
+    .setExtraHTTPHeaders({ "x-forwarded-for": `e2e-daily-hours-${suffix}` });
+  await registerAndVerify(page, email, "Daily hours owner", password);
+  await login(page, email, password);
+  await completeOrganizerProfile(page, {
+    displayName: "Daily Hours Estate Sales",
+    contactName: "Daily hours owner",
+    contactEmail: email,
+  });
+  await page.getByRole("button", { name: "Create event" }).click();
+  await expect(page).toHaveURL(/\/dashboard\/events\/[0-9a-f-]+\/edit$/);
+  const eventId = page.url().match(/events\/([^/]+)\/edit/)?.[1];
+  expect(eventId).toBeTruthy();
+  await page.getByLabel("Public title").fill("Three Day Estate Sale");
+  await page
+    .getByLabel("Public description")
+    .fill(
+      "A three day estate sale with furniture, books, art, and collectibles, with different hours each day.",
+    );
+  await page.getByRole("button", { name: "Save and continue" }).click();
+
+  const nextMonth = new Date();
+  const dates = [4, 5, 7].map((day) =>
+    new Date(
+      Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth() + 1, day),
+    )
+      .toISOString()
+      .slice(0, 10),
+  );
+  const first = dates[0]!;
+  const second = dates[1]!;
+  const third = dates[2]!;
+  const dayLabel = (date: string) =>
+    new Intl.DateTimeFormat("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(`${date}T12:00:00.000Z`));
+  for (const date of dates) await chooseSaleDate(page, date);
+  await page.getByLabel(`Start time for ${dayLabel(second)}`).fill("09:00");
+  await page.getByLabel(`End time for ${dayLabel(second)}`).fill("14:30");
+  await page.getByLabel(`End time for ${dayLabel(third)}`).fill("12:00");
+
+  await page.getByRole("button", { name: `Remove ${dayLabel(first)}` }).click();
+  await expect(
+    page.getByLabel(`Start time for ${dayLabel(first)}`),
+  ).toHaveCount(0);
+  await expect(page.getByLabel(`End time for ${dayLabel(second)}`)).toHaveValue(
+    "14:30",
+  );
+  await chooseSaleDate(page, first);
+  await page.getByLabel(`End time for ${dayLabel(first)}`).fill("07:00");
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(page.locator(".schedule-card").getByRole("alert")).toContainText(
+    "must be after its start time",
+  );
+  await page.getByLabel(`End time for ${dayLabel(first)}`).fill("13:00");
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Address and privacy" }),
+  ).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Schedule", exact: true }).click();
+  await expect(page.getByLabel(/^Start time for/)).toHaveCount(3);
+  await expect(page.getByLabel(`End time for ${dayLabel(first)}`)).toHaveValue(
+    "13:00",
+  );
+  await expect(
+    page.getByLabel(`Start time for ${dayLabel(second)}`),
+  ).toHaveValue("09:00");
+  await expect(page.getByLabel(`End time for ${dayLabel(second)}`)).toHaveValue(
+    "14:30",
+  );
+  await expect(page.getByLabel(`End time for ${dayLabel(third)}`)).toHaveValue(
+    "12:00",
+  );
+  await page
+    .locator(".schedule-card")
+    .screenshot({ path: testInfo.outputPath("daily-hours-desktop.png") });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByLabel(`End time for ${dayLabel(second)}`),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page
+    .locator(".schedule-card")
+    .screenshot({ path: testInfo.outputPath("daily-hours-mobile.png") });
+  await page.getByLabel(`End time for ${dayLabel(third)}`).fill("12:15");
+
+  await page.getByRole("button", { name: "Privacy", exact: true }).click();
+  await page
+    .getByLabel("Search the sale property address")
+    .fill("123 Baker Street");
+  await page.getByRole("option").getByRole("button").click();
+  await page.getByLabel("I confirm this is the sale property.").check();
+  await expect(
+    page
+      .getByRole("group", { name: "Privacy for this address" })
+      .getByRole("radio"),
+  ).toHaveCount(2);
+  await page.getByLabel("Hide address until", { exact: true }).check();
+  await page.getByLabel("Address reveal date", { exact: true }).fill(first);
+  await page.getByLabel("Address reveal time", { exact: true }).fill("06:00");
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Photos", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Schedule", exact: true }).click();
+  await expect(page.getByLabel(`End time for ${dayLabel(third)}`)).toHaveValue(
+    "12:15",
+  );
+  await page.getByLabel(`End time for ${dayLabel(third)}`).fill("12:00");
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await page.getByLabel("Address reveal time", { exact: true }).fill("05:30");
+  await page.getByRole("button", { name: "Schedule", exact: true }).click();
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(
+    page.getByLabel("Address reveal time", { exact: true }),
+  ).toHaveValue("05:30");
+  await page.getByLabel("Address reveal time", { exact: true }).fill("06:00");
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Photos", exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Privacy", exact: true }).click();
+  await expect(
+    page.getByLabel("Hide address until", { exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByLabel("Address reveal date", { exact: true }),
+  ).toHaveValue(first);
+  await expect(
+    page.getByLabel("Address reveal time", { exact: true }),
+  ).toHaveValue("06:00");
+  await page
+    .getByRole("group", { name: "Privacy for this address" })
+    .screenshot({ path: testInfo.outputPath("address-reveal-mobile.png") });
+
+  const result = (await (
+    await page.request.get(`/api/events/${eventId}`)
+  ).json()) as {
+    event: { scheduleDays: unknown; localAddressRevealAt: string };
+  };
+  expect(result.event.scheduleDays).toEqual([
+    { date: first, startTime: "08:00", endTime: "13:00" },
+    { date: second, startTime: "09:00", endTime: "14:30" },
+    { date: third, startTime: "08:00", endTime: "12:00" },
+  ]);
+  expect(result.event.localAddressRevealAt).toBe(`${first}T06:00`);
+});
 
 test("completes the account, recovery, session, and optional profile lifecycle", async ({
   browser,
@@ -425,7 +701,21 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   await stalePage.goto(page.url());
 
   await page.getByRole("button", { name: "Schedule" }).click();
-  await chooseSingleDaySchedule(page, "2026-09-05");
+  const saleDay = new Date(Date.now() + 86_400_000);
+  const saleDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(saleDay);
+  const saleDateLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(saleDay);
+  await chooseSingleDaySchedule(page, saleDate);
   await page.getByRole("button", { name: "Save and continue" }).click();
   await expect(
     page.getByRole("heading", { name: "Address and privacy" }),
@@ -439,7 +729,7 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   ).toBeVisible();
   await expect(
     stalePage.getByRole("region", { name: "Sale schedule details" }),
-  ).toContainText("September 5, 2026");
+  ).toContainText(saleDateLabel);
   await stalePage.close();
 
   await page
@@ -452,7 +742,7 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     }),
   ).toBeVisible();
   await page.getByLabel("I confirm this is the sale property.").check();
-  await page.getByLabel("Hide exact address until the event starts").check();
+  await page.getByLabel("Hide address until").check();
   await page.getByRole("button", { name: "Save and continue" }).click();
 
   const image = await sharp({
@@ -488,6 +778,21 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     },
     { times: 1 },
   );
+  await page.route(
+    "**/api/events/*/photos/*/finalize",
+    async (route) => {
+      await route.fulfill({
+        status: 429,
+        contentType: "application/json",
+        headers: { "Retry-After": "5" },
+        body: JSON.stringify({
+          code: "PROCESSING_BUSY",
+          error: "Image processing is busy. Please retry this photo shortly.",
+        }),
+      });
+    },
+    { times: 1 },
+  );
   await page.getByLabel(/Event photos/).setInputFiles([
     {
       name: "estate-photo.jpg",
@@ -520,6 +825,13 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   const photoManager = page.getByRole("list", {
     name: "Photo uploads and event photo order",
   });
+  const busyPhoto = photoManager
+    .locator(":scope > li")
+    .filter({ hasText: "estate-photo.jpg" });
+  // A temporary processing limit retries the already-transferred photo.
+  await expect(
+    busyPhoto.getByRole("button", { name: "Retry", exact: true }),
+  ).toHaveCount(0);
   await expect(photoManager.getByText("Ready", { exact: true })).toHaveCount(
     2,
     { timeout: 30_000 },
@@ -694,7 +1006,9 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     ),
   ).toBeVisible();
   await expect(page.getByRole("checkbox")).toHaveCount(1);
-  await page.getByLabel(/I accept publishing terms version/).check();
+  await page
+    .getByLabel(/I accept publishing terms and approve this event for payment/)
+    .check();
   await page.getByRole("button", { name: "Approve exact revision" }).click();
   await expect(page).toHaveURL(
     new RegExp(`/dashboard/events/${eventId}/payment`),
@@ -731,7 +1045,9 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     page.getByRole("button", { name: "Approve exact revision" }),
   ).toHaveCount(0);
   await expect(
-    page.getByLabel(/I accept publishing terms version/),
+    page.getByLabel(
+      /I accept publishing terms and approve this event for payment/,
+    ),
   ).toHaveCount(0);
   await page.getByRole("link", { name: "Make payment" }).click();
   await expect(page).toHaveURL(
@@ -750,7 +1066,9 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   await page.getByRole("button", { name: "Review", exact: true }).click();
   await expect(page.getByText("Approval", { exact: true })).toBeVisible();
   await expect(page.getByText("NOT APPROVED", { exact: true })).toBeVisible();
-  await page.getByLabel(/I accept publishing terms version/).check();
+  await page
+    .getByLabel(/I accept publishing terms and approve this event for payment/)
+    .check();
   await page.getByRole("button", { name: "Approve exact revision" }).click();
   await expect(page).toHaveURL(
     new RegExp(`/dashboard/events/${eventId}/payment`),

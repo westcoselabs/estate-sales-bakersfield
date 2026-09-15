@@ -14,6 +14,11 @@ import type {
   PublicSearchSourceRecord,
 } from "./ports";
 import { resolvePublicDateInterval } from "./date-range";
+import {
+  approximateLocationCoordinates,
+  APPROXIMATE_LOCATION_RADIUS_METERS,
+  PUBLIC_ZONE_RADIUS_METERS,
+} from "../domain/approximate-location";
 
 const PUBLIC_ID = /^[0-9a-f]{12}$/;
 const DEFAULT_LIMIT = 20;
@@ -120,11 +125,13 @@ interface SearchProjection {
   readonly localStartsAt: string;
   readonly localEndsAt: string;
   readonly timezone: string;
+  readonly scheduleDays?: PublicListingCardProjection["scheduleDays"];
   readonly address: {
     readonly kind: "EXACT" | "APPROXIMATE" | "HIDDEN";
     readonly label?: string;
     readonly city: string;
     readonly region: string;
+    readonly releasesAt?: string;
   };
   readonly coverPhotoUrl: string;
 }
@@ -179,6 +186,9 @@ function sourceProjection(
     timezone: source.content.timezone,
     address: {
       kind,
+      ...(kind === "HIDDEN"
+        ? { releasesAt: source.startsAt.toISOString() }
+        : {}),
       ...(kind === "APPROXIMATE"
         ? { label: zone?.label ?? "Bakersfield area" }
         : {}),
@@ -191,9 +201,8 @@ function sourceProjection(
 
 function cardProjection(
   source: PublicSearchSourceRecord,
-  now: Date,
+  projection: SearchProjection,
 ): PublicListingCardProjection {
-  const projection = sourceProjection(source, now);
   const address = projection.address;
   return {
     id: source.publicId,
@@ -209,6 +218,9 @@ function cardProjection(
     localStartsAt: projection.localStartsAt,
     localEndsAt: projection.localEndsAt,
     timezone: projection.timezone,
+    ...(projection.scheduleDays
+      ? { scheduleDays: projection.scheduleDays }
+      : {}),
     location: {
       kind:
         address.kind === "EXACT"
@@ -222,6 +234,9 @@ function cardProjection(
           : `${address.city}, ${address.region}`,
       city: address.city,
       region: address.region,
+      ...(address.kind === "HIDDEN" && address.releasesAt
+        ? { releasesAt: address.releasesAt }
+        : {}),
     },
     coverPhotoUrl: projection.coverPhotoUrl,
   };
@@ -229,23 +244,28 @@ function cardProjection(
 
 function markerProjection(
   source: PublicSearchSourceRecord,
-  now: Date,
+  projection: SearchProjection,
 ): PublicMapMarkerProjection | null {
-  const projection = sourceProjection(source, now);
   const protectedLocation = projection.address.kind !== "EXACT";
   const zone =
     PUBLIC_ZONE_CENTROIDS[
       source.location.publicZone as keyof typeof PUBLIC_ZONE_CENTROIDS
     ];
-  const coordinates = protectedLocation
-    ? zone
-      ? ([zone.longitude, zone.latitude] as const)
-      : null
-    : source.location.confirmationStatus === "CONFIRMED" &&
-        source.location.latitude !== null &&
-        source.location.longitude !== null
+  const confirmedCoordinates =
+    source.location.confirmationStatus === "CONFIRMED" &&
+    source.location.latitude !== null &&
+    source.location.longitude !== null &&
+    Number.isFinite(source.location.latitude) &&
+    Number.isFinite(source.location.longitude)
       ? ([source.location.longitude, source.location.latitude] as const)
       : null;
+  const coordinates = protectedLocation
+    ? zone
+      ? confirmedCoordinates
+        ? approximateLocationCoordinates(...confirmedCoordinates)
+        : ([zone.longitude, zone.latitude] as const)
+      : null
+    : confirmedCoordinates;
   if (!coordinates) return null;
   return {
     id: source.publicId,
@@ -261,11 +281,21 @@ function markerProjection(
     localStartsAt: projection.localStartsAt,
     localEndsAt: projection.localEndsAt,
     timezone: projection.timezone,
+    ...(projection.scheduleDays
+      ? { scheduleDays: projection.scheduleDays }
+      : {}),
     locationLabel: protectedLocation
       ? (zone?.label ?? "Bakersfield area")
       : `${projection.address.city}, ${projection.address.region}`,
     coverPhotoUrl: projection.coverPhotoUrl,
     geometry: { type: "Point", coordinates },
+    ...(protectedLocation
+      ? {
+          approximateRadiusMeters: confirmedCoordinates
+            ? APPROXIMATE_LOCATION_RADIUS_METERS
+            : PUBLIC_ZONE_RADIUS_METERS,
+        }
+      : {}),
     markerKind:
       projection.address.kind === "EXACT"
         ? "exact"
@@ -301,11 +331,21 @@ export class PublicSearchService {
     });
     const visible = rows.slice(0, limit);
     const last = visible.at(-1);
-    const items = visible.map((row) => cardProjection(row, now));
+    // Parse each immutable snapshot only once, including map responses that
+    // need both a listing card and a marker for the same publication.
+    const projected = visible.map((source) => ({
+      source,
+      projection: sourceProjection(source, now),
+    }));
+    const items = projected.map(({ source, projection }) =>
+      cardProjection(source, projection),
+    );
     const markers =
       criteria.view === "map"
-        ? visible
-            .map((row) => markerProjection(row, now))
+        ? projected
+            .map(({ source, projection }) =>
+              markerProjection(source, projection),
+            )
             .filter(
               (marker): marker is PublicMapMarkerProjection => marker !== null,
             )

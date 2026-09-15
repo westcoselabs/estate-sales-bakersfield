@@ -3,6 +3,17 @@ import "server-only";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 
 import type { EventRepository } from "../application/ports";
+import { EventResourceLimitError } from "../domain/errors";
+import { readScheduleDays } from "../domain/schedule";
+import {
+  MAXIMUM_ACTIVE_DRAFTS_PER_ACCOUNT,
+  MAXIMUM_RETAINED_PHOTOS_PER_ACCOUNT,
+  MAXIMUM_SOURCE_BYTES_PER_ACCOUNT,
+  MAXIMUM_RESERVED_PHOTO_BYTES,
+  MAXIMUM_ACCOUNT_PHOTO_PROCESSING,
+  PHOTO_PROCESSING_LEASE_MS,
+  PHOTO_PROCESSING_PURGE_GRACE_MS,
+} from "../domain/resource-policy";
 import {
   MAXIMUM_EVENT_PHOTOS,
   type EventLocationRecord,
@@ -126,6 +137,8 @@ function mapEvent(event: EventPayload): EventRecord {
     origin: event.origin,
     localStartsAt: event.localStartsAt,
     localEndsAt: event.localEndsAt,
+    scheduleDays: readScheduleDays(event.scheduleDays),
+    addressRevealAt: event.addressRevealAt,
     startsAt: event.startsAt,
     endsAt: event.endsAt,
     timezone: event.timezone,
@@ -221,6 +234,27 @@ export class PrismaEventRepository implements EventRepository {
 
   async createOwned(input: Parameters<EventRepository["createOwned"]>[0]) {
     return this.prisma.$transaction(async (transaction) => {
+      // All account-wide resource admissions take this lock before event locks.
+      // READ COMMITTED sees the previous admission after this lock is acquired.
+      await transaction.$queryRaw(Prisma.sql`
+        SELECT "id" FROM "users" WHERE "id" = ${input.ownerUserId}::uuid FOR UPDATE
+      `);
+      const drafts = await transaction.event.count({
+        where: {
+          organizer: { userId: input.ownerUserId },
+          publication: { is: null },
+          deletedAt: null,
+          canceledAt: null,
+          removedAt: null,
+        },
+      });
+      if (drafts >= MAXIMUM_ACTIVE_DRAFTS_PER_ACCOUNT) {
+        throw new EventResourceLimitError(
+          "You have reached the active draft limit. Publish or delete an existing draft first.",
+          "DRAFT_LIMIT",
+          3600,
+        );
+      }
       const organizer = await transaction.organizerProfile.upsert({
         where: { userId: input.ownerUserId },
         create: {
@@ -578,6 +612,9 @@ export class PrismaEventRepository implements EventRepository {
       data: {
         localStartsAt: input.localStartsAt,
         localEndsAt: input.localEndsAt,
+        scheduleDays: input.scheduleDays
+          ? input.scheduleDays.map((day) => ({ ...day }))
+          : Prisma.DbNull,
         startsAt: input.startsAt,
         endsAt: input.endsAt,
         timezone: input.timezone,
@@ -600,6 +637,7 @@ export class PrismaEventRepository implements EventRepository {
         },
         data: {
           privacyMode: input.privacyMode,
+          addressRevealAt: input.addressRevealAt ?? null,
           ...invalidatedApproval,
           workflowState: input.workflowState,
           version: { increment: 1 },
@@ -685,6 +723,36 @@ export class PrismaEventRepository implements EventRepository {
     return this.prisma.$transaction(
       async (transaction) => {
         await transaction.$queryRaw(Prisma.sql`
+          SELECT "id" FROM "users" WHERE "id" = ${input.userId}::uuid FOR UPDATE
+        `);
+        const [usage] = await transaction.$queryRaw<
+          Array<{ photos: bigint; bytes: bigint }>
+        >(Prisma.sql`
+          SELECT COUNT(*) AS "photos",
+            COALESCE(SUM(COALESCE(photo."source_size", ${MAXIMUM_RESERVED_PHOTO_BYTES})), 0)::bigint AS "bytes"
+          FROM "event_photos" AS photo
+          JOIN "events" AS event ON event."id" = photo."event_id"
+          JOIN "organizer_profiles" AS organizer ON organizer."id" = event."organizer_id"
+          WHERE organizer."user_id" = ${input.userId}::uuid
+            AND (photo."staging_object_key" IS NOT NULL
+              OR photo."dashboard_thumbnail_key" IS NOT NULL
+              OR photo."listing_card_key" IS NOT NULL
+              OR photo."gallery_key" IS NOT NULL
+              OR photo."cover_display_key" IS NOT NULL)
+        `);
+        if (
+          !usage ||
+          usage.photos >= BigInt(MAXIMUM_RETAINED_PHOTOS_PER_ACCOUNT) ||
+          usage.bytes + BigInt(MAXIMUM_RESERVED_PHOTO_BYTES) >
+            BigInt(MAXIMUM_SOURCE_BYTES_PER_ACCOUNT)
+        ) {
+          throw new EventResourceLimitError(
+            "Your account has reached its photo allowance. Remove unused photos and allow cleanup to finish before uploading more.",
+            "MEDIA_LIMIT",
+            3600,
+          );
+        }
+        await transaction.$queryRaw(Prisma.sql`
           SELECT "id" FROM "events"
           WHERE "id" = ${input.eventId}::uuid
           FOR UPDATE
@@ -696,7 +764,7 @@ export class PrismaEventRepository implements EventRepository {
             organizer: { userId: input.userId },
             publication: { is: null },
           },
-          select: { id: true },
+          select: { id: true, workflowState: true },
         });
         if (!current) return null;
         const maximum = await transaction.eventPhoto.count({
@@ -710,7 +778,14 @@ export class PrismaEventRepository implements EventRepository {
             organizer: { userId: input.userId },
             publication: { is: null },
           },
-          data: { version: { increment: 1 } },
+          data: {
+            ...invalidatedApproval,
+            workflowState:
+              current.workflowState === "APPROVED_FOR_PAYMENT"
+                ? "PREVIEW_READY"
+                : current.workflowState,
+            version: { increment: 1 },
+          },
         });
         if (event.count !== 1) return null;
         await transaction.eventPhoto.create({
@@ -745,13 +820,15 @@ export class PrismaEventRepository implements EventRepository {
             type: "EVENT_PHOTO_RESERVATION_PURGE",
             payload: { reservationId: input.reservationId },
             deduplicationKey: `photo-reservation-purge:${input.reservationId}`,
-            runAt: new Date(input.expiresAt.getTime() + 60_000),
+            runAt: new Date(
+              input.expiresAt.getTime() + PHOTO_PROCESSING_PURGE_GRACE_MS,
+            ),
             maxAttempts: 10,
           },
         });
         return this.findOwnedWith(transaction, input.eventId, input.userId);
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
     );
   }
 
@@ -763,7 +840,17 @@ export class PrismaEventRepository implements EventRepository {
         id: input.reservationId,
         consumedAt: null,
         expiresAt: { lte: input.now },
-        photo: { status: { in: ["RESERVED", "UPLOADED", "FAILED"] } },
+        OR: [
+          { photo: { status: { in: ["RESERVED", "UPLOADED", "FAILED"] } } },
+          {
+            photo: { status: "PROCESSING" },
+            expiresAt: {
+              lte: new Date(
+                input.now.getTime() - PHOTO_PROCESSING_PURGE_GRACE_MS,
+              ),
+            },
+          },
+        ],
       },
       select: { photoId: true, stagingObjectKey: true },
     });
@@ -779,7 +866,17 @@ export class PrismaEventRepository implements EventRepository {
             id: input.reservationId,
             consumedAt: null,
             expiresAt: { lte: input.now },
-            photo: { status: { in: ["RESERVED", "UPLOADED", "FAILED"] } },
+            OR: [
+              { photo: { status: { in: ["RESERVED", "UPLOADED", "FAILED"] } } },
+              {
+                photo: { status: "PROCESSING" },
+                expiresAt: {
+                  lte: new Date(
+                    input.now.getTime() - PHOTO_PROCESSING_PURGE_GRACE_MS,
+                  ),
+                },
+              },
+            ],
           },
           select: {
             photoId: true,
@@ -838,6 +935,25 @@ export class PrismaEventRepository implements EventRepository {
     input: Parameters<EventRepository["markPhotoProcessing"]>[0],
   ) {
     return this.prisma.$transaction(async (transaction) => {
+      await transaction.$queryRaw(Prisma.sql`
+        SELECT "id" FROM "users" WHERE "id" = ${input.userId}::uuid FOR UPDATE
+      `);
+      const processing = await transaction.eventPhoto.count({
+        where: {
+          event: { organizer: { userId: input.userId } },
+          status: "PROCESSING",
+          // Admission renews this lease independently of the original upload
+          // deadline, so a photo finalized near that deadline keeps its slot.
+          uploadReservation: { is: { expiresAt: { gt: input.now } } },
+        },
+      });
+      if (processing >= MAXIMUM_ACCOUNT_PHOTO_PROCESSING) {
+        throw new EventResourceLimitError(
+          "Your other photos are still processing. Please try again shortly.",
+          "PROCESSING_BUSY",
+          10,
+        );
+      }
       const event = await transaction.event.updateMany({
         where: {
           id: input.eventId,
@@ -865,6 +981,35 @@ export class PrismaEventRepository implements EventRepository {
       });
       if (photo.count !== 1) {
         throw new Error("Photo reservation is not active");
+      }
+      const processingExpiresAt = new Date(
+        input.now.getTime() + PHOTO_PROCESSING_LEASE_MS,
+      );
+      await transaction.uploadReservation.update({
+        where: { id: input.reservationId },
+        data: { expiresAt: processingExpiresAt },
+      });
+      const cleanup = await transaction.durableJob.updateMany({
+        where: {
+          queue: "default",
+          type: "EVENT_PHOTO_RESERVATION_PURGE",
+          deduplicationKey: `photo-reservation-purge:${input.reservationId}`,
+          status: { in: ["PENDING", "FAILED"] },
+        },
+        data: {
+          runAt: new Date(
+            processingExpiresAt.getTime() + PHOTO_PROCESSING_PURGE_GRACE_MS,
+          ),
+        },
+      });
+      if (cleanup.count !== 1) {
+        // Roll back admission rather than consuming an upload without a future
+        // cleanup owner, or racing a job whose provider deletion already began.
+        throw new EventResourceLimitError(
+          "Upload cleanup is busy. Please retry this photo shortly.",
+          "PROCESSING_BUSY",
+          5,
+        );
       }
       return true;
     });
@@ -1046,6 +1191,15 @@ export class PrismaEventRepository implements EventRepository {
         include: { event: { select: { coverPhotoId: true } } },
       });
       if (!photo) return null;
+      // A reconciled upload retry can repeat cleanup while the purge worker is
+      // still pending. Keep that acknowledgement free of duplicate jobs,
+      // audit entries and event revision changes.
+      if (
+        photo.status === "FAILED" &&
+        photo.errorCode === "MEDIA_DELETION_PENDING"
+      ) {
+        return this.findOwnedWith(transaction, input.eventId, input.userId);
+      }
       const updated = await transaction.event.updateMany({
         where: {
           id: input.eventId,
@@ -1149,6 +1303,9 @@ export class PrismaEventRepository implements EventRepository {
               status: "COMPLETE",
             },
             publication: { is: null },
+            photos: {
+              none: { status: { in: ["RESERVED", "UPLOADED", "PROCESSING"] } },
+            },
           },
           select: { id: true, organizerId: true },
         });
@@ -1172,6 +1329,9 @@ export class PrismaEventRepository implements EventRepository {
             contentRevision: input.contentRevision,
             organizer: { userId: input.principal.id },
             publication: { is: null },
+            photos: {
+              none: { status: { in: ["RESERVED", "UPLOADED", "PROCESSING"] } },
+            },
           },
           data: {
             workflowState: "APPROVED_FOR_PAYMENT",

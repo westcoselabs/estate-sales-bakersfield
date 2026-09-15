@@ -28,7 +28,7 @@ vi.mock("next/navigation", async (importOriginal) => {
 });
 
 vi.mock("@/app/_components/published-listing-loader", () => ({
-  loadPublishedListing: mocks.loadPublishedListing,
+  loadPublishedListingForRequest: mocks.loadPublishedListing,
 }));
 
 vi.mock("@/app/_components/public-event-listing", () => ({

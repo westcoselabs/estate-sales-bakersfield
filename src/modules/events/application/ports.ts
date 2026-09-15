@@ -4,6 +4,7 @@ import type {
   AddressPrivacyMode,
   EventLocationRecord,
   EventRecord,
+  EventScheduleDay,
   EventType,
 } from "../domain/types";
 
@@ -108,6 +109,7 @@ export interface EventRepository {
     readonly expectedVersion: number;
     readonly localStartsAt: string;
     readonly localEndsAt: string;
+    readonly scheduleDays?: readonly EventScheduleDay[] | null;
     readonly startsAt: Date;
     readonly endsAt: Date;
     readonly timezone: string;
@@ -120,6 +122,7 @@ export interface EventRepository {
     readonly expectedVersion: number;
     readonly location: Omit<EventLocationRecord, "id" | "eventId">;
     readonly privacyMode: AddressPrivacyMode;
+    readonly addressRevealAt?: Date | null;
     readonly workflowState: "INCOMPLETE_DRAFT" | "PREVIEW_READY";
     readonly audit: EventAuditContext;
   }): Promise<EventRecord | null>;

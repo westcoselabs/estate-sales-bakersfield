@@ -1,3 +1,4 @@
+import { administratorMfaProof } from "./support/admin-mfa-fixtures";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -44,7 +45,11 @@ function manualContext(
 ): ListingImportCommandContext {
   return {
     transport,
-    actor: { kind: "ADMIN_USER", adminUserId: administratorId },
+    actor: {
+      kind: "ADMIN_USER",
+      adminUserId: administratorId,
+      adminSessionId: administratorSessionId,
+    },
     audit: { requestId: crypto.randomUUID() },
   };
 }
@@ -147,6 +152,11 @@ beforeAll(async () => {
         .digest("hex"),
       expiresAt: new Date(authenticatedAt.getTime() + 60 * 60 * 1_000),
       passwordAuthenticatedAt: authenticatedAt,
+      ...(await administratorMfaProof(
+        prisma,
+        administratorId,
+        authenticatedAt,
+      )),
     },
   });
   administratorSessionId = session.id;
@@ -308,7 +318,11 @@ describe("listing import persistence and application service", () => {
     await expect(
       service.importBatch(input, {
         transport: "MANUAL_JSON",
-        actor: { kind: "ADMIN_USER", adminUserId: ordinary.id },
+        actor: {
+          kind: "ADMIN_USER",
+          adminUserId: ordinary.id,
+          adminSessionId: administratorSessionId,
+        },
       }),
     ).rejects.toMatchObject({ code: "ACTOR_TRANSPORT_MISMATCH" });
     await expect(

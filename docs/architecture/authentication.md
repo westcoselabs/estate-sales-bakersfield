@@ -34,6 +34,19 @@ only in the request cookie and session grant; PostgreSQL stores SHA-256 hashes.
 Production cookies are host-only, HTTP-only, Secure,
 `SameSite=Lax`, path `/`, and use the `__Host-` prefix.
 
+Every administrator page and API also requires an enrolled authenticator and a
+session proof from the current credential version. Password-only and previously
+issued sessions go through `/account/security`; ordinary user sessions retain
+their existing behavior. TOTP and one-time recovery proofs rotate the session
+token. Critical administrator actions require both password and MFA proofs from
+the last 15 minutes, repeated under repository locks before mutation. Replacing
+the authenticator revokes sibling sessions and invalidates older MFA proofs.
+See [administrator MFA operations](../operations/administrator-mfa.md) for key
+backup, enrollment, and operator-assisted recovery.
+
+`getCurrentSession` is memoized only within the React server request, avoiding
+duplicate layout/page reads without retaining authorization across requests.
+
 The central server functions are `getCurrentSession`, `getCurrentUser`, `requireUser`, `requireAdmin`, and `requireVerifiedPublishingUser`. They return a narrow principal and reject disabled or restricted accounts. Organizer commands derive ownership from `requireUser` and repeat ownership enforcement in the repository key. The verified-publishing guard exists for Phase 3 commands but no publishing workflow is implemented in Phase 2.
 
 ## Email delivery

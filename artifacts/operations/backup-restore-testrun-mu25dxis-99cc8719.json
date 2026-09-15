@@ -1,0 +1,22 @@
+{
+  "schema": "backup-restore-rehearsal-v1",
+  "capturedAt": "2026-09-15T04:04:53.191Z",
+  "scope": "Synthetic disposable Development schema; Production backup/restore is not verified",
+  "status": "pass",
+  "phase": "verify",
+  "fixture": {
+    "counts": {
+      "users": 1000,
+      "publications": 50,
+      "externalListings": 50
+    },
+    "anchor": "2030-05-01T15:00:00.000Z",
+    "sourceSha256": "edf6161ddf640e467ef8258824513b2d7700c372a5f1b884bd530d0e5dd0a02b"
+  },
+  "toolVersion": "pg_dump (PostgreSQL) 18.6",
+  "dumpMs": 9399,
+  "restoreMs": 42577,
+  "tablesVerified": 39,
+  "rowsVerified": 1769,
+  "archiveBytes": 355064
+}
