@@ -10,6 +10,7 @@ vi.mock("react", async (importOriginal) => ({
   useCallback: (callback: unknown) => callback,
   useEffect: () => {},
 }));
+import { analyticsDocument } from "@/platform/seo/analytics-document";
 import { GoogleAnalytics } from "@/app/_components/google-analytics";
 
 afterEach(() => {
@@ -35,13 +36,10 @@ describe("analytics document", () => {
   });
 
   it("accepts exactly one public pageview from its own parent origin", () => {
-    const frame = GoogleAnalytics({
-      measurementId: "G-4LYJ726JEQ",
-      origin: "https://sales.example.test",
-    });
-    const script = (frame!.props.srcDoc as string).match(
-      /<script>([\s\S]*?)<\/script>/u,
-    )![1]!;
+    const script = analyticsDocument(
+      "G-4LYJ726JEQ",
+      "https://sales.example.test",
+    ).match(/<script>([\s\S]*?)<\/script>/u)![1]!;
     const parent = {};
     const dataLayer: Array<ArrayLike<unknown>> = [];
     let listener: (event: object) => void = () => {};

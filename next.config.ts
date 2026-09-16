@@ -70,6 +70,19 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/(.*)", headers: securityHeaders },
+      {
+        source: "/analytics-tag",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          {
+            key: "Content-Security-Policy",
+            value: contentSecurityPolicy.replace(
+              "frame-ancestors 'none'",
+              "frame-ancestors 'self'",
+            ),
+          },
+        ],
+      },
       ...sensitivePagePaths.map((source) => ({
         source,
         headers: [{ key: "Cache-Control", value: "private, no-store" }],
