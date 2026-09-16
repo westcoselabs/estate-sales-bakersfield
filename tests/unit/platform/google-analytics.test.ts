@@ -67,7 +67,7 @@ describe("analytics document", () => {
     expect(dataLayer).toHaveLength(0);
     listener(event);
     listener(event);
-    expect(dataLayer).toHaveLength(2);
+    expect(dataLayer).toHaveLength(3);
     expect(Array.from(dataLayer[1]!)).toEqual([
       "config",
       "G-4LYJ726JEQ",

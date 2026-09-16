@@ -33,13 +33,27 @@ export function GoogleAnalytics({
   }, [page, origin]);
   // Covers a cached iframe that finishes loading before React hydrates.
   // The document accepts one message, so onLoad/effect cannot double count.
-  useEffect(sendPageview, [sendPageview]);
+  useEffect(() => {
+    const acknowledge = (event: MessageEvent) => {
+      if (
+        event.source === frame.current?.contentWindow &&
+        event.origin === origin &&
+        event.data?.type === "public-analytics-ready" &&
+        frame.current
+      ) {
+        frame.current.dataset.analyticsStatus = "ready";
+      }
+    };
+    window.addEventListener("message", acknowledge);
+    sendPageview();
+    return () => window.removeEventListener("message", acknowledge);
+  }, [sendPageview, origin]);
   if (!validMeasurementId(measurementId) || !page) return null;
   const config = JSON.stringify({ measurementId, origin }).replaceAll(
     "<",
     "\\u003c",
   );
-  const document = `<!doctype html><html><head><meta name="referrer" content="no-referrer"><script>
+  const document = `<!doctype html><html><head><meta name="referrer" content="no-referrer"></head><body><script>
     const config = ${config};
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
@@ -55,8 +69,11 @@ export function GoogleAnalytics({
         allow_google_signals: false,
         allow_ad_personalization_signals: false
       });
+      gtag('get', config.measurementId, 'client_id', function() {
+        parent.postMessage({type: 'public-analytics-ready'}, config.origin);
+      });
     });
-    </script><script async src="https://www.googletagmanager.com/gtag/js?id=${measurementId}"></script></head><body></body></html>`;
+    </script><script async src="https://www.googletagmanager.com/gtag/js?id=${measurementId}"></script></body></html>`;
   return (
     <iframe
       ref={frame}
