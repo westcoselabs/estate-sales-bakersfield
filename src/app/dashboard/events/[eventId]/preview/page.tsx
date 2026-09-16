@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { PublicEventListing } from "@/app/_components/public-event-listing";
 import { EventReadinessNotice } from "@/app/_components/event-readiness-notice";
-import { BuilderShell } from "@/components/shells/shells";
+import { BuilderShell, PublicFooter } from "@/components/shells/shells";
 import { getCurrentUser } from "@/modules/auth";
 import { createConfiguredEventService } from "@/modules/events";
 import type { PublishedListing } from "@/modules/payments";
@@ -64,6 +64,7 @@ export default async function EventPreviewPage({ params }: Props) {
       backHref={`/dashboard/events/${eventId}/edit`}
       backLabel="Return to editor"
       className="builder-app--listing-preview"
+      footer={<PublicFooter />}
       meta={<p>Revision {editor.contentRevision}</p>}
     >
       <div className="preview-toolbar listing-preview-toolbar">

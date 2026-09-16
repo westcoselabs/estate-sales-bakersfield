@@ -20,11 +20,20 @@
 }
 
 .public-sale-schedule li {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 0.2rem 0.7rem;
   font-size: 0.875rem;
   line-height: 1.5;
+}
+
+.public-sale-schedule li + li {
+  border-top: 1px solid rgb(21 62 47 / 12%);
+  padding-top: 0.45rem;
+}
+
+.public-sale-schedule__hours-label {
+  font-size: 0.75rem;
+  color: #53655c;
 }
 
 .public-sale-schedule li > span {

@@ -1,7 +1,7 @@
 "use client";
 
 import type { TouchEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Icon } from "@/components/ui/icons";
 
@@ -21,15 +21,41 @@ function GalleryImage({
   readonly title: string;
   readonly onOpen: () => void;
 }) {
+  const [status, setStatus] = useState<"loading" | "loaded" | "error">(
+    "loading",
+  );
+  // Cached images can finish before hydration attaches the load listener.
+  const checkCachedImage = useCallback((image: HTMLImageElement | null) => {
+    if (image?.complete) {
+      setStatus(image.naturalWidth > 0 ? "loaded" : "error");
+    }
+  }, []);
+
   return (
     <button
       type="button"
       className="public-gallery__item"
-      aria-label={`Open ${title} photo ${index + 1}`}
+      data-load-state={status}
+      aria-busy={status === "loading"}
+      aria-label={`${status === "error" ? "Photo unavailable. " : ""}Open ${title} photo ${index + 1}`}
       onClick={onOpen}
     >
+      {status === "loading" ? (
+        <span className="public-gallery__skeleton" aria-hidden="true" />
+      ) : null}
+      {status === "error" ? (
+        <span className="public-gallery__error">Photo unavailable</span>
+      ) : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={photo.url} alt={`${title} photo ${index + 1}`} loading="lazy" />
+      <img
+        ref={checkCachedImage}
+        src={photo.url}
+        alt={`${title} photo ${index + 1}`}
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setStatus("loaded")}
+        onError={() => setStatus("error")}
+      />
     </button>
   );
 }
@@ -127,7 +153,7 @@ export function PublicListingGallery({
       <div className="public-gallery" aria-label={`${title} photo gallery`}>
         {previewPhotos.map((photo, index) => (
           <GalleryImage
-            key={photo.id}
+            key={`${photo.id}:${photo.url}`}
             photo={photo}
             index={index}
             title={title}
@@ -162,7 +188,7 @@ export function PublicListingGallery({
             <div className="public-gallery public-gallery--all">
               {photos.map((photo, index) => (
                 <GalleryImage
-                  key={photo.id}
+                  key={`${photo.id}:${photo.url}`}
                   photo={photo}
                   index={index}
                   title={title}

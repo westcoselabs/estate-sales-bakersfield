@@ -46,8 +46,19 @@ export function PublicSaleSchedule({
                 {date.format(new Date(day.startsAt))}
               </time>
               <span>
-                {time.format(new Date(day.startsAt))} –{" "}
-                {time.format(new Date(day.endsAt))}
+                <span className="public-sale-schedule__hours-label">
+                  Opens{" "}
+                </span>
+                <time dateTime={day.startsAt}>
+                  {time.format(new Date(day.startsAt))}
+                </time>
+                <span aria-hidden="true"> – </span>
+                <span className="public-sale-schedule__hours-label">
+                  Closes{" "}
+                </span>
+                <time dateTime={day.endsAt}>
+                  {time.format(new Date(day.endsAt))}
+                </time>
               </span>
             </li>
           ))}
@@ -57,7 +68,11 @@ export function PublicSaleSchedule({
           <li>
             <time dateTime={projection.startsAt}>{date.format(start)}</time>
             <span>
-              {time.format(start)} – {time.format(end)}
+              <span className="public-sale-schedule__hours-label">Opens </span>
+              <time dateTime={projection.startsAt}>{time.format(start)}</time>
+              <span aria-hidden="true"> – </span>
+              <span className="public-sale-schedule__hours-label">Closes </span>
+              <time dateTime={projection.endsAt}>{time.format(end)}</time>
             </span>
           </li>
         </ul>

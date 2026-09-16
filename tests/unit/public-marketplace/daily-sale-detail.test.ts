@@ -25,8 +25,8 @@ function listing(now: string): OrganizerPublicListing {
     localEndsAt: "2026-10-06T13:00",
     scheduleDays: [4, 5, 6].map((day) => ({
       date: `2026-10-0${String(day)}`,
-      startTime: "08:00",
-      endTime: "13:00",
+      startTime: day === 5 ? "09:00" : "08:00",
+      endTime: day === 5 ? "14:00" : "13:00",
     })),
   });
   return {
@@ -57,12 +57,29 @@ describe("public daily sale detail", () => {
       "Tue, Oct 6, 2026",
     ])
       expect(html).toContain(date);
-    expect(html.match(/8:00 AM – 1:00 PM/g)).toHaveLength(3);
+    const text = html.replace(/<[^>]+>/g, "");
+    expect(text.match(/Opens 8:00 AM – Closes 1:00 PM/g)).toHaveLength(2);
+    expect(text).toContain("Mon, Oct 5, 2026Opens 9:00 AM – Closes 2:00 PM");
     expect(html).toContain(
       "Full address will be shown on Sun, Oct 4, 6:00 AM PDT.",
     );
+    expect(html).toContain('class="public-listing-cover__backdrop"');
+    expect(html).toContain('class="public-listing-cover__image"');
+    expect(html).toContain("Contact seller");
+    expect(html).not.toContain("Published from approved revision");
     expect(html).not.toContain("123 Main Street");
     expect(html).not.toContain("Get directions");
+  });
+
+  it("does not invent daily hours for older multi-day publications", () => {
+    const published = listing("2026-10-03T12:00:00Z");
+    const projection = { ...published.projection };
+    delete projection.scheduleDays;
+    const html = renderToStaticMarkup(
+      createElement(PublicListing, { listing: { ...published, projection } }),
+    );
+    expect(html).toContain("Daily hours have not been provided.");
+    expect(html).not.toContain('aria-label="Daily sale hours"');
   });
 
   it("provides exact address and directions at the chosen reveal instant", () => {

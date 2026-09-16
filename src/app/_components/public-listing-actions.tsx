@@ -5,9 +5,11 @@ import { useState } from "react";
 import { Icon } from "@/components/ui/icons";
 
 export function PublicListingActions({
+  contactHref,
   directionsUrl,
   title,
 }: {
+  readonly contactHref: string | null;
   readonly directionsUrl: string | null;
   readonly title: string;
 }) {
@@ -33,9 +35,14 @@ export function PublicListingActions({
 
   return (
     <div className="public-listing-actions">
-      {directionsUrl ? (
+      {contactHref ? (
+        <a href={contactHref}>
+          <Icon name="mail" size={20} />
+          Contact seller
+        </a>
+      ) : directionsUrl ? (
         <a href={directionsUrl} target="_blank" rel="noopener noreferrer">
-          <Icon name="arrow" size={20} />
+          <Icon name="map" size={20} />
           Get directions
         </a>
       ) : null}

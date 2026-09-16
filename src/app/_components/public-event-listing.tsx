@@ -86,37 +86,6 @@ function visibleAddress(listing: PublicListingDetail): {
   };
 }
 
-function ExternalListingContent({
-  listing,
-}: {
-  readonly listing: Extract<PublicListingDetail, { sourceKind: "EXTERNAL" }>;
-}) {
-  const projection = listing.projection;
-  return (
-    <>
-      <div
-        className="public-listing-external-placeholder"
-        aria-label="External listing image placeholder"
-        data-external-listing-placeholder="true"
-      >
-        {/* External source images are intentionally neither fetched nor hotlinked. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={projection.coverPhotoUrl}
-          alt={`Marketplace placeholder for ${projection.title}`}
-        />
-      </div>
-      <section
-        className="public-listing-about"
-        aria-labelledby="about-sale-title"
-      >
-        <h2 id="about-sale-title">About this sale</h2>
-        <p className="preserve-lines">{projection.description}</p>
-      </section>
-    </>
-  );
-}
-
 export function PublicListing({
   listing,
   revisionNote,
@@ -143,6 +112,14 @@ export function PublicListing({
   );
   const applicationUrl = getServerApplicationUrl();
   const structuredData = publicListingStructuredData(listing, applicationUrl);
+  const photoCount =
+    listing.sourceKind === "ORGANIZER"
+      ? Math.max(1, projection.gallery.length)
+      : 0;
+  const publicationProof =
+    listing.sourceKind === "EXTERNAL"
+      ? `External listing attributed to ${listing.sourceLabel}. Estate Sales Bakersfield is not the organizer.`
+      : revisionNote;
 
   return (
     <div className="preview-shell public-listing-page">
@@ -159,144 +136,145 @@ export function PublicListing({
       </nav>
 
       <article className="public-listing" data-source-kind={listing.sourceKind}>
-        <header className="public-listing-hero">
-          <div className="public-listing-hero__glow" aria-hidden="true" />
-          <div className="public-listing-hero__panel">
-            <p className="public-listing-hero__eyebrow">
-              {kind} <span aria-hidden="true">•</span> {locationLabel(listing)}
-            </p>
-            <h1>{projection.title}</h1>
+        <div className="public-listing-overview">
+          <header className="public-listing-hero">
+            <div className="public-listing-hero__panel">
+              <p className="public-listing-hero__eyebrow">
+                {kind} <span aria-hidden="true">•</span>{" "}
+                {locationLabel(listing)}
+              </p>
+              <h1>{projection.title}</h1>
 
-            <div className="public-listing-facts">
-              <div>
-                <span aria-hidden="true">
-                  <Icon name="calendar" size={24} />
-                </span>
-                <PublicSaleSchedule projection={projection} />
-              </div>
-              <div>
-                <span aria-hidden="true">
-                  <Icon name="pin" size={24} />
-                </span>
-                <p>
-                  <strong>{address.primary}</strong>
-                  <span>{address.secondary}</span>
-                </p>
-              </div>
-              {listing.sourceKind === "EXTERNAL" ? (
+              <div className="public-listing-facts">
                 <div>
                   <span aria-hidden="true">
-                    <Icon name="external" size={24} />
+                    <Icon name="calendar" size={24} />
                   </span>
-                  <p>
-                    <strong>Unclaimed / External listing</strong>
-                    <span>Source: {listing.sourceLabel}</span>
-                    <a
-                      href={listing.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer nofollow external"
-                    >
-                      View original listing
-                    </a>
-                  </p>
+                  <PublicSaleSchedule projection={projection} />
                 </div>
-              ) : hasContactDetails && organizer ? (
                 <div>
                   <span aria-hidden="true">
-                    <Icon name="user" size={24} />
+                    <Icon name="pin" size={24} />
                   </span>
                   <p>
-                    <span>Contact</span>
-                    {verifiedEmail && emailHref ? (
-                      <strong>
-                        <a href={emailHref}>{verifiedEmail}</a>
-                      </strong>
-                    ) : null}
-                    {organizer.displayName ? (
-                      <span>Listed by {organizer.displayName}</span>
-                    ) : null}
-                    {organizer.websiteUrl ? (
+                    <strong>{address.primary}</strong>
+                    <span>{address.secondary}</span>
+                    {projection.address.kind === "EXACT" ? (
                       <a
-                        href={organizer.websiteUrl}
-                        rel="noopener noreferrer nofollow"
+                        className="public-listing-fact__link"
+                        href={directionsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
                       >
-                        Website
+                        Get directions
                       </a>
                     ) : null}
                   </p>
                 </div>
-              ) : null}
-            </div>
+                {listing.sourceKind === "EXTERNAL" ? (
+                  <div>
+                    <span aria-hidden="true">
+                      <Icon name="external" size={24} />
+                    </span>
+                    <p>
+                      <strong>Unclaimed / External listing</strong>
+                      <span>Source: {listing.sourceLabel}</span>
+                      <a
+                        href={listing.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow external"
+                      >
+                        View original listing
+                      </a>
+                    </p>
+                  </div>
+                ) : hasContactDetails && organizer ? (
+                  <div>
+                    <span aria-hidden="true">
+                      <Icon name="user" size={24} />
+                    </span>
+                    <p>
+                      <span>Contact</span>
+                      {verifiedEmail && emailHref ? (
+                        <strong>
+                          <a href={emailHref}>{verifiedEmail}</a>
+                        </strong>
+                      ) : null}
+                      {organizer.displayName ? (
+                        <span>Listed by {organizer.displayName}</span>
+                      ) : null}
+                      {organizer.websiteUrl ? (
+                        <a
+                          href={organizer.websiteUrl}
+                          rel="noopener noreferrer nofollow"
+                        >
+                          Website
+                        </a>
+                      ) : null}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
 
-            <PublicListingActions
-              directionsUrl={
-                projection.address.kind === "EXACT" ? directionsUrl : null
-              }
-              title={projection.title}
+              <PublicListingActions
+                contactHref={emailHref}
+                directionsUrl={
+                  projection.address.kind === "EXACT" ? directionsUrl : null
+                }
+                title={projection.title}
+              />
+            </div>
+          </header>
+
+          <figure
+            className="public-listing-cover"
+            {...(listing.sourceKind === "EXTERNAL"
+              ? {
+                  "aria-label": "External listing image placeholder",
+                  "data-external-listing-placeholder": "true",
+                }
+              : {})}
+          >
+            {/* The repeated image is decorative and creates the blurred edge fill. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              className="public-listing-cover__backdrop"
+              src={projection.coverPhotoUrl}
+              alt=""
+              aria-hidden="true"
             />
-          </div>
-        </header>
+            <div className="public-listing-cover__frame">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                className="public-listing-cover__image"
+                src={projection.coverPhotoUrl}
+                alt={
+                  listing.sourceKind === "EXTERNAL"
+                    ? `Marketplace placeholder for ${projection.title}`
+                    : `Cover photo for ${projection.title}`
+                }
+              />
+            </div>
+            {photoCount > 0 ? (
+              <span className="public-listing-cover__count">
+                <Icon name="photo" size={19} />
+                {photoCount} {photoCount === 1 ? "photo" : "photos"}
+              </span>
+            ) : null}
+          </figure>
+        </div>
 
         <div className="public-listing-content">
-          {listing.sourceKind === "EXTERNAL" ? (
-            <ExternalListingContent listing={listing} />
-          ) : (
-            <PublicListingDetailTabs
-              description={projection.description}
-              photos={projection.gallery}
-              title={projection.title}
-            />
-          )}
+          <PublicListingDetailTabs
+            description={projection.description}
+            external={listing.sourceKind === "EXTERNAL"}
+            photos={projection.gallery}
+            title={projection.title}
+          />
 
-          <section
-            className="public-listing-trust"
-            aria-label="Listing highlights"
-          >
-            <div>
-              <Icon name="status" size={24} />
-              <p>
-                {listing.sourceKind === "EXTERNAL" ? (
-                  <>
-                    <strong>Source transparency</strong>
-                    <span>Original listing clearly identified</span>
-                  </>
-                ) : (
-                  <>
-                    <strong>Quality finds</strong>
-                    <span>Preview items before you visit</span>
-                  </>
-                )}
-              </p>
-            </div>
-            <div>
-              <Icon name="clock" size={24} />
-              <p>
-                <strong>Exact timing</strong>
-                <span>Plan your visit around the sale hours</span>
-              </p>
-            </div>
-            <div>
-              <Icon name="pin" size={24} />
-              <p>
-                <strong>Local listing</strong>
-                <span>Focused on Bakersfield</span>
-              </p>
-            </div>
-            <div>
-              <Icon name="shield" size={24} />
-              <p>
-                <strong>Privacy aware</strong>
-                <span>Location details provided for this event</span>
-              </p>
-            </div>
-          </section>
-
-          <p className="publication-proof">
-            {listing.sourceKind === "EXTERNAL"
-              ? `External listing attributed to ${listing.sourceLabel}. Estate Sales Bakersfield is not the organizer.`
-              : (revisionNote ??
-                `Published from approved revision ${String(listing.approvedRevision)}.`)}
-          </p>
+          {publicationProof ? (
+            <p className="publication-proof">{publicationProof}</p>
+          ) : null}
         </div>
       </article>
 

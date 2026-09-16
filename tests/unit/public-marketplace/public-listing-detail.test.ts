@@ -55,6 +55,8 @@ describe("external public listing detail", () => {
       'href="https://www.estatesales.org/example-listing"',
     );
     expect(html).toContain('src="/images/marketplace-hero.webp"');
+    expect(html).toContain('class="public-listing-cover__backdrop"');
+    expect(html).toContain('class="public-listing-cover__image"');
     expect(html).toContain('data-external-listing-placeholder="true"');
     expect(html).toContain("Source transparency");
     expect(html).toContain("Estate Sales Bakersfield is not the organizer.");

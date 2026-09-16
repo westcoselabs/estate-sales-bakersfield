@@ -126,6 +126,57 @@ export function PublicHeader({
   );
 }
 
+export function PublicFooter() {
+  return (
+    <footer className="public-footer">
+      <div className="shell-container public-footer__grid">
+        <div className="public-footer__brand">
+          <Brand />
+          <p>
+            A local marketplace for discovering published estate and yard sale
+            listings in Bakersfield.
+          </p>
+        </div>
+        <nav aria-label="Explore">
+          <strong>Explore</strong>
+          <TextLink href="/search">All sales</TextLink>
+          <TextLink href="/estate-sales">Estate sales</TextLink>
+          <TextLink href="/yard-sales">Yard sales</TextLink>
+        </nav>
+        <nav aria-label="For sellers">
+          <strong>For sellers</strong>
+          <TextLink href="/list-your-sale">List your sale</TextLink>
+          <TextLink href="/how-it-works">How it works</TextLink>
+          <TextLink href="/faq">FAQ</TextLink>
+        </nav>
+        <nav aria-label="Company and support">
+          <strong>Company</strong>
+          <TextLink href="/about">About</TextLink>
+          <TextLink href="/contact">Contact</TextLink>
+          <TextLink href="/privacy">Privacy</TextLink>
+          <TextLink href="/terms">Terms</TextLink>
+        </nav>
+        <div className="public-footer__service">
+          <strong>Need hands-on help?</strong>
+          <p>
+            Simply Decorated offers separate organizing, pricing, staging, and
+            promotion services.
+          </p>
+          <ExternalLink href="https://decoratedbyriley.com/estate-sale-companies-bakersfield/">
+            Explore professional estate-sale services
+            <Icon name="external" size={17} />
+            <span className="sr-only">(opens in a new tab)</span>
+          </ExternalLink>
+        </div>
+      </div>
+      <div className="shell-container public-footer__legal">
+        <p>Estate Sales Bakersfield is a self-service listing marketplace.</p>
+        <p>&copy; {new Date().getFullYear()} Estate Sales Bakersfield</p>
+      </div>
+    </footer>
+  );
+}
+
 export async function PublicShell({
   children,
   variant = "default",
@@ -147,52 +198,7 @@ export async function PublicShell({
       <SkipLink />
       <PublicHeader account={account} />
       <main id="main-content">{children}</main>
-      <footer className="public-footer">
-        <div className="shell-container public-footer__grid">
-          <div className="public-footer__brand">
-            <Brand />
-            <p>
-              A local marketplace for discovering published estate and yard sale
-              listings in Bakersfield.
-            </p>
-          </div>
-          <nav aria-label="Explore">
-            <strong>Explore</strong>
-            <TextLink href="/search">All sales</TextLink>
-            <TextLink href="/estate-sales">Estate sales</TextLink>
-            <TextLink href="/yard-sales">Yard sales</TextLink>
-          </nav>
-          <nav aria-label="For sellers">
-            <strong>For sellers</strong>
-            <TextLink href="/list-your-sale">List your sale</TextLink>
-            <TextLink href="/how-it-works">How it works</TextLink>
-            <TextLink href="/faq">FAQ</TextLink>
-          </nav>
-          <nav aria-label="Company and support">
-            <strong>Company</strong>
-            <TextLink href="/about">About</TextLink>
-            <TextLink href="/contact">Contact</TextLink>
-            <TextLink href="/privacy">Privacy</TextLink>
-            <TextLink href="/terms">Terms</TextLink>
-          </nav>
-          <div className="public-footer__service">
-            <strong>Need hands-on help?</strong>
-            <p>
-              Simply Decorated offers separate organizing, pricing, staging, and
-              promotion services.
-            </p>
-            <ExternalLink href="https://decoratedbyriley.com/estate-sale-companies-bakersfield/">
-              Explore professional estate-sale services
-              <Icon name="external" size={17} />
-              <span className="sr-only">(opens in a new tab)</span>
-            </ExternalLink>
-          </div>
-        </div>
-        <div className="shell-container public-footer__legal">
-          <p>Estate Sales Bakersfield is a self-service listing marketplace.</p>
-          <p>&copy; {new Date().getFullYear()} Estate Sales Bakersfield</p>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }
@@ -356,6 +362,7 @@ export function BuilderShell({
   actions,
   account,
   className = "",
+  footer,
 }: {
   readonly eyebrow: string;
   readonly title: string;
@@ -367,6 +374,7 @@ export function BuilderShell({
   readonly actions?: ReactNode;
   readonly account?: ShellAccount;
   readonly className?: string;
+  readonly footer?: ReactNode;
 }) {
   return (
     <div className={`builder-app ${className}`.trim()}>
@@ -404,6 +412,7 @@ export function BuilderShell({
         ) : null}
         {children}
       </main>
+      {footer}
       {actions ? <div className="builder-action-region">{actions}</div> : null}
     </div>
   );
