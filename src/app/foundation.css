@@ -3596,6 +3596,7 @@ button {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   background: var(--color-surface);
+  color: var(--color-text);
   padding: var(--space-2);
   box-shadow: var(--shadow-3);
 }
@@ -5414,6 +5415,7 @@ button {
 }
 
 .dashboard-topbar .account-menu summary,
+.admin-topbar .account-menu summary,
 .builder-app__header .account-menu summary {
   min-height: 2.55rem;
   gap: 0.4rem;
@@ -5421,6 +5423,7 @@ button {
 }
 
 .dashboard-topbar .account-avatar,
+.admin-topbar .account-avatar,
 .builder-app__header .account-avatar {
   width: 2rem;
   height: 2rem;
@@ -5428,6 +5431,7 @@ button {
 }
 
 .dashboard-topbar .account-menu__name,
+.admin-topbar .account-menu__name,
 .builder-app__header .account-menu__name {
   max-width: 9rem;
   font-size: 0.875rem;
@@ -7507,7 +7511,7 @@ button {
 
 .admin-sidebar {
   width: var(--admin-sidebar-width);
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(max-content, 1fr) auto;
   gap: var(--space-6);
   overflow-y: auto;
   border-right: 0;
@@ -7662,66 +7666,6 @@ button {
 
 .admin-sidebar__secondary {
   border-color: rgb(255 255 255 / 12%);
-}
-
-.admin-sidebar__secondary .account-menu summary {
-  min-height: 3rem;
-  border-color: rgb(255 255 255 / 13%);
-  background: rgb(255 255 255 / 8%);
-  color: var(--color-on-primary);
-}
-
-.account-menu--admin summary {
-  transition:
-    border-color var(--motion-base) ease,
-    background-color var(--motion-base) ease,
-    box-shadow var(--motion-base) ease;
-}
-
-.account-menu--admin summary:hover,
-.account-menu--admin[open] summary {
-  border-color: rgb(230 189 112 / 48%);
-  background: rgb(255 255 255 / 13%);
-}
-
-.account-menu--admin .account-avatar {
-  border: 1px solid rgb(255 255 255 / 42%);
-  background: linear-gradient(145deg, #f1d18f, #d5a347);
-  color: #173a2d;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 55%),
-    0 4px 12px rgb(5 22 16 / 18%);
-}
-
-.account-menu__chevron {
-  flex: 0 0 auto;
-  color: currentcolor;
-  opacity: 0.7;
-  transition: transform var(--motion-base) ease;
-}
-
-.account-menu--admin[open] .account-menu__chevron {
-  transform: rotate(180deg);
-}
-
-.account-menu--admin .account-menu__popover {
-  overflow: hidden;
-  border-color: rgb(23 58 45 / 13%);
-  background: rgb(255 255 255 / 97%);
-  padding: var(--space-2);
-  box-shadow:
-    0 1px 2px rgb(23 32 27 / 5%),
-    0 22px 54px rgb(23 32 27 / 18%);
-}
-
-.account-menu--admin .account-menu__identity {
-  margin-bottom: var(--space-1);
-  border-radius: 0.75rem;
-  background: linear-gradient(135deg, #f8f3e8, #f0ede5);
-}
-
-.account-menu--admin .account-menu__popover > a svg {
-  color: var(--color-primary);
 }
 
 .admin-sidebar .account-menu__popover {
@@ -8415,21 +8359,8 @@ button {
     color: #fff;
   }
 
-  .admin-topbar .account-menu summary {
-    min-height: 2.75rem;
-    border-color: rgb(255 255 255 / 14%);
-    background: rgb(255 255 255 / 8%);
-    color: var(--color-on-primary);
-    padding: 0.25rem 0.4rem 0.25rem 0.25rem;
-    box-shadow: none;
-  }
-
   .admin-topbar .account-menu__popover {
     top: calc(100% + 0.65rem);
-  }
-
-  .admin-topbar .account-menu__chevron {
-    display: block;
   }
 
   .admin-main {

@@ -120,7 +120,7 @@ export function AdminShell({
             <Icon name="shield" />
             Two-step verification
           </Link>
-          <AccountMenu account={account} variant="admin" />
+          <AccountMenu account={account} />
         </div>
       </aside>
       <header className="admin-topbar">
@@ -131,7 +131,7 @@ export function AdminShell({
             <Icon name="shield" size={18} />
             <span>Security</span>
           </Link>
-          <AccountMenu account={account} variant="admin" />
+          <AccountMenu account={account} />
         </div>
       </header>
       <main className="admin-main" id="main-content">

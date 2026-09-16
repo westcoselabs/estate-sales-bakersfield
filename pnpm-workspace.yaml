@@ -1,6 +1,9 @@
 packages:
   - "."
 
+strictPeerDependencies: true
+autoInstallPeers: false
+
 supportedArchitectures:
   os:
     - win32

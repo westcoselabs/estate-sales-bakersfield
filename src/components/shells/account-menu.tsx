@@ -54,7 +54,7 @@ export function AccountMenu({
   variant = "default",
 }: {
   readonly account: ShellAccount;
-  readonly variant?: "admin" | "default" | "public";
+  readonly variant?: "default" | "public";
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -95,9 +95,6 @@ export function AccountMenu({
       >
         <AccountAvatar account={account} />
         <span className="account-menu__name">{account.displayName}</span>
-        {variant === "admin" ? (
-          <Icon className="account-menu__chevron" name="chevron" size={16} />
-        ) : null}
       </summary>
       <div className="account-menu__popover">
         <div className="account-menu__identity">
