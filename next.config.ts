@@ -6,11 +6,11 @@ const vercelBlobUploadOrigin = "https://vercel.com";
 
 const contentSecurityPolicy = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""}`,
+  `script-src 'self' 'unsafe-inline' https://www.googletagmanager.com${isDevelopment ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' blob: data: https://tiles.openfreemap.org",
+  "img-src 'self' blob: data: https://tiles.openfreemap.org https://*.google-analytics.com https://www.googletagmanager.com",
   "font-src 'self' data:",
-  `connect-src 'self' ${vercelBlobUploadOrigin} https://*.ingest.sentry.io https://tiles.openfreemap.org`,
+  `connect-src 'self' ${vercelBlobUploadOrigin} https://*.ingest.sentry.io https://tiles.openfreemap.org https://*.google-analytics.com https://www.googletagmanager.com`,
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",

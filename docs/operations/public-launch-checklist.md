@@ -1,5 +1,7 @@
 # Public launch verification
 
+**September 15 launch update:** The owner has now authorized deployment, live Stripe setup and public SEO launch. The domain and Pro schedules are deployed. Public indexing is now an independent Production opt-in, so payment activation does not block the directory sitemap. See [analytics and Search Console](analytics-and-search-console.md) and [Stripe live setup](stripe-live-launch.md). Earlier deferrals below describe the preparation phase and no longer override these owner instructions.
+
 Application preparation and a paid public launch are separate milestones. Live Stripe is explicitly deferred until the application is complete. Do not switch credentials, enable indexing, send campaigns, create provider resources or promote a deployment merely to make a check turn green.
 
 September 15 preparation now includes operator-specific policy drafts, read-only provider probes, a disabled daily monitoring workflow, synthetic backup/restore verification and HTTP scale tooling. See [provider and recovery procedures](provider-and-recovery-runbook.md) and [the current evidence report](prelaunch-readiness-2026-09-15.md). Local evidence does not close hosted-provider or release gates.

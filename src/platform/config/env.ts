@@ -222,14 +222,11 @@ export const serverEnvironmentSchema = z
     }
     if (
       environment.PUBLIC_INDEXING_ENABLED &&
-      (environment.APP_ENV !== "production" ||
-        environment.PRODUCTION_BETA_MODE ||
-        environment.STRIPE_MODE !== "live")
+      environment.APP_ENV !== "production"
     ) {
       context.addIssue({
         code: "custom",
-        message:
-          "Public indexing requires a live Production launch outside beta mode",
+        message: "Public indexing requires the Production environment",
         path: ["PUBLIC_INDEXING_ENABLED"],
       });
     }

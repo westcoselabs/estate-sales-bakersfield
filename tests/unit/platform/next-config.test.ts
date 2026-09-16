@@ -36,6 +36,8 @@ describe("sensitive page headers", () => {
       "https://vercel.com",
       "https://*.ingest.sentry.io",
       "https://tiles.openfreemap.org",
+      "https://*.google-analytics.com",
+      "https://www.googletagmanager.com",
     ]);
     expect(sources).not.toContain("*");
     expect(sources).not.toContain("https:");

@@ -72,10 +72,11 @@ afterEach(() => {
 });
 
 describe("launch sitemap routes", () => {
-  it("keeps every sitemap hidden and unadvertised during beta without reading the database", async () => {
+  it("keeps every sitemap hidden without the explicit indexing opt-in", async () => {
     launchEnvironment();
     vi.stubEnv("PRODUCTION_BETA_MODE", "true");
     vi.stubEnv("STRIPE_MODE", "test");
+    vi.stubEnv("PUBLIC_INDEXING_ENABLED", "false");
     expect((await indexRoute()).status).toBe(404);
     expect(
       (
@@ -92,6 +93,8 @@ describe("launch sitemap routes", () => {
 
   it("advertises a canonical index and bounded shards only after launch", async () => {
     launchEnvironment();
+    vi.stubEnv("PRODUCTION_BETA_MODE", "true");
+    vi.stubEnv("STRIPE_MODE", "test");
     database.eventPublication.count.mockResolvedValue(1001);
     database.externalListing.count.mockResolvedValue(1);
     const response = await indexRoute();

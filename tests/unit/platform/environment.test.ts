@@ -60,7 +60,7 @@ describe("server environment validation", () => {
     ).toThrow();
   });
 
-  it("keeps public indexing disabled until production is outside beta with live Stripe", () => {
+  it("keeps public indexing opt-in restricted to Production", () => {
     expect(parseServerEnvironment(base).PUBLIC_INDEXING_ENABLED).toBe(false);
     expect(() =>
       parseServerEnvironment({ ...base, PUBLIC_INDEXING_ENABLED: "true" }),
@@ -423,6 +423,12 @@ describe("server environment validation", () => {
       PRODUCTION_BETA_MODE: true,
       STRIPE_MODE: "test",
     });
+    expect(
+      parseServerEnvironment({
+        ...productionBeta,
+        PUBLIC_INDEXING_ENABLED: "true",
+      }).PUBLIC_INDEXING_ENABLED,
+    ).toBe(true);
     expect(() =>
       parseServerEnvironment({
         ...productionBeta,

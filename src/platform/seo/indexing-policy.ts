@@ -5,9 +5,7 @@ export function publicIndexingEnabled(
 ): boolean {
   return (
     environment.PUBLIC_INDEXING_ENABLED === "true" &&
-    environment.APP_ENV === "production" &&
-    environment.PRODUCTION_BETA_MODE === "false" &&
-    environment.STRIPE_MODE === "live"
+    environment.APP_ENV === "production"
   );
 }
 
@@ -24,7 +22,7 @@ export function importedListingIndexingEnabled(
 
 /**
  * Public pages remain noindex unless the explicit launch opt-in and every
- * production/live-mode condition are present. Search and private pages retain
+ * production condition are present. Payment mode is independent. Search and private pages retain
  * their own noindex policy even after launch.
  */
 export const prelaunchRobots: NonNullable<Metadata["robots"]> = {

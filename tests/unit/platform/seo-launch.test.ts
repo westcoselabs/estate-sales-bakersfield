@@ -16,7 +16,7 @@ const launch = {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("public indexing launch gate", () => {
-  it("requires every launch condition and an explicit opt-in", () => {
+  it("requires Production and an explicit indexing opt-in", () => {
     expect(publicIndexingEnabled({})).toBe(false);
     expect(publicIndexingEnabled(launch)).toBe(true);
     for (const override of [
@@ -26,15 +26,11 @@ describe("public indexing launch gate", () => {
       { APP_ENV: "preview" },
       { APP_ENV: "local" },
       { APP_ENV: "test" },
-      { PRODUCTION_BETA_MODE: "true" },
-      { PRODUCTION_BETA_MODE: undefined },
-      { STRIPE_MODE: "test" },
-      { STRIPE_MODE: undefined },
     ])
       expect(publicIndexingEnabled({ ...launch, ...override })).toBe(false);
   });
 
-  it("keeps beta and utility routes excluded when public pages become eligible", () => {
+  it("indexes public pages independently of payments while excluding utility routes", () => {
     for (const [key, value] of Object.entries(launch)) vi.stubEnv(key, value);
     expect(publicRobots()).toMatchObject({
       index: true,
@@ -43,9 +39,10 @@ describe("public indexing launch gate", () => {
     expect(searchRobots).toMatchObject({ index: false, follow: true });
     expect(sensitiveRobots).toMatchObject({ index: false, follow: false });
     vi.stubEnv("PRODUCTION_BETA_MODE", "true");
+    vi.stubEnv("STRIPE_MODE", "test");
     expect(publicRobots()).toMatchObject({
-      index: false,
-      googleBot: { index: false },
+      index: true,
+      googleBot: { index: true },
     });
   });
 });

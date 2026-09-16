@@ -75,6 +75,7 @@ const sections = [
       "Vercel hosts the application and stores listing media in Blob. Neon/PostgreSQL stores application records. Resend delivers account and transaction messages and processes email delivery and subscription events. Stripe processes checkout and returns payment status.",
       "Geoapify processes address suggestions through our server; confirmed addresses and coordinates are stored for the listing. MapLibre displays maps using OpenFreeMap and OpenStreetMap-derived data. Map requests go to the map providers.",
       "When configured, Sentry receives filtered error diagnostics to help identify failures. The application disables default personal-information collection and filters sensitive fields; service-provider network logs may still contain technical information.",
+      "We use Google Analytics to understand visits to public pages. Analytics uses cookies and receives technical browser and device information. Our pageview integration omits URL query strings and fragments and excludes account, login, administration and checkout pages. We do not send account email addresses or payment details as analytics parameters, and Google advertising signals and advertising personalization are disabled in our tag configuration.",
       "These providers process information needed for their services. We may also disclose information when required by law or necessary to investigate fraud, protect the service or respond to a legitimate security incident.",
     ],
   ],
