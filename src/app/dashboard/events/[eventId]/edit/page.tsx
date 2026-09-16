@@ -29,6 +29,9 @@ export default async function EventEditPage({ params }: Props) {
       throw error;
     });
   const payment = await createConfiguredPaymentService().status(user, eventId);
+  if (["FINISHED", "CANCELED"].includes(payment.displayState)) {
+    redirect(`/dashboard/events/${eventId}/payment`);
+  }
   const deletionBlocked = [
     "PAYMENT_PENDING",
     "PAYMENT_RECEIVED_PUBLISHING",
@@ -44,7 +47,7 @@ export default async function EventEditPage({ params }: Props) {
         displayName: user.displayName,
         isSuperAdmin: user.role === "SUPER_ADMIN",
       }}
-      eyebrow={`${event.eventType === "ESTATE_SALE" ? "Estate sale" : "Yard sale"} draft`}
+      eyebrow={`${event.eventType === "ESTATE_SALE" ? "Estate sale" : "Yard sale"}${event.publication ? " · Published" : " draft"}`}
       title={event.title ?? "Build your event"}
     >
       <EventBuilder

@@ -77,7 +77,11 @@ export interface EventRepository {
     | { readonly disposition: "CANCELED" | "ALREADY_CANCELED" }
     | {
         readonly disposition:
-          "NOT_FOUND" | "STALE_VERSION" | "NOT_PUBLISHED" | "PAYMENT_BLOCKED";
+          | "NOT_FOUND"
+          | "STALE_VERSION"
+          | "NOT_PUBLISHED"
+          | "PAYMENT_BLOCKED"
+          | "FINISHED";
       }
   >;
   findLifecycleMediaKeys(eventId: string): Promise<readonly string[]>;

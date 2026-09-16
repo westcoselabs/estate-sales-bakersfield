@@ -445,6 +445,7 @@ model Event {
   localStartsAt         String?             @map("local_starts_at") @db.VarChar(16)
   localEndsAt           String?             @map("local_ends_at") @db.VarChar(16)
   scheduleDays          Json?               @map("schedule_days")
+  publishedSnapshot     Json?               @map("published_snapshot")
   addressRevealAt       DateTime?           @map("address_reveal_at") @db.Timestamptz(3)
   startsAt              DateTime?           @map("starts_at") @db.Timestamptz(3)
   endsAt                DateTime?           @map("ends_at") @db.Timestamptz(3)

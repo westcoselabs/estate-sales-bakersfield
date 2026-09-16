@@ -61,6 +61,18 @@ describe("dashboard listing views", () => {
     expect(listingMatches(listing("PUBLISHED"), "published")).toBe(true);
     expect(listingMatches(listing("CANCELED"), "history")).toBe(true);
     expect(listingMatches(listing("CANCELED"), "all")).toBe(false);
+    expect(listingMatches(listing("FINISHED"), "history")).toBe(true);
+    for (const view of [
+      "all",
+      "published",
+      "drafts",
+      "ready",
+      "attention",
+    ] as const) {
+      expect(listingMatches(listing("FINISHED"), view)).toBe(false);
+    }
+    expect(listingPrimaryAction(listing("FINISHED")).label).toBe("View record");
+    expect(listingLifecycleAction(listing("FINISHED"))).toBeNull();
   });
 
   it("uses recovery, review, edit, and live-listing destinations", () => {

@@ -24,7 +24,7 @@ Before release, the map receives a fixed neighborhood cell center and approximat
 
 ## State and privacy
 
-`INCOMPLETE_DRAFT` and `PREVIEW_READY` are derived by application policy. `APPROVED_FOR_PAYMENT` records exact revision approval, not publication. Phase 4 publication creates a separate immutable snapshot bound to that approval digest and payment attempt. Approximate and pre-start hidden runtime projections never serialize exact coordinates/address. Published Phase 4 events are edit-locked; the paid-edit workflow remains deferred.
+`INCOMPLETE_DRAFT` and `PREVIEW_READY` are derived by application policy. `APPROVED_FOR_PAYMENT` records exact revision approval, not publication. Phase 4 publication creates a separate immutable snapshot bound to that approval digest and payment attempt. Approximate and pre-start hidden runtime projections never serialize exact coordinates/address. Published events remain editable until their final closing time. Details, daily schedule, and ready-photo changes atomically update `events.published_snapshot`; the original paid publication, approval proof, canonical path, organizer, and address remain immutable. Search reads the current snapshot when present, and database triggers update search dates and invalidate cached results in the same transaction. Published listings must retain a description and ready cover. Ended publications derive the `FINISHED` display state, appear only in dashboard History, and cannot be canceled or edited. No scheduled job is required. Apply migration `20260916000000_published_event_edits` before deploying.
 
 ## Routes
 
@@ -44,4 +44,4 @@ Before release, the map receives a fixed neighborhood cell center and approximat
 - `POST /api/events/[eventId]/payment-cancel`
 - `POST /api/webhooks/stripe`
 
-Dashboard/editor/preview/payment pages are under `/dashboard`. Canonical `/estate-sales/[slug]-[publicId]` and `/yard-sales/[slug]-[publicId]` detail routes return not-found until an immutable publication exists, redirect noncanonical slugs to the stored canonical path, and read only the published snapshot.
+Dashboard/editor/preview/payment pages are under `/dashboard`. Canonical `/estate-sales/[slug]-[publicId]` and `/yard-sales/[slug]-[publicId]` detail routes return not-found until an immutable publication exists, redirect noncanonical slugs to the stored canonical path, and read the current published snapshot, falling back to the original paid snapshot for unedited listings.

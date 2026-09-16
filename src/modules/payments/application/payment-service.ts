@@ -121,7 +121,9 @@ function statusMessage(state: PaymentStatusDto["displayState"]): string {
     PAYMENT_PENDING: "Payment is pending authoritative Stripe confirmation.",
     PAYMENT_RECEIVED_PUBLISHING:
       "Payment was received and publication is processing.",
-    PUBLISHED: "The approved listing revision is published.",
+    PUBLISHED:
+      "Your listing is published. You can edit its details, schedule, and photos.",
+    FINISHED: "This event has ended and is saved in your event history.",
     CANCELED:
       "This paid listing was canceled by the organizer. Payment and publication records are retained; no refund was initiated.",
     PAYMENT_CANCELED: "Checkout was canceled before payment confirmation.",
@@ -458,7 +460,9 @@ export class PaymentService {
     ]);
     let displayState: PaymentStatusDto["displayState"];
     if (event.canceledAt) displayState = "CANCELED";
-    else if (publication) displayState = "PUBLISHED";
+    else if (publication)
+      displayState =
+        event.endsAt && event.endsAt <= this.now() ? "FINISHED" : "PUBLISHED";
     else if (!attempt) {
       displayState =
         event.approvalStatus === "APPROVED"

@@ -7,8 +7,10 @@ import { DashboardShell } from "@/components/shells/shells";
 import { Icon } from "@/components/ui/icons";
 import { getCurrentUser } from "@/modules/auth";
 
-import { ListingCollection } from "./_components/listing-views";
-import { loadDashboardListings } from "./_lib/listings";
+import { ListingCollection, listingMatches } from "./_components/listing-views";
+import { loadDashboardListings, nextListingEnd } from "./_lib/listings";
+
+import { ListingStatusRefresh } from "./_components/listing-status-refresh";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +44,7 @@ export default async function DashboardPage({
     );
   }
   const listings = await loadDashboardListings(user);
-  const activeListings = listings.filter((item) => !item.event.canceledAt);
+  const activeListings = listings.filter((item) => listingMatches(item, "all"));
   const attentionCount = activeListings.filter((item) =>
     [
       "PAYMENT_CANCELED",
@@ -55,6 +57,7 @@ export default async function DashboardPage({
 
   return (
     <DashboardShell account={account}>
+      <ListingStatusRefresh endsAt={nextListingEnd(listings)} />
       <div className="dashboard-content dashboard-overview">
         <header className="dashboard-page-header">
           <div>

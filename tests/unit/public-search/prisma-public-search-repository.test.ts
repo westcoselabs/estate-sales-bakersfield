@@ -43,7 +43,7 @@ describe("PrismaPublicSearchRepository", () => {
       `search_document."privacy_mode" = 'HIDDEN_UNTIL_START'`,
     );
     expect(organizerBranch).toContain(
-      `publication."snapshot" ->> 'addressRevealAt'`,
+      `COALESCE(source_event."published_snapshot", publication."snapshot") ->> 'addressRevealAt'`,
     );
     expect(organizerBranch).toContain(`search_document."starts_at") <=`);
     expect(externalBranch).toContain(

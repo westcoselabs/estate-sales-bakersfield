@@ -7,6 +7,8 @@ import { getCurrentUser } from "@/modules/auth";
 import { createConfiguredEventService } from "@/modules/events";
 import { createConfiguredPaymentService } from "@/modules/payments";
 
+import { ListingStatusRefresh } from "../../../_components/listing-status-refresh";
+
 export const dynamic = "force-dynamic";
 
 interface Props {
@@ -21,6 +23,7 @@ export default async function EventPaymentPage({ params }: Props) {
     createConfiguredEventService().get(user, eventId),
     createConfiguredPaymentService().status(user, eventId),
   ]);
+  const inHistory = ["CANCELED", "FINISHED"].includes(payment.displayState);
   const paymentCanBeResumed = [
     "READY_FOR_PAYMENT",
     "CHECKOUT_CREATED",
@@ -35,26 +38,37 @@ export default async function EventPaymentPage({ params }: Props) {
         isSuperAdmin: user.role === "SUPER_ADMIN",
       }}
       eyebrow={
-        payment.displayState === "CANCELED"
-          ? "Canceled event record"
-          : payment.displayState === "PUBLISHED"
-            ? "Published listing"
-            : paymentCanBeResumed
-              ? "Approved listing publication"
-              : "Payment and publication status"
+        payment.displayState === "FINISHED"
+          ? "Finished event record"
+          : payment.displayState === "CANCELED"
+            ? "Canceled event record"
+            : payment.displayState === "PUBLISHED"
+              ? "Published listing"
+              : paymentCanBeResumed
+                ? "Approved listing publication"
+                : "Payment and publication status"
       }
       title={event.title ?? "Event payment"}
       meta={
         <div className="payment-page-meta">
           <nav aria-label="Listing publication links">
-            {payment.displayState === "CANCELED" ? (
-              <Link href="/dashboard/events?view=history">
-                Return to event history
-              </Link>
+            {inHistory ? (
+              <>
+                <Link href="/dashboard/events?view=history">
+                  Return to event history
+                </Link>
+                {payment.displayState === "FINISHED" ? (
+                  <Link href={`/dashboard/events/${eventId}/preview`}>
+                    View event details
+                  </Link>
+                ) : null}
+              </>
             ) : (
               <>
                 <Link href={`/dashboard/events/${eventId}/edit`}>
-                  Return to approved draft
+                  {event.publication
+                    ? "Edit listing"
+                    : "Return to approved draft"}
                 </Link>
                 <Link href={`/dashboard/events/${eventId}/preview`}>
                   Review listing preview
@@ -66,7 +80,12 @@ export default async function EventPaymentPage({ params }: Props) {
             Listing fees are non-refundable, including if you cancel your event.
             Read the <Link href="/terms">publishing terms</Link> before paying.
           </p>
-          {payment.displayState === "CANCELED" ? (
+          {payment.displayState === "FINISHED" ? (
+            <p>
+              This event has ended. Its details and payment record are retained
+              in History.
+            </p>
+          ) : payment.displayState === "CANCELED" ? (
             <p>
               This paid publication was canceled by the organizer. Its financial
               record remains and no refund was initiated.
@@ -87,7 +106,11 @@ export default async function EventPaymentPage({ params }: Props) {
         </div>
       }
     >
+      <ListingStatusRefresh
+        endsAt={payment.displayState === "PUBLISHED" ? event.endsAt : null}
+      />
       <PaymentPanel
+        key={payment.displayState}
         eventId={eventId}
         expectedVersion={event.version}
         initialStatus={payment}

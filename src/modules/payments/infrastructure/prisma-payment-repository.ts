@@ -873,6 +873,7 @@ export class PrismaPaymentRepository implements PaymentRepository {
     input: Parameters<PaymentRepository["findPublishedByPublicId"]>[0],
   ) {
     const publication = await this.prisma.eventPublication.findFirst({
+      include: { event: { select: { publishedSnapshot: true } } },
       where: {
         publicId: input.publicId,
         event: {
@@ -886,6 +887,9 @@ export class PrismaPaymentRepository implements PaymentRepository {
       },
     });
     if (!publication) return null;
-    return mapPublication(publication);
+    return mapPublication({
+      ...publication,
+      snapshot: publication.event.publishedSnapshot ?? publication.snapshot,
+    });
   }
 }

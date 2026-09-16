@@ -10,7 +10,9 @@ import {
   ListingTabs,
   type ListingView,
 } from "../_components/listing-views";
-import { loadDashboardListings } from "../_lib/listings";
+import { loadDashboardListings, nextListingEnd } from "../_lib/listings";
+
+import { ListingStatusRefresh } from "../_components/listing-status-refresh";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +41,7 @@ export default async function EventsPage({
         isSuperAdmin: user.role === "SUPER_ADMIN",
       }}
     >
+      <ListingStatusRefresh endsAt={nextListingEnd(listings)} />
       <div className="dashboard-content">
         <header className="dashboard-page-header">
           <div>

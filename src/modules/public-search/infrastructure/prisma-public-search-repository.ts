@@ -51,9 +51,9 @@ function pagePredicate(input: SearchInput, source: "ORGANIZER" | "EXTERNAL") {
     ? Prisma.sql`TRUE`
     : organizer
       ? Prisma.sql`(
-          CASE WHEN jsonb_array_length(COALESCE(publication."snapshot" -> 'projection' -> 'scheduleDays', '[]'::jsonb)) > 0
+          CASE WHEN jsonb_array_length(COALESCE(COALESCE(source_event."published_snapshot", publication."snapshot") -> 'projection' -> 'scheduleDays', '[]'::jsonb)) > 0
           THEN EXISTS (
-            SELECT 1 FROM jsonb_array_elements(publication."snapshot" -> 'projection' -> 'scheduleDays') AS sale_day
+            SELECT 1 FROM jsonb_array_elements(COALESCE(source_event."published_snapshot", publication."snapshot") -> 'projection' -> 'scheduleDays') AS sale_day
             WHERE (sale_day ->> 'startsAt')::timestamptz < ${input.range.endsAt}
               AND (sale_day ->> 'endsAt')::timestamptz > ${input.range.startsAt}
           )
@@ -83,7 +83,7 @@ function publicBoundsPredicate(
     source === "organizer"
       ? Prisma.sql`(search_document."privacy_mode" = 'EXACT_ADDRESS' OR
         (search_document."privacy_mode" = 'HIDDEN_UNTIL_START' AND
-          COALESCE((publication."snapshot" ->> 'addressRevealAt')::timestamptz, search_document."starts_at") <= ${input.activeAfter}))`
+          COALESCE((COALESCE(source_event."published_snapshot", publication."snapshot") ->> 'addressRevealAt')::timestamptz, search_document."starts_at") <= ${input.activeAfter}))`
       : Prisma.sql`(listing."privacy_mode" = 'EXACT_ADDRESS' OR
         (listing."privacy_mode" = 'HIDDEN_UNTIL_START' AND listing."starts_at" <= ${input.activeAfter}))`;
   const includesPublicZone =
@@ -125,7 +125,7 @@ export class PrismaPublicSearchRepository implements PublicSearchRepository {
           'ORGANIZER'::text AS "sourceKind",
           search_document."public_id" AS "publicId",
           publication."canonical_path" AS "canonicalPath",
-          publication."snapshot" AS "snapshot",
+          COALESCE(source_event."published_snapshot", publication."snapshot") AS "snapshot",
           search_document."event_type"::text AS "eventType",
           search_document."starts_at" AS "startsAt",
           search_document."ends_at" AS "endsAt",

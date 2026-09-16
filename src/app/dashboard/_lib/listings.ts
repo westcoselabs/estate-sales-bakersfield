@@ -15,6 +15,18 @@ export interface DashboardListing {
   readonly payment: PaymentStatusDto;
 }
 
+export function nextListingEnd(
+  listings: readonly DashboardListing[],
+): string | null {
+  return (
+    listings
+      .filter((listing) => listing.payment.displayState === "PUBLISHED")
+      .map((listing) => listing.event.endsAt)
+      .filter((endsAt): endsAt is string => endsAt !== null)
+      .sort()[0] ?? null
+  );
+}
+
 export async function loadDashboardListings(
   user: AuthPrincipal,
 ): Promise<readonly DashboardListing[]> {

@@ -545,3 +545,43 @@ describe("Phase 4 payment service", () => {
     },
   );
 });
+
+describe("finished publication status", () => {
+  it.each([
+    [-1, "PUBLISHED"],
+    [0, "FINISHED"],
+    [1, "FINISHED"],
+  ] as const)(
+    "classifies closing time with offset %s",
+    async (offset, expected) => {
+      const event = approvedEvent({ endsAt: new Date(now.getTime() - offset) });
+      const payments = paymentRepository({
+        findPublicationForEvent: vi.fn(async () =>
+          publication(paymentAttempt()),
+        ),
+      });
+      const result = await service(
+        payments,
+        eventRepository(event),
+        stripeProvider(),
+      ).status(principal, event.id);
+      expect(result.displayState).toBe(expected);
+    },
+  );
+
+  it("keeps cancellation distinct from a naturally finished event", async () => {
+    const event = { ...approvedEvent(), endsAt: now, canceledAt: now };
+    const payments = paymentRepository({
+      findPublicationForEvent: vi.fn(async () => publication(paymentAttempt())),
+    });
+    expect(
+      (
+        await service(
+          payments,
+          eventRepository(event),
+          stripeProvider(),
+        ).status(principal, event.id)
+      ).displayState,
+    ).toBe("CANCELED");
+  });
+});

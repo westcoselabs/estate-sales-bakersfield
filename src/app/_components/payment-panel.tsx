@@ -32,6 +32,7 @@ function stateTitle(state: PaymentStatusDto["displayState"]): string {
     PAYMENT_PENDING: "Payment pending",
     PAYMENT_RECEIVED_PUBLISHING: "Publishing",
     PUBLISHED: "Published",
+    FINISHED: "Finished",
     CANCELED: "Canceled",
     PAYMENT_CANCELED: "Payment canceled",
     CHECKOUT_EXPIRED: "Checkout expired",
@@ -156,13 +157,15 @@ export function PaymentPanel({
   const fixturePrice = Boolean(status.price?.fixture);
   const tone = stateTone(status.displayState);
   const panelTitle =
-    status.displayState === "CANCELED"
-      ? "Canceled event record"
-      : status.displayState === "PUBLISHED"
-        ? "Your listing is live"
-        : canPay
-          ? "Finish publishing your listing"
-          : "Publication status";
+    status.displayState === "FINISHED"
+      ? "Finished event record"
+      : status.displayState === "CANCELED"
+        ? "Canceled event record"
+        : status.displayState === "PUBLISHED"
+          ? "Your listing is live"
+          : canPay
+            ? "Finish publishing your listing"
+            : "Publication status";
 
   return (
     <section className="payment-panel" aria-labelledby="payment-panel-title">
@@ -189,7 +192,8 @@ export function PaymentPanel({
         <p className="payment-panel__status" aria-live="polite">
           {status.message}
         </p>
-        {returnContext === "success" && status.displayState !== "PUBLISHED" ? (
+        {returnContext === "success" &&
+        !["PUBLISHED", "FINISHED", "CANCELED"].includes(status.displayState) ? (
           <p className="payment-panel__notice payment-panel__notice--info">
             <Icon name="clock" size={19} />
             <span>
@@ -277,7 +281,7 @@ export function PaymentPanel({
             {busy ? "Opening checkout" : checkoutAction}
           </Button>
         ) : null}
-        {status.canonicalPath && status.displayState !== "CANCELED" ? (
+        {status.canonicalPath && status.displayState === "PUBLISHED" ? (
           <Link className="button-link" href={status.canonicalPath}>
             View live listing
           </Link>

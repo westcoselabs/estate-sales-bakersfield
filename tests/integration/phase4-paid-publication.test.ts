@@ -1,4 +1,10 @@
 import { randomUUID } from "node:crypto";
+import sharp from "sharp";
+import { EventService } from "@/modules/events/application/event-service";
+import type { LocationProvider } from "@/modules/locations";
+import { parseMediaObjectKey } from "@/modules/media/domain/object-key";
+import { SharpImageProcessor } from "@/modules/media/infrastructure/sharp-image-processor";
+import { InMemoryMediaStore } from "../contract/blob/in-memory-media-store";
 
 import { afterAll, describe, expect, it, vi } from "vitest";
 
@@ -846,5 +852,205 @@ describe("Phase 4 paid publication in an isolated Development Neon schema", () =
         },
       }),
     ).toMatchObject({ maxAttempts: 10, status: "PENDING" });
+  });
+});
+
+describe("published organizer edits", () => {
+  it("updates live content and search, uploads photos, preserves paid proof, and finishes in history", async () => {
+    const fixture = await checkout("Editable Publication");
+    const webhook = completeFakeCheckout(fixture.sessionId);
+    await fixture.service.handleWebhook(webhook.body, webhook.signature);
+    const original = await payments.findPublicationForEvent(fixture.event.id);
+    const media = new InMemoryMediaStore();
+    const editor = new EventService(
+      events,
+      {} as LocationProvider,
+      media,
+      new SharpImageProcessor(),
+      "test",
+    );
+    let event = await editor.get(fixture.principal, fixture.event.id);
+    const originalCover = event.photos[0]!.id;
+    const search = new PublicSearchService(
+      new PrismaPublicSearchRepository(prisma),
+    );
+    const criteria = {
+      date: "all",
+      from: null,
+      to: null,
+      location: "bakersfield-ca",
+      sort: "soonest",
+      view: "list",
+      cursor: null,
+      sale: "all",
+    } as const;
+    const revisionBefore = await prisma.publicSearchRevision.findUniqueOrThrow({
+      where: { id: 1 },
+    });
+    event = await editor.updateDetails(fixture.principal, event.id, {
+      expectedVersion: event.version,
+      title: "Updated published sale",
+      description: "New furniture and art added after publication.",
+    });
+    const live = await fixture.service.published(
+      "ESTATE_SALE",
+      fixture.event.publicId,
+    );
+    expect(live?.projection).toMatchObject({
+      title: "Updated published sale",
+      description: "New furniture and art added after publication.",
+    });
+    expect(live?.canonicalPath).toBe(original?.canonicalPath);
+    expect(
+      (
+        await prisma.publicSearchRevision.findUniqueOrThrow({
+          where: { id: 1 },
+        })
+      ).revision,
+    ).toBeGreaterThan(revisionBefore.revision);
+    await expect(
+      editor.updateDetails(fixture.principal, event.id, {
+        expectedVersion: event.version - 1,
+        title: "Stale",
+        description: "Stale",
+      }),
+    ).rejects.toThrow();
+    await expect(
+      editor.updateDetails(
+        { ...fixture.principal, id: randomUUID() },
+        event.id,
+        {
+          expectedVersion: event.version,
+          title: "Other owner",
+          description: "Other owner",
+        },
+      ),
+    ).rejects.toThrow();
+    await expect(
+      editor.deletePhoto(
+        fixture.principal,
+        event.id,
+        originalCover,
+        event.version,
+      ),
+    ).rejects.toThrow("cover");
+
+    const reservation = await editor.reservePhoto(fixture.principal, event.id, {
+      expectedVersion: event.version,
+      contentType: "image/jpeg",
+    });
+    const bytes = await sharp({
+      create: { width: 64, height: 64, channels: 3, background: "#ba7452" },
+    })
+      .jpeg()
+      .toBuffer();
+    media.putFixture(parseMediaObjectKey(reservation.uploadPathname), bytes);
+    event = await editor.finalizePhoto(
+      fixture.principal,
+      event.id,
+      reservation.photoId,
+      {
+        expectedVersion: reservation.event.version,
+        reservationId: reservation.reservationId,
+        pathname: reservation.uploadPathname,
+      },
+    );
+    expect(
+      (
+        await fixture.service.published("ESTATE_SALE", fixture.event.publicId)
+      )?.projection.gallery.map((photo) => photo.id),
+    ).toContain(reservation.photoId);
+    event = await editor.setCover(
+      fixture.principal,
+      event.id,
+      reservation.photoId,
+      event.version,
+    );
+    event = await editor.reorderPhotos(
+      fixture.principal,
+      event.id,
+      [reservation.photoId, originalCover],
+      event.version,
+    );
+    event = await editor.deletePhoto(
+      fixture.principal,
+      event.id,
+      originalCover,
+      event.version,
+    );
+    const afterPhotos = await fixture.service.published(
+      "ESTATE_SALE",
+      fixture.event.publicId,
+    );
+    expect(afterPhotos?.projection.coverPhotoUrl).toBe(
+      `/media/${reservation.photoId}/cover`,
+    );
+    expect(afterPhotos?.projection.gallery).toHaveLength(1);
+
+    event = await editor.updateSchedule(fixture.principal, event.id, {
+      expectedVersion: event.version,
+      timezone: "America/Los_Angeles",
+      scheduleDays: [
+        { date: "2027-08-26", startTime: "08:00", endTime: "13:00" },
+        { date: "2027-08-28", startTime: "10:00", endTime: "16:00" },
+      ],
+    });
+    const afterSchedule = await fixture.service.published(
+      "ESTATE_SALE",
+      fixture.event.publicId,
+    );
+    expect(afterSchedule?.projection.scheduleDays).toHaveLength(2);
+    const searchResult = await search.search(
+      { ...criteria, date: "custom", from: "2027-08-28", to: "2027-08-28" },
+      new Date(),
+      100,
+    );
+    expect(
+      searchResult.items.find((item) => item.id === fixture.event.publicId),
+    ).toMatchObject({ title: "Updated published sale", endsAt: event.endsAt });
+    const skippedDate = await search.search(
+      { ...criteria, date: "custom", from: "2027-08-27", to: "2027-08-27" },
+      new Date(),
+      100,
+    );
+    expect(
+      skippedDate.items.some((item) => item.id === fixture.event.publicId),
+    ).toBe(false);
+    expect(await payments.findPublicationForEvent(event.id)).toEqual(original);
+    expect(
+      await prisma.paymentAttempt.count({ where: { eventId: event.id } }),
+    ).toBe(1);
+    expect(
+      (await fixture.service.status(fixture.principal, event.id)).displayState,
+    ).toBe("PUBLISHED");
+
+    event = await editor.updateSchedule(fixture.principal, event.id, {
+      expectedVersion: event.version,
+      timezone: "America/Los_Angeles",
+      scheduleDays: [
+        { date: "2026-01-02", startTime: "08:00", endTime: "09:00" },
+      ],
+    });
+    expect(
+      (await fixture.service.status(fixture.principal, event.id)).displayState,
+    ).toBe("FINISHED");
+    expect(
+      await fixture.service.published("ESTATE_SALE", fixture.event.publicId),
+    ).toBeNull();
+    await expect(
+      editor.cancelPublished(fixture.principal, event.id, {
+        expectedVersion: event.version,
+        confirmation: event.title!,
+      }),
+    ).rejects.toThrow("finished");
+    await expect(
+      editor.reservePhoto(fixture.principal, event.id, {
+        expectedVersion: event.version,
+        contentType: "image/jpeg",
+      }),
+    ).rejects.toThrow("finished");
+    expect(
+      (await editor.list(fixture.principal)).map((item) => item.id),
+    ).toContain(event.id);
   });
 });

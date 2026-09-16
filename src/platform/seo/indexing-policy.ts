@@ -16,6 +16,7 @@ export function importedListingIndexingEnabled(
 ): boolean {
   return (
     publicIndexingEnabled(environment) &&
+    environment.PRODUCTION_BETA_MODE !== "true" &&
     environment.PUBLIC_IMPORTED_INDEXING_ENABLED === "true"
   );
 }

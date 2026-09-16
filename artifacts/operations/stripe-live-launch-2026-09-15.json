@@ -1,0 +1,127 @@
+{
+  "at": "2026-09-16T00:58:49.097Z",
+  "checks": {
+    "/api/health": {
+      "status": 200,
+      "contentType": "application/json",
+      "body": {
+        "build": "f7ab44fc9ced",
+        "requestId": "c3badaba-d415-45ef-9663-65600e8a6dc9",
+        "status": "ok"
+      }
+    },
+    "/": {
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "canonicalCorrect": true,
+      "indexable": true
+    },
+    "/robots.txt": {
+      "status": 200,
+      "contentType": "text/plain",
+      "sitemapAdvertised": true
+    },
+    "/sitemap.xml": {
+      "status": 200,
+      "contentType": "application/xml; charset=utf-8",
+      "locations": [
+        "https://estatesalesbakersfield.com/sitemaps/pages.xml",
+        "https://estatesalesbakersfield.com/sitemaps/organizer-0.xml"
+      ]
+    },
+    "/sitemaps/pages.xml": {
+      "status": 200,
+      "contentType": "application/xml; charset=utf-8",
+      "locations": [
+        "https://estatesalesbakersfield.com/",
+        "https://estatesalesbakersfield.com/estate-sales",
+        "https://estatesalesbakersfield.com/yard-sales",
+        "https://estatesalesbakersfield.com/estate-sales/this-weekend",
+        "https://estatesalesbakersfield.com/yard-sales/this-weekend",
+        "https://estatesalesbakersfield.com/sales-today",
+        "https://estatesalesbakersfield.com/about",
+        "https://estatesalesbakersfield.com/how-it-works",
+        "https://estatesalesbakersfield.com/list-your-sale",
+        "https://estatesalesbakersfield.com/faq",
+        "https://estatesalesbakersfield.com/contact",
+        "https://estatesalesbakersfield.com/privacy",
+        "https://estatesalesbakersfield.com/terms"
+      ]
+    },
+    "/sitemaps/organizer-0.xml": {
+      "status": 200,
+      "contentType": "application/xml; charset=utf-8",
+      "locations": [
+        "https://estatesalesbakersfield.com/estate-sales/remodeling-estate-sale-83ceef29bf27"
+      ]
+    },
+    "/analytics-tag": {
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "measurementIdCorrect": true
+    }
+  },
+  "webhookTestScope": "Synthetic signed unsupported event, stored as ignored; does not prove Stripe-origin delivery or payment fulfillment.",
+  "webhook": [
+    {
+      "test": "invalid-signature",
+      "status": 400,
+      "error": "Invalid webhook signature",
+      "requestId": "195de1b4-3b85-4f42-998a-971665670bf2"
+    },
+    {
+      "test": "signed-ignored-event",
+      "status": 200,
+      "received": true,
+      "duplicate": false,
+      "requestId": "25bbe83f-a5d7-4974-9f86-285358bed647"
+    },
+    {
+      "test": "duplicate-ignored-event",
+      "status": 200,
+      "received": true,
+      "duplicate": true,
+      "requestId": "5495b97c-dc2b-4e50-848a-f8b93eb15fc2"
+    }
+  ],
+  "stripe": {
+    "at": "2026-09-16T00:57:07.911Z",
+    "account": {
+      "id": "acct_1TvocwERIwWzI0Ug",
+      "chargesEnabled": true,
+      "payoutsEnabled": true,
+      "detailsSubmitted": true,
+      "cardPayments": "active"
+    },
+    "price": {
+      "id": "price_1UG6IPERIwWzI0UgS4gibmaC",
+      "live": true,
+      "active": true,
+      "type": "one_time",
+      "amount": 2000,
+      "currency": "usd",
+      "productName": "Estate Sale Publishing",
+      "productActive": true,
+      "matchesConfiguredAmount": true,
+      "matchesConfiguredCurrency": true
+    },
+    "webhooks": {
+      "hasMore": false,
+      "endpoints": [
+        {
+          "id": "we_1UG6ivERIwWzI0Ugy222jiRN",
+          "url": "https://estatesalesbakersfield.com/api/webhooks/stripe",
+          "live": true,
+          "status": "enabled",
+          "events": [
+            "checkout.session.async_payment_failed",
+            "checkout.session.async_payment_succeeded",
+            "checkout.session.completed",
+            "checkout.session.expired"
+          ],
+          "apiVersion": "2026-06-24.dahlia"
+        }
+      ]
+    }
+  }
+}

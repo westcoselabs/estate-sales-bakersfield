@@ -93,7 +93,7 @@ describe("launch sitemap routes", () => {
 
   it("advertises a canonical index and bounded shards only after launch", async () => {
     launchEnvironment();
-    vi.stubEnv("PRODUCTION_BETA_MODE", "true");
+    vi.stubEnv("PRODUCTION_BETA_MODE", "false");
     vi.stubEnv("STRIPE_MODE", "test");
     database.eventPublication.count.mockResolvedValue(1001);
     database.externalListing.count.mockResolvedValue(1);

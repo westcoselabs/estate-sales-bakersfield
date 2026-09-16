@@ -193,12 +193,27 @@ export class EventService {
     }
   }
 
-  private assertEditable(event: EventRecord): void {
-    if (event.publication) {
+  private assertEditable(event: EventRecord, allowPublished = true): void {
+    if (event.canceledAt || event.deletedAt || event.removedAt) {
+      throw new EventStateError("This event is no longer editable.");
+    }
+    if (event.publication && event.endsAt && event.endsAt <= this.now()) {
       throw new EventStateError(
-        "Published listings cannot be edited in the Phase 4 workflow.",
+        "This event has finished. Its record is available in History.",
       );
     }
+    if (event.publication && !allowPublished) {
+      throw new EventStateError(
+        "Published listings cannot change location or be approved for payment again.",
+      );
+    }
+  }
+
+  private assertPublishedReady(event: EventRecord): void {
+    if (!event.publication) return;
+    const readiness = eventReadiness(event);
+    if (!readiness.ready)
+      throw new EventValidationError(readiness.missing.join(" "));
   }
 
   async create(
@@ -315,7 +330,7 @@ export class EventService {
     const target = await this.events.findOwnedForLifecycle(eventId, user.id);
     if (!target) throw new EventNotFoundError();
     this.assertLifecycleConfirmation(target, input.confirmation);
-    const now = new Date();
+    const now = this.now();
     const result = await this.events.cancelOwnedPublished({
       eventId,
       userId: user.id,
@@ -332,6 +347,11 @@ export class EventService {
     }
     if (result.disposition === "NOT_FOUND") throw new EventNotFoundError();
     if (result.disposition === "STALE_VERSION") throw new EventConflictError();
+    if (result.disposition === "FINISHED") {
+      throw new EventLifecycleBlockedError(
+        "This event has finished and cannot be canceled.",
+      );
+    }
     if (result.disposition === "NOT_PUBLISHED") {
       throw new EventLifecycleBlockedError(
         "Only paid published events can be canceled.",
@@ -402,6 +422,7 @@ export class EventService {
       approvalStatus: "NOT_APPROVED",
       coverPhotoId: current.coverPhotoId,
     });
+    this.assertPublishedReady(hypothetical);
     const result = await this.events.updateDetails({
       eventId,
       userId: user.id,
@@ -476,6 +497,7 @@ export class EventService {
       timezone: input.timezone,
       approvalStatus: "NOT_APPROVED",
     });
+    this.assertPublishedReady(hypothetical);
     const result = await this.events.updateSchedule({
       eventId,
       userId: user.id,
@@ -500,7 +522,7 @@ export class EventService {
   ): Promise<EventEditorDto> {
     const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
-    this.assertEditable(current);
+    this.assertEditable(current, false);
     if (current.version !== input.expectedVersion)
       throw new EventConflictError();
     if (current.timezone && current.timezone !== input.timezone) {
@@ -1076,12 +1098,18 @@ export class EventService {
     if (!current.photos.some((photo) => photo.id === photoId)) {
       throw new EventNotFoundError("The event photo was not found.");
     }
+    if (current.publication && current.coverPhotoId === photoId) {
+      throw new EventValidationError(
+        "Choose another cover photo before removing the current cover.",
+      );
+    }
     const hypothetical = withChanges(current, {
       photos: current.photos.filter((photo) => photo.id !== photoId),
       coverPhotoId:
         current.coverPhotoId === photoId ? null : current.coverPhotoId,
       approvalStatus: "NOT_APPROVED",
     });
+    this.assertPublishedReady(hypothetical);
     const deleted = await this.events.deletePhoto({
       eventId,
       photoId,
@@ -1120,7 +1148,7 @@ export class EventService {
       );
     }
     const current = await this.loadOwned(eventId, user.id);
-    this.assertEditable(current);
+    this.assertEditable(current, false);
     if (current.organizerStatus !== "COMPLETE") {
       throw new OrganizerProfileIncompleteError(
         "Complete your organizer profile before approving this event.",

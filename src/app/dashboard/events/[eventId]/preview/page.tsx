@@ -21,6 +21,14 @@ export default async function EventPreviewPage({ params }: Props) {
   const { eventId } = await params;
   const service = createConfiguredEventService();
   const editor = await service.get(user, eventId);
+  const finished = Boolean(
+    editor.publication &&
+    editor.endsAt &&
+    new Date(editor.endsAt) <= new Date(),
+  );
+  const returnPath = finished
+    ? `/dashboard/events/${eventId}/payment`
+    : `/dashboard/events/${eventId}/edit`;
   const account = {
     displayName: user.displayName,
     isSuperAdmin: user.role === "SUPER_ADMIN",
@@ -32,8 +40,8 @@ export default async function EventPreviewPage({ params }: Props) {
         account={account}
         eyebrow="Listing preview"
         title="Preview is not ready"
-        backHref={`/dashboard/events/${eventId}/edit`}
-        backLabel="Return to editor"
+        backHref={returnPath}
+        backLabel={finished ? "Return to event record" : "Return to editor"}
       >
         <section>
           <p>Complete these details to preview your listing.</p>
@@ -59,10 +67,12 @@ export default async function EventPreviewPage({ params }: Props) {
   return (
     <BuilderShell
       account={account}
-      eyebrow="Exact future listing preview"
+      eyebrow={
+        finished ? "Finished event details" : "Exact future listing preview"
+      }
       title={preview.title}
-      backHref={`/dashboard/events/${eventId}/edit`}
-      backLabel="Return to editor"
+      backHref={returnPath}
+      backLabel={finished ? "Return to event record" : "Return to editor"}
       className="builder-app--listing-preview"
       footer={<PublicFooter />}
       meta={<p>Revision {editor.contentRevision}</p>}
@@ -70,13 +80,21 @@ export default async function EventPreviewPage({ params }: Props) {
       <div className="preview-toolbar listing-preview-toolbar">
         <Link
           className="button-link listing-preview-toolbar__exit"
-          href={`/dashboard/events/${eventId}/edit`}
+          href={returnPath}
         >
           Exit preview
         </Link>
-        <strong>Previewing revision {editor.contentRevision}</strong>
+        <strong>
+          {finished
+            ? "This event has finished"
+            : `Previewing revision ${editor.contentRevision}`}
+        </strong>
         <div className="listing-preview-toolbar__actions">
-          {editor.publication ? (
+          {finished ? (
+            <Link className="button-link" href="/dashboard/events?view=history">
+              Event history
+            </Link>
+          ) : editor.publication ? (
             <Link
               className="button-link"
               href={editor.publication.canonicalPath}

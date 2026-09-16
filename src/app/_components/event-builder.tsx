@@ -601,6 +601,22 @@ export function EventBuilder({
   const previousStepRef = useRef(step);
 
   useEffect(() => {
+    if (!draft.publication || !draft.endsAt) return;
+    const end = new Date(draft.endsAt).getTime();
+    let timer: ReturnType<typeof setTimeout>;
+    function checkEnd() {
+      const remaining = end - Date.now();
+      if (remaining <= 0) {
+        router.replace(`/dashboard/events/${draft.id}/payment`);
+        return;
+      }
+      timer = setTimeout(checkEnd, Math.min(remaining + 100, 2_147_483_647));
+    }
+    checkEnd();
+    return () => clearTimeout(timer);
+  }, [draft.publication, draft.endsAt, draft.id, router]);
+
+  useEffect(() => {
     disposed.current = false;
     const activeControllers = controllers.current;
     const activePreviews = previewUrls.current;
@@ -2007,6 +2023,14 @@ export function EventBuilder({
         </p>
       ) : null}
 
+      {draft.publication ? (
+        <div className="success-box" role="status">
+          <strong>This listing is published.</strong> Save changes to update the
+          live listing. You can edit the about section, dates, times, and photos
+          without another payment.
+        </div>
+      ) : null}
+
       {approvalIsCurrent ? (
         <div className="warning-box builder-approval-warning" role="status">
           <strong>This exact revision is approved.</strong> Saving new details,
@@ -2173,209 +2197,229 @@ export function EventBuilder({
               <h2 id="location-title" ref={stepHeadingRef} tabIndex={-1}>
                 Address and privacy
               </h2>
-              <form onSubmit={saveLocation}>
-                <AddressAutocomplete
-                  value={addressQuery}
-                  onChange={changeAddressQuery}
-                  onSelect={selectAddress}
-                  invalid={Boolean(locationAddressError)}
-                  validationMessage={locationAddressError}
-                />
-                {selectedAddress ? (
-                  <p
-                    className="address-verification-status is-verified"
-                    role="status"
-                  >
-                    Address selected. Confirm it below to continue.
-                  </p>
-                ) : savedAddressIsConfirmed ? (
-                  <p
-                    className="address-verification-status is-verified"
-                    role="status"
-                  >
-                    Address selected. You can update the privacy setting and
-                    continue.
-                  </p>
-                ) : (
-                  <p className="address-verification-status">
-                    Select an address from the results to continue.
-                  </p>
-                )}
-                {selectedAddress || selectedCoordinates ? (
-                  <section
-                    className="selected-address-review"
-                    aria-labelledby="selected-address-title"
-                  >
-                    <div>
-                      <p className="eyebrow">Selected address</p>
-                      <h3 id="selected-address-title">
-                        {selectedAddress?.formattedAddress ??
-                          initialEvent.location?.normalizedAddress ??
-                          addressQuery}
-                      </h3>
-                      <p>Review the selected address and map.</p>
-                    </div>
-                    {selectedCoordinates ? (
-                      <LocationConfirmationMap
-                        latitude={selectedCoordinates.latitude}
-                        longitude={selectedCoordinates.longitude}
-                        label={
-                          selectedAddress?.formattedAddress ?? addressQuery
-                        }
-                      />
-                    ) : null}
-                    <label className="location-confirmation-check">
-                      <input
-                        type="checkbox"
-                        checked={locationConfirmed}
-                        onChange={(event) => {
-                          setLocationConfirmed(event.target.checked);
-                          if (event.target.checked) {
-                            setStepFeedback("location", {
-                              kind: "success",
-                              text: "Address confirmed. Save and continue.",
-                            });
-                          }
-                        }}
-                      />
-                      I confirm this is the sale property.
-                    </label>
-                    <p className="location-attribution">
-                      {selectedAddress?.provider.attribution ??
-                        initialEvent.location?.providerAttribution}
-                    </p>
-                  </section>
-                ) : (
-                  <section className="unconfirmed-address-draft">
-                    <p>
-                      If you can’t find the address, save it as a draft and
-                      continue. Confirm the property before approving your sale.
-                    </p>
-                    <div className="form-grid">
-                      <label>
-                        City
-                        <input
-                          value={city}
-                          onChange={(event) => setCity(event.target.value)}
-                          required
-                        />
-                      </label>
-                      <label>
-                        State
-                        <input
-                          value={region}
-                          onChange={(event) => setRegion(event.target.value)}
-                          required
-                        />
-                      </label>
-                      <label>
-                        Postal code (optional for draft)
-                        <input
-                          value={postalCode}
-                          onChange={(event) =>
-                            setPostalCode(event.target.value)
-                          }
-                        />
-                      </label>
-                      <label>
-                        Country
-                        <input
-                          value={countryCode}
-                          onChange={(event) =>
-                            setCountryCode(event.target.value)
-                          }
-                          required
-                        />
-                      </label>
-                    </div>
-                  </section>
-                )}
-                <label>
-                  Unit or suite (optional)
-                  <input
-                    value={addressLine2}
-                    onChange={(event) => {
-                      setAddressLine2(event.target.value);
-                      setLocationConfirmed(false);
-                    }}
-                  />
-                </label>
-                <fieldset disabled={Boolean(pending)}>
-                  <legend>Privacy for this address</legend>
-                  {(
-                    [
-                      ["EXACT_ADDRESS", "Show exact address"],
-                      ["HIDDEN_UNTIL_START", "Hide address until"],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <label className="radio-label" key={value}>
-                      <input
-                        type="radio"
-                        name="privacyMode"
-                        value={value}
-                        checked={privacyMode === value}
-                        onChange={() => setPrivacyMode(value)}
-                      />
-                      {label}
-                    </label>
-                  ))}
-                  {privacyMode === "HIDDEN_UNTIL_START" ? (
-                    <div className={scheduleStyles.reveal}>
-                      <label>
-                        Address reveal date
-                        <input
-                          type="date"
-                          value={localAddressRevealAt.split("T")[0] ?? ""}
-                          onChange={(event) =>
-                            setLocalAddressRevealAt(
-                              `${event.target.value}T${localAddressRevealAt.split("T")[1] ?? "08:00"}`,
-                            )
-                          }
-                          required
-                          aria-describedby="address-reveal-note"
-                        />
-                      </label>
-                      <label>
-                        Address reveal time
-                        <input
-                          type="time"
-                          value={localAddressRevealAt.split("T")[1] ?? ""}
-                          onChange={(event) =>
-                            setLocalAddressRevealAt(
-                              `${localAddressRevealAt.split("T")[0] ?? ""}T${event.target.value}`,
-                            )
-                          }
-                          required
-                          aria-describedby="address-reveal-note"
-                        />
-                      </label>
-                      <p id="address-reveal-note">
-                        Pacific Time (US/Pacific). Until then, shoppers will see
-                        the general area on the map. The full address will
-                        appear automatically at your selected date and time.
-                      </p>
-                    </div>
-                  ) : null}
-                </fieldset>
-                <StepFeedback feedback={currentFeedback} />
-                {!locationConfirmed ? (
+              {draft.publication ? (
+                <div>
+                  <p>{draft.location?.normalizedAddress}</p>
+                  <p>The published address and privacy settings are fixed.</p>
                   <div className="button-row">
                     <button
                       type="button"
                       className="secondary-button"
-                      disabled={Boolean(pending)}
-                      onClick={() => saveLocationValues(true)}
+                      onClick={() => setStep("schedule")}
                     >
-                      Save draft and continue to Photos
+                      Back
+                    </button>
+                    <button type="button" onClick={() => setStep("photos")}>
+                      Continue to Photos
                     </button>
                   </div>
-                ) : null}
-                <WizardActions
-                  back={() => setStep("schedule")}
-                  pending={pending === "location"}
-                  loadingLabel="Validating…"
-                />
-              </form>
+                </div>
+              ) : (
+                <form onSubmit={saveLocation}>
+                  <AddressAutocomplete
+                    value={addressQuery}
+                    onChange={changeAddressQuery}
+                    onSelect={selectAddress}
+                    invalid={Boolean(locationAddressError)}
+                    validationMessage={locationAddressError}
+                  />
+                  {selectedAddress ? (
+                    <p
+                      className="address-verification-status is-verified"
+                      role="status"
+                    >
+                      Address selected. Confirm it below to continue.
+                    </p>
+                  ) : savedAddressIsConfirmed ? (
+                    <p
+                      className="address-verification-status is-verified"
+                      role="status"
+                    >
+                      Address selected. You can update the privacy setting and
+                      continue.
+                    </p>
+                  ) : (
+                    <p className="address-verification-status">
+                      Select an address from the results to continue.
+                    </p>
+                  )}
+                  {selectedAddress || selectedCoordinates ? (
+                    <section
+                      className="selected-address-review"
+                      aria-labelledby="selected-address-title"
+                    >
+                      <div>
+                        <p className="eyebrow">Selected address</p>
+                        <h3 id="selected-address-title">
+                          {selectedAddress?.formattedAddress ??
+                            initialEvent.location?.normalizedAddress ??
+                            addressQuery}
+                        </h3>
+                        <p>Review the selected address and map.</p>
+                      </div>
+                      {selectedCoordinates ? (
+                        <LocationConfirmationMap
+                          latitude={selectedCoordinates.latitude}
+                          longitude={selectedCoordinates.longitude}
+                          label={
+                            selectedAddress?.formattedAddress ?? addressQuery
+                          }
+                        />
+                      ) : null}
+                      <label className="location-confirmation-check">
+                        <input
+                          type="checkbox"
+                          checked={locationConfirmed}
+                          onChange={(event) => {
+                            setLocationConfirmed(event.target.checked);
+                            if (event.target.checked) {
+                              setStepFeedback("location", {
+                                kind: "success",
+                                text: "Address confirmed. Save and continue.",
+                              });
+                            }
+                          }}
+                        />
+                        I confirm this is the sale property.
+                      </label>
+                      <p className="location-attribution">
+                        {selectedAddress?.provider.attribution ??
+                          initialEvent.location?.providerAttribution}
+                      </p>
+                    </section>
+                  ) : (
+                    <section className="unconfirmed-address-draft">
+                      <p>
+                        If you can’t find the address, save it as a draft and
+                        continue. Confirm the property before approving your
+                        sale.
+                      </p>
+                      <div className="form-grid">
+                        <label>
+                          City
+                          <input
+                            value={city}
+                            onChange={(event) => setCity(event.target.value)}
+                            required
+                          />
+                        </label>
+                        <label>
+                          State
+                          <input
+                            value={region}
+                            onChange={(event) => setRegion(event.target.value)}
+                            required
+                          />
+                        </label>
+                        <label>
+                          Postal code (optional for draft)
+                          <input
+                            value={postalCode}
+                            onChange={(event) =>
+                              setPostalCode(event.target.value)
+                            }
+                          />
+                        </label>
+                        <label>
+                          Country
+                          <input
+                            value={countryCode}
+                            onChange={(event) =>
+                              setCountryCode(event.target.value)
+                            }
+                            required
+                          />
+                        </label>
+                      </div>
+                    </section>
+                  )}
+                  <label>
+                    Unit or suite (optional)
+                    <input
+                      value={addressLine2}
+                      onChange={(event) => {
+                        setAddressLine2(event.target.value);
+                        setLocationConfirmed(false);
+                      }}
+                    />
+                  </label>
+                  <fieldset disabled={Boolean(pending)}>
+                    <legend>Privacy for this address</legend>
+                    {(
+                      [
+                        ["EXACT_ADDRESS", "Show exact address"],
+                        ["HIDDEN_UNTIL_START", "Hide address until"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <label className="radio-label" key={value}>
+                        <input
+                          type="radio"
+                          name="privacyMode"
+                          value={value}
+                          checked={privacyMode === value}
+                          onChange={() => setPrivacyMode(value)}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                    {privacyMode === "HIDDEN_UNTIL_START" ? (
+                      <div className={scheduleStyles.reveal}>
+                        <label>
+                          Address reveal date
+                          <input
+                            type="date"
+                            value={localAddressRevealAt.split("T")[0] ?? ""}
+                            onChange={(event) =>
+                              setLocalAddressRevealAt(
+                                `${event.target.value}T${localAddressRevealAt.split("T")[1] ?? "08:00"}`,
+                              )
+                            }
+                            required
+                            aria-describedby="address-reveal-note"
+                          />
+                        </label>
+                        <label>
+                          Address reveal time
+                          <input
+                            type="time"
+                            value={localAddressRevealAt.split("T")[1] ?? ""}
+                            onChange={(event) =>
+                              setLocalAddressRevealAt(
+                                `${localAddressRevealAt.split("T")[0] ?? ""}T${event.target.value}`,
+                              )
+                            }
+                            required
+                            aria-describedby="address-reveal-note"
+                          />
+                        </label>
+                        <p id="address-reveal-note">
+                          Pacific Time (US/Pacific). Until then, shoppers will
+                          see the general area on the map. The full address will
+                          appear automatically at your selected date and time.
+                        </p>
+                      </div>
+                    ) : null}
+                  </fieldset>
+                  <StepFeedback feedback={currentFeedback} />
+                  {!locationConfirmed ? (
+                    <div className="button-row">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={Boolean(pending)}
+                        onClick={() => saveLocationValues(true)}
+                      >
+                        Save draft and continue to Photos
+                      </button>
+                    </div>
+                  ) : null}
+                  <WizardActions
+                    back={() => setStep("schedule")}
+                    pending={pending === "location"}
+                    loadingLabel="Validating…"
+                  />
+                </form>
+              )}
             </section>
           ) : null}
 
@@ -2933,16 +2977,14 @@ export function EventBuilder({
                   </Link>
                 </p>
               ) : (
-                <p>
-                  Complete the details above to preview your listing.
-                </p>
+                <p>Complete the details above to preview your listing.</p>
               )}
               {draft.publication ? (
                 <div className="success-box" role="status">
-                  <strong>This listing is published.</strong>
+                  <strong>Your changes are live.</strong>
                   <p>
-                    Payment was confirmed and the approved revision is live. The
-                    published listing is no longer awaiting payment.
+                    Saved details, schedule, and ready photos appear on your
+                    published listing. No further payment is required.
                   </p>
                   <Link
                     className="button-link"

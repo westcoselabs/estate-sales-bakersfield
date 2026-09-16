@@ -1,0 +1,268 @@
+{
+  "at": "2026-09-16T01:11:22.735Z",
+  "health": {
+    "build": "1a5aab4bb4cf",
+    "requestId": "ff88c9b7-9ba8-4662-9d77-bee90aacdaad",
+    "status": "ok"
+  },
+  "pages": [
+    {
+      "path": "/",
+      "status": 200,
+      "title": "Estate Sales and Yard Sales in Bakersfield, CA",
+      "description": "Find upcoming estate sales and yard sales in Bakersfield, browse by date, or prepare a self-service sale listing.",
+      "canonical": "https://estatesalesbakersfield.com",
+      "robots": "index, follow",
+      "h1Count": 1,
+      "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
+      "structuredTypes": [
+        "Organization",
+        "WebSite"
+      ],
+      "analyticsPresent": true,
+      "googleVerification": null
+    },
+    {
+      "path": "/estate-sales",
+      "status": 200,
+      "title": "Upcoming Estate Sales in Bakersfield, CA",
+      "description": "Browse published Bakersfield estate sales, preview the listings, and plan your next visit.",
+      "canonical": "https://estatesalesbakersfield.com/estate-sales",
+      "robots": "index, follow",
+      "h1Count": 1,
+      "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
+      "structuredTypes": [
+        "BreadcrumbList"
+      ],
+      "analyticsPresent": true,
+      "googleVerification": null
+    },
+    {
+      "path": "/yard-sales",
+      "status": 200,
+      "title": "Upcoming Yard Sales in Bakersfield, CA",
+      "description": "Find upcoming Bakersfield yard sales with sale dates, location notes, and published listing details.",
+      "canonical": "https://estatesalesbakersfield.com/yard-sales",
+      "robots": "index, follow",
+      "h1Count": 1,
+      "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
+      "structuredTypes": [
+        "BreadcrumbList"
+      ],
+      "analyticsPresent": true,
+      "googleVerification": null
+    },
+    {
+      "path": "/estate-sales/this-weekend",
+      "status": 200,
+      "title": "Estate Sales This Weekend in Bakersfield, CA",
+      "description": "Plan this weekend&#x27;s Bakersfield estate-sale visits with current sale listings, local dates, and address availability.",
+      "canonical": "https://estatesalesbakersfield.com/estate-sales/this-weekend",
+      "robots": "index, follow",
+      "h1Count": 1,
+      "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
+      "structuredTypes": [],
+      "analyticsPresent": true,
+      "googleVerification": null
+    },
+    {
+      "path": "/yard-sales/this-weekend",
+      "status": 200,
+      "title": "Yard Sales This Weekend in Bakersfield, CA",
+      "description": "Find Bakersfield yard sales this weekend, check the schedule, and browse published listings before you head out.",
+      "canonical": "https://estatesalesbakersfield.com/yard-sales/this-weekend",
+      "robots": "index, follow",
+      "h1Count": 1,
+      "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
+      "structuredTypes": [],
+      "analyticsPresent": true,
+      "googleVerification": null
+    },
+    {
+      "path": "/sales-today",
+      "status": 200,
+      "title": "Estate Sales and Yard Sales Today in Bakersfield, CA",
+      "description": "See estate sales and yard sales scheduled in Bakersfield today, with current listing details and local sale times.",
+      "canonical": "https://estatesalesbakersfield.com/sales-today",
+      "robots": "index, follow",
+      "h1Count": 1,
+      "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
+      "structuredTypes": [],
+      "analyticsPresent": true,
+      "googleVerification": null
+    },
+    {
+      "path": "/about",
+      "status": 200,
+      "title": "About Estate Sales Bakersfield",
+      "description": "Learn about the local purpose, seller responsibilities, and privacy boundaries behind Estate Sales Bakersfield.",
+      "canonical": "https://estatesalesbakersfield.com/about",
+      "robots": "index, follow",
+      "h1Count": 1,
+      "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
+      "structuredTypes": [],
+      "analyticsPresent": true,
+      "googleVerification": null
+    },
+    {
+      "path": "/how-it-works",
+      "status": 200,
+      "title": "How Estate Sales Bakersfield Works",
+      "description": "Learn how to find upcoming Bakersfield sales or create, review, and publish your own estate or yard sale listing.",
+      "canonical": "https://estatesalesbakersfield.com/how-it-works",
+      "robots": "index, follow",
+      "h1Count": 1,
+      "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
+      "structuredTypes": [],
+      "analyticsPresent": true,
+      "googleVerification": null
+    },
+    {
+      "path": "/list-your-sale",
+      "status": 200,
+      "title": "List Your Estate or Yard Sale in Bakersfield",
+      "description": "Prepare and publish a Bakersfield estate or yard sale listing through a clear, privacy-aware self-service workflow.",
+      "canonical": "https://estatesalesbakersfield.com/list-your-sale",
+      "robots": "index, follow",
+      "h1Count": 1,
+      "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
+      "structuredTypes": [],
+      "analyticsPresent": true,
+      "googleVerification": null
+    },
+    {
+      "path": "/faq",
+      "status": 200,
+      "title": "Estate Sales Bakersfield FAQ",
+      "description": "Answers about finding local sales, location privacy, creating a listing, approval, payment, and publication.",
+      "canonical": "https://estatesalesbakersfield.com/faq",
+      "robots": "index, follow",
+      "h1Count": 1,
+      "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
+      "structuredTypes": [],
+      "analyticsPresent": true,
+      "googleVerification": null
+    },
+    {
+      "path": "/contact",
+      "status": 200,
+      "title": "Contact Estate Sales Bakersfield",
+      "description": "Find support and help with Estate Sales Bakersfield accounts, listings, and payments.",
+      "canonical": "https://estatesalesbakersfield.com/contact",
+      "robots": "index, follow",
+      "h1Count": 1,
+      "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
+      "structuredTypes": [],
+      "analyticsPresent": true,
+      "googleVerification": null
+    },
+    {
+      "path": "/privacy",
+      "status": 200,
+      "title": "Estate Sales Bakersfield Privacy Policy",
+      "description": "How Estate Sales Bakersfield collects and uses account, listing, photo, payment and location information.",
+      "canonical": "https://estatesalesbakersfield.com/privacy",
+      "robots": "index, follow",
+      "h1Count": 1,
+      "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
+      "structuredTypes": [],
+      "analyticsPresent": true,
+      "googleVerification": null
+    },
+    {
+      "path": "/terms",
+      "status": 200,
+      "title": "Estate Sales Bakersfield Terms of Use",
+      "description": "Terms for creating, paying for, publishing and canceling estate sale and yard sale listings.",
+      "canonical": "https://estatesalesbakersfield.com/terms",
+      "robots": "index, follow",
+      "h1Count": 1,
+      "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
+      "structuredTypes": [],
+      "analyticsPresent": true,
+      "googleVerification": null
+    },
+    {
+      "path": "/search",
+      "status": 200,
+      "title": "Find Estate Sales and Yard Sales in Bakersfield",
+      "description": "Browse upcoming published estate-sale and yard-sale listings in Bakersfield by sale type and date.",
+      "canonical": "https://estatesalesbakersfield.com/search",
+      "robots": "noindex, follow, noarchive",
+      "h1Count": 1,
+      "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
+      "structuredTypes": [],
+      "analyticsPresent": true,
+      "googleVerification": null
+    },
+    {
+      "path": "/login",
+      "status": 200,
+      "title": "Log in",
+      "description": "Find upcoming estate sales and yard sales in Bakersfield, California.",
+      "robots": "noindex, nofollow, noarchive",
+      "h1Count": 1,
+      "structuredTypes": [],
+      "analyticsPresent": false,
+      "googleVerification": null
+    },
+    {
+      "path": "/reset-password",
+      "status": 200,
+      "title": "Choose a new password",
+      "description": "Find upcoming estate sales and yard sales in Bakersfield, California.",
+      "robots": "noindex, nofollow, noarchive",
+      "h1Count": 1,
+      "structuredTypes": [],
+      "analyticsPresent": false,
+      "googleVerification": null
+    }
+  ],
+  "sitemap": {
+    "status": 200,
+    "contentType": "application/xml; charset=utf-8",
+    "shards": [
+      {
+        "url": "https://estatesalesbakersfield.com/sitemaps/pages.xml",
+        "status": 200,
+        "contentType": "application/xml; charset=utf-8",
+        "urls": [
+          "https://estatesalesbakersfield.com/",
+          "https://estatesalesbakersfield.com/estate-sales",
+          "https://estatesalesbakersfield.com/yard-sales",
+          "https://estatesalesbakersfield.com/estate-sales/this-weekend",
+          "https://estatesalesbakersfield.com/yard-sales/this-weekend",
+          "https://estatesalesbakersfield.com/sales-today",
+          "https://estatesalesbakersfield.com/about",
+          "https://estatesalesbakersfield.com/how-it-works",
+          "https://estatesalesbakersfield.com/list-your-sale",
+          "https://estatesalesbakersfield.com/faq",
+          "https://estatesalesbakersfield.com/contact",
+          "https://estatesalesbakersfield.com/privacy",
+          "https://estatesalesbakersfield.com/terms"
+        ]
+      },
+      {
+        "url": "https://estatesalesbakersfield.com/sitemaps/organizer-0.xml",
+        "status": 200,
+        "contentType": "application/xml; charset=utf-8",
+        "urls": [
+          "https://estatesalesbakersfield.com/estate-sales/remodeling-estate-sale-83ceef29bf27"
+        ]
+      }
+    ]
+  },
+  "robots": "User-Agent: *\nAllow: /\nDisallow: /admin\nDisallow: /dashboard\n\nSitemap: https://estatesalesbakersfield.com/sitemap.xml\n",
+  "redirects": [
+    {
+      "origin": "http://estatesalesbakersfield.com",
+      "status": 308,
+      "location": "https://estatesalesbakersfield.com/"
+    },
+    {
+      "origin": "https://www.estatesalesbakersfield.com",
+      "status": 308,
+      "location": "https://estatesalesbakersfield.com/"
+    }
+  ]
+}

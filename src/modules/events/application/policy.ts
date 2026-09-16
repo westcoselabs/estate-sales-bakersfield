@@ -248,7 +248,8 @@ export function toEventEditorDto(event: EventRecord): EventEditorDto {
   return {
     id: event.id,
     publicId: event.publicId,
-    futurePublicPath: futurePublicPath(event),
+    futurePublicPath:
+      event.publication?.canonicalPath ?? futurePublicPath(event),
     slug: event.slug,
     title: event.title,
     description: event.description,
@@ -380,7 +381,7 @@ export function publicEventProjection(
     title: event.title,
     description: event.description,
     eventType: event.eventType,
-    path: futurePublicPath(event),
+    path: event.publication?.canonicalPath ?? futurePublicPath(event),
     startsAt: event.startsAt.toISOString(),
     endsAt: event.endsAt.toISOString(),
     timezone: event.timezone,

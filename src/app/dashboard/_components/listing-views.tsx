@@ -44,7 +44,8 @@ export function listingMatches(
   listing: DashboardListing,
   view: ListingView,
 ): boolean {
-  if (listing.event.canceledAt) return view === "history";
+  if (listing.event.canceledAt || listing.payment.displayState === "FINISHED")
+    return view === "history";
   if (view === "history") return false;
   if (view === "all") return true;
   if (view === "published") return listing.payment.displayState === "PUBLISHED";
@@ -73,6 +74,7 @@ function statusLabel(listing: DashboardListing): string {
     PAYMENT_PENDING: "Payment pending",
     PAYMENT_RECEIVED_PUBLISHING: "Publishing",
     PUBLISHED: "Published",
+    FINISHED: "Finished",
     CANCELED: "Canceled",
     PAYMENT_CANCELED: "Payment canceled",
     CHECKOUT_EXPIRED: "Checkout expired",
@@ -88,7 +90,7 @@ export function listingPrimaryAction(listing: DashboardListing): {
   label: string;
 } {
   const { event, payment } = listing;
-  if (event.canceledAt) {
+  if (event.canceledAt || payment.displayState === "FINISHED") {
     return {
       href: `/dashboard/events/${event.id}/payment`,
       label: "View record",
@@ -140,7 +142,8 @@ export function listingLifecycleAction(listing: DashboardListing): {
   readonly kind: "delete" | "cancel";
   readonly disabledReason?: string;
 } | null {
-  if (listing.event.canceledAt) return null;
+  if (listing.event.canceledAt || listing.payment.displayState === "FINISHED")
+    return null;
   if (listing.payment.displayState === "PUBLISHED") {
     return { kind: "cancel" };
   }
@@ -221,7 +224,7 @@ export function ListingCollection({
             : view === "attention"
               ? "Nothing currently needs your attention."
               : view === "history"
-                ? "Canceled paid events will appear here with their retained records."
+                ? "Finished and canceled events appear here with their retained records."
                 : "Create a sale draft, then return here to track its real status."}
         </p>
         {view !== "attention" ? (
@@ -299,7 +302,7 @@ export function ListingCollection({
                 {action.label} <Icon name="arrow" size={18} />
               </Link>
               <div className="dashboard-listing-card__secondary-actions">
-                {listing.payment.displayState !== "PUBLISHED" &&
+                {listing.payment.displayState !== "FINISHED" &&
                 !listing.event.canceledAt ? (
                   <Link
                     className="ui-text-link"

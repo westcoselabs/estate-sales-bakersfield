@@ -1,0 +1,130 @@
+{
+  "at": "2026-09-16T01:51:03.395Z",
+  "stripeActivity": {
+    "period": "last 24 hours",
+    "sessionsHasMore": false,
+    "sessions": [],
+    "eventsHasMore": false,
+    "events": []
+  },
+  "geoapify": {
+    "source": "local .env key through the app provider",
+    "suggestions": 1,
+    "cities": [
+      "Bakersfield"
+    ],
+    "validationStatus": "VERIFIED",
+    "city": "Bakersfield",
+    "region": "CA",
+    "coordinatesPresent": true
+  },
+  "productionEnvironment": [
+    {
+      "key": "GEOAPIFY_API_KEY",
+      "configured": true
+    },
+    {
+      "key": "BLOB_READ_WRITE_TOKEN",
+      "configured": true
+    },
+    {
+      "key": "BLOB_RESOURCE_ENV",
+      "configured": true
+    },
+    {
+      "key": "STRIPE_SECRET_KEY",
+      "configured": true
+    },
+    {
+      "key": "STRIPE_WEBHOOK_SECRET",
+      "configured": true
+    },
+    {
+      "key": "STRIPE_PRICE_ID",
+      "configured": true
+    },
+    {
+      "key": "STRIPE_MODE",
+      "configured": true
+    },
+    {
+      "key": "STRIPE_RESOURCE_ENV",
+      "configured": true
+    },
+    {
+      "key": "CRON_SECRET",
+      "configured": true
+    },
+    {
+      "key": "AUTH_FINGERPRINT_SECRET",
+      "configured": true
+    }
+  ],
+  "productionErrors": {
+    "period": "last hour",
+    "completed": true,
+    "count": 0,
+    "records": []
+  },
+  "publishedMedia": {
+    "pageStatus": 200,
+    "mediaReferences": 7,
+    "checked": [
+      {
+        "variant": "cover",
+        "status": 200,
+        "contentType": "image/webp",
+        "bytes": 193356,
+        "width": 1122,
+        "height": 1350,
+        "format": "webp"
+      },
+      {
+        "variant": "gallery",
+        "status": 200,
+        "contentType": "image/webp",
+        "bytes": 177422,
+        "width": 1122,
+        "height": 1402,
+        "format": "webp"
+      },
+      {
+        "variant": "gallery",
+        "status": 200,
+        "contentType": "image/webp",
+        "bytes": 281532,
+        "width": 1600,
+        "height": 1200,
+        "format": "webp"
+      },
+      {
+        "variant": "gallery",
+        "status": 200,
+        "contentType": "image/webp",
+        "bytes": 276604,
+        "width": 1600,
+        "height": 1200,
+        "format": "webp"
+      }
+    ]
+  },
+  "automatedTests": {
+    "files": 18,
+    "passed": 78,
+    "failed": 0,
+    "coverage": [
+      "Stripe provider contracts and payment state handling",
+      "Blob upload contracts, authorization, and upload state",
+      "Real Sharp image processing",
+      "Location provider contracts and location validation"
+    ],
+    "limitation": "Provider contract tests use mocks; these do not establish authenticated production flow success."
+  },
+  "pending": [
+    "Fresh image upload through the authenticated production editor",
+    "Address autocomplete and save through the authenticated production editor",
+    "Application-created live Stripe Checkout redirect and displayed $20 amount",
+    "Real payment completion and Stripe-origin webhook fulfillment (no payment made)"
+  ],
+  "result": "Provider/configuration checks passed; full end-to-end production verification is pending sign-in."
+}

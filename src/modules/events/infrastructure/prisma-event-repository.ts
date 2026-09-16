@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 
 import type { EventRepository } from "../application/ports";
+import { editedPublicationSnapshot } from "../application/published-edits";
 import { EventResourceLimitError } from "../domain/errors";
 import { readScheduleDays } from "../domain/schedule";
 import {
@@ -421,6 +422,7 @@ export class PrismaEventRepository implements EventRepository {
             id: true,
             version: true,
             canceledAt: true,
+            endsAt: true,
             publication: {
               select: {
                 id: true,
@@ -440,6 +442,8 @@ export class PrismaEventRepository implements EventRepository {
           return { disposition: "ALREADY_CANCELED" as const };
         if (!event.publication)
           return { disposition: "NOT_PUBLISHED" as const };
+        if (event.endsAt && event.endsAt <= input.now)
+          return { disposition: "FINISHED" as const };
         if (event.version !== input.expectedVersion)
           return { disposition: "STALE_VERSION" as const };
         if (
@@ -545,6 +549,41 @@ export class PrismaEventRepository implements EventRepository {
     });
   }
 
+  private editableWhere(): Prisma.EventWhereInput {
+    return {
+      canceledAt: null,
+      deletedAt: null,
+      removedAt: null,
+      OR: [
+        { publication: { is: null } },
+        { publication: { isNot: null }, endsAt: { gt: new Date() } },
+      ],
+    };
+  }
+
+  private async refreshPublishedContent(
+    transaction: Prisma.TransactionClient,
+    eventId: string,
+    userId: string,
+  ): Promise<EventRecord | null> {
+    const event = await this.findOwnedWith(transaction, eventId, userId);
+    if (!event?.publication) return event;
+    const publication = await transaction.eventPublication.findUniqueOrThrow({
+      where: { eventId },
+      select: { snapshot: true },
+    });
+    await transaction.event.update({
+      where: { id: eventId },
+      data: {
+        publishedSnapshot: editedPublicationSnapshot(
+          publication.snapshot,
+          event,
+        ) as unknown as Prisma.InputJsonValue,
+      },
+    });
+    return event;
+  }
+
   private async updateMaterial(input: {
     readonly eventId: string;
     readonly userId: string;
@@ -561,7 +600,7 @@ export class PrismaEventRepository implements EventRepository {
           id: input.eventId,
           version: input.expectedVersion,
           organizer: { userId: input.userId },
-          publication: { is: null },
+          ...this.editableWhere(),
         },
         data: {
           ...input.data,
@@ -581,7 +620,11 @@ export class PrismaEventRepository implements EventRepository {
           metadata: input.metadata,
         }),
       });
-      return this.findOwnedWith(transaction, input.eventId, input.userId);
+      return this.refreshPublishedContent(
+        transaction,
+        input.eventId,
+        input.userId,
+      );
     });
   }
 
@@ -762,7 +805,7 @@ export class PrismaEventRepository implements EventRepository {
             id: input.eventId,
             version: input.expectedVersion,
             organizer: { userId: input.userId },
-            publication: { is: null },
+            ...this.editableWhere(),
           },
           select: { id: true, workflowState: true },
         });
@@ -776,7 +819,7 @@ export class PrismaEventRepository implements EventRepository {
             id: input.eventId,
             version: input.expectedVersion,
             organizer: { userId: input.userId },
-            publication: { is: null },
+            ...this.editableWhere(),
           },
           data: {
             ...invalidatedApproval,
@@ -959,7 +1002,7 @@ export class PrismaEventRepository implements EventRepository {
           id: input.eventId,
           version: input.expectedVersion,
           organizer: { userId: input.userId },
-          publication: { is: null },
+          ...this.editableWhere(),
         },
         data: { version: { increment: 1 } },
       });
@@ -1022,7 +1065,7 @@ export class PrismaEventRepository implements EventRepository {
           id: input.eventId,
           version: input.expectedVersion,
           organizer: { userId: input.userId },
-          publication: { is: null },
+          ...this.editableWhere(),
         },
         data: {
           ...invalidatedApproval,
@@ -1076,7 +1119,11 @@ export class PrismaEventRepository implements EventRepository {
           metadata: { photoId: input.photoId },
         }),
       });
-      return this.findOwnedWith(transaction, input.eventId, input.userId);
+      return this.refreshPublishedContent(
+        transaction,
+        input.eventId,
+        input.userId,
+      );
     });
   }
 
@@ -1111,7 +1158,7 @@ export class PrismaEventRepository implements EventRepository {
           id: input.eventId,
           version: input.expectedVersion,
           organizer: { userId: input.userId },
-          publication: { is: null },
+          ...this.editableWhere(),
           photos: { some: { id: input.photoId, status: "READY" } },
         },
         data: {
@@ -1135,7 +1182,11 @@ export class PrismaEventRepository implements EventRepository {
           metadata: { photoId: input.photoId },
         }),
       });
-      return this.findOwnedWith(transaction, input.eventId, input.userId);
+      return this.refreshPublishedContent(
+        transaction,
+        input.eventId,
+        input.userId,
+      );
     });
   }
 
@@ -1146,7 +1197,7 @@ export class PrismaEventRepository implements EventRepository {
           id: input.eventId,
           version: input.expectedVersion,
           organizer: { userId: input.userId },
-          publication: { is: null },
+          ...this.editableWhere(),
         },
         data: {
           ...invalidatedApproval,
@@ -1172,7 +1223,11 @@ export class PrismaEventRepository implements EventRepository {
           metadata: { photoCount: input.photoIds.length },
         }),
       });
-      return this.findOwnedWith(transaction, input.eventId, input.userId);
+      return this.refreshPublishedContent(
+        transaction,
+        input.eventId,
+        input.userId,
+      );
     });
   }
 
@@ -1185,7 +1240,7 @@ export class PrismaEventRepository implements EventRepository {
           event: {
             version: input.expectedVersion,
             organizer: { userId: input.userId },
-            publication: { is: null },
+            ...this.editableWhere(),
           },
         },
         include: { event: { select: { coverPhotoId: true } } },
@@ -1205,7 +1260,7 @@ export class PrismaEventRepository implements EventRepository {
           id: input.eventId,
           version: input.expectedVersion,
           organizer: { userId: input.userId },
-          publication: { is: null },
+          ...this.editableWhere(),
         },
         data: {
           ...invalidatedApproval,
@@ -1244,7 +1299,7 @@ export class PrismaEventRepository implements EventRepository {
           maxAttempts: 10,
         },
       });
-      const event = await this.findOwnedWith(
+      const event = await this.refreshPublishedContent(
         transaction,
         input.eventId,
         input.userId,
