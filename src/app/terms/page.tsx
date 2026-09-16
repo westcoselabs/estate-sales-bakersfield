@@ -39,7 +39,7 @@ const sections = [
     "operator",
     "Who operates this website",
     [
-      "Estate Sales Bakersfield is operated by Brandon Francis. Contact decoratedbyriley@gmail.com with questions about these terms, a listing or a payment.",
+      "Estate Sales Bakersfield operates this website. Contact decoratedbyriley@gmail.com with questions about these terms, a listing or a payment.",
       "These terms cover the directory and self-service listing tools. Professional estate-sale services offered through Simply Decorated are separate and are not included in a listing fee.",
     ],
   ],

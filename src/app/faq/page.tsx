@@ -28,7 +28,7 @@ const questions = [
   {
     question: "How do I create a listing?",
     answer:
-      "Create an account, start your event, then work through Details, Schedule, Address and privacy, Photos, and Review and payment. Verify your email before approval and payment. Profile details are optional.",
+      "Create an account, complete the required organizer name and private contact details, then start your event and work through Details, Schedule, Address and privacy, Photos, and Review and payment. Verify your email before approval and payment. Phone and website are optional.",
   },
   {
     question: "When can I upload photos?",
@@ -85,19 +85,6 @@ export const metadata: Metadata = {
 };
 
 export default function FaqPage() {
-  const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: questions.map(({ question, answer }) => ({
-      "@type": "Question",
-      name: question,
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: answer,
-      },
-    })),
-  };
-
   return (
     <PublicShell>
       <div className="content-page glass-page faq-page">
@@ -177,13 +164,6 @@ export default function FaqPage() {
           eyebrow="A separate professional service"
           description="Explore professional help with organizing, pricing, staging, and promoting a sale through Simply Decorated."
           headingId="faq-service-title"
-        />
-
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(structuredData).replace(/</g, "\\u003c"),
-          }}
         />
       </div>
     </PublicShell>

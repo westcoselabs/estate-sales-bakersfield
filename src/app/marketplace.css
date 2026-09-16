@@ -1240,6 +1240,8 @@
 }
 
 .content-legal > section {
+  width: 100%;
+  max-width: none;
   padding: clamp(1.25rem, 4vw, 2rem);
 }
 
@@ -1258,6 +1260,12 @@
 
 .content-legal p:last-child {
   margin-bottom: 0;
+}
+
+.content-legal > p {
+  margin: 0;
+  border-top: 1px solid var(--color-border);
+  padding: clamp(1.25rem, 4vw, 2rem);
 }
 
 .search-page {
@@ -4851,13 +4859,13 @@
 /* Listing detail composition shared by the live page and exact approval preview. */
 .public-listing-page,
 .public-shell > main > .public-listing-page {
-  width: min(calc(100% - 3rem), 90rem);
-  max-width: 90rem;
+  width: min(calc(100% - 3rem), 76rem);
+  max-width: 76rem;
 }
 
 .builder-app--listing-preview .public-listing-page {
-  width: min(calc(100% - 3rem), 90rem);
-  max-width: 90rem;
+  width: min(calc(100% - 3rem), 76rem);
+  max-width: 76rem;
   margin-inline: auto;
 }
 

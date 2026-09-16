@@ -5,7 +5,7 @@ import { PublicShell } from "@/components/shells/shells";
 
 const title = "Estate Sales Bakersfield Privacy Policy";
 const description =
-  "How Brandon Francis, operator of Estate Sales Bakersfield, collects and uses account, listing, photo, payment and location information.";
+  "How Estate Sales Bakersfield collects and uses account, listing, photo, payment and location information.";
 
 export const metadata: Metadata = {
   title,
@@ -39,7 +39,7 @@ const sections = [
     "operator",
     "Who is responsible",
     [
-      "Estate Sales Bakersfield is operated by Brandon Francis. For privacy questions or requests, contact decoratedbyriley@gmail.com.",
+      "Estate Sales Bakersfield is responsible for this website. For privacy questions or requests, contact decoratedbyriley@gmail.com.",
     ],
   ],
   [
@@ -120,8 +120,8 @@ export default function PrivacyPage() {
           <p className="eyebrow">Updated September 15, 2026</p>
           <h1>Privacy policy</h1>
           <p className="marketing-lede">
-            How Brandon Francis, operator of Estate Sales Bakersfield, collects
-            and uses account, listing, photo, payment and location information.
+            How Estate Sales Bakersfield collects and uses account, listing,
+            photo, payment and location information.
           </p>
         </header>
         <div className="content-legal shell-container">
