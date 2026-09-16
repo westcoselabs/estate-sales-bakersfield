@@ -7537,13 +7537,25 @@ button {
 
 .admin-sidebar__brand .brand {
   display: grid;
-  min-height: 4.6rem;
+  min-height: 4.25rem;
   place-items: center;
-  border: 1px solid rgb(255 255 255 / 72%);
-  border-radius: var(--radius-card);
-  background: rgb(255 255 255 / 94%);
-  padding: var(--space-3);
-  box-shadow: 0 12px 30px rgb(6 24 17 / 18%);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  transition: background-color var(--motion-base) ease;
+}
+
+.admin-sidebar__brand .brand:hover {
+  background: rgb(255 255 255 / 7%);
+}
+
+.admin-sidebar__brand .brand__logo {
+  width: min(100%, 13.25rem);
+}
+
+.admin-sidebar__brand .brand:focus-visible,
+.admin-topbar .brand:focus-visible {
+  outline: 3px solid rgb(230 189 112 / 58%);
+  outline-offset: 3px;
 }
 
 .admin-sidebar__brand > span {
@@ -7657,6 +7669,66 @@ button {
   border-color: rgb(255 255 255 / 13%);
   background: rgb(255 255 255 / 8%);
   color: var(--color-on-primary);
+}
+
+.account-menu--admin summary {
+  transition:
+    border-color var(--motion-base) ease,
+    background-color var(--motion-base) ease,
+    box-shadow var(--motion-base) ease;
+}
+
+.account-menu--admin summary:hover,
+.account-menu--admin[open] summary {
+  border-color: rgb(230 189 112 / 48%);
+  background: rgb(255 255 255 / 13%);
+}
+
+.account-menu--admin .account-avatar {
+  border: 1px solid rgb(255 255 255 / 42%);
+  background: linear-gradient(145deg, #f1d18f, #d5a347);
+  color: #173a2d;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 55%),
+    0 4px 12px rgb(5 22 16 / 18%);
+}
+
+.account-menu__chevron {
+  flex: 0 0 auto;
+  color: currentcolor;
+  opacity: 0.7;
+  transition: transform var(--motion-base) ease;
+}
+
+.account-menu--admin[open] .account-menu__chevron {
+  transform: rotate(180deg);
+}
+
+.account-menu--admin .account-menu__popover {
+  overflow: hidden;
+  border-color: rgb(23 58 45 / 13%);
+  background: rgb(255 255 255 / 97%);
+  padding: var(--space-2);
+  box-shadow:
+    0 1px 2px rgb(23 32 27 / 5%),
+    0 22px 54px rgb(23 32 27 / 18%);
+}
+
+.account-menu--admin .account-menu__identity {
+  margin-bottom: var(--space-1);
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #f8f3e8, #f0ede5);
+}
+
+.account-menu--admin .account-menu__popover > a svg {
+  color: var(--color-primary);
+}
+
+.admin-sidebar .account-menu__popover {
+  top: auto;
+  right: auto;
+  bottom: calc(100% + var(--space-2));
+  left: 0;
 }
 
 .admin-main {
@@ -8307,17 +8379,57 @@ button {
 
   .admin-topbar .brand {
     display: grid;
-    min-height: 2.9rem;
-    width: 9rem;
+    min-height: 2.75rem;
+    width: 8.25rem;
     place-items: center;
-    border-radius: var(--radius-control);
-    background: rgb(255 255 255 / 94%);
-    padding: var(--space-1) var(--space-2);
+    border-radius: 0.65rem;
+    padding: var(--space-1);
+  }
+
+  .admin-topbar .brand__logo {
+    width: 100%;
+  }
+
+  .admin-topbar__actions {
+    gap: var(--space-2);
+  }
+
+  .admin-topbar__security {
+    display: inline-flex;
+    min-height: 2.5rem;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid rgb(255 255 255 / 16%);
+    border-radius: var(--radius-full);
+    background: rgb(255 255 255 / 8%);
+    padding: 0.45rem 0.7rem;
+    color: rgb(255 255 255 / 82%);
+    font-size: 0.8125rem;
+    font-weight: 750;
+    text-decoration: none;
+  }
+
+  .admin-topbar__security:hover {
+    border-color: rgb(230 189 112 / 45%);
+    background: rgb(255 255 255 / 13%);
+    color: #fff;
   }
 
   .admin-topbar .account-menu summary {
+    min-height: 2.75rem;
     border-color: rgb(255 255 255 / 14%);
+    background: rgb(255 255 255 / 8%);
     color: var(--color-on-primary);
+    padding: 0.25rem 0.4rem 0.25rem 0.25rem;
+    box-shadow: none;
+  }
+
+  .admin-topbar .account-menu__popover {
+    top: calc(100% + 0.65rem);
+  }
+
+  .admin-topbar .account-menu__chevron {
+    display: block;
   }
 
   .admin-main {
@@ -8452,6 +8564,20 @@ button {
 }
 
 @media (max-width: 350px) {
+  .admin-topbar .brand {
+    width: 7.5rem;
+  }
+
+  .admin-topbar__security {
+    width: 2.5rem;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .admin-topbar__security span {
+    display: none;
+  }
+
   .admin-metric-grid {
     grid-template-columns: minmax(0, 1fr);
   }

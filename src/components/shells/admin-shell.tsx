@@ -11,21 +11,21 @@ import { AccountMenu, type ShellAccount } from "./account-menu";
 function AdminBrand() {
   return (
     <Link
-      className="brand"
+      className="brand admin-brand"
       href="/admin"
       aria-label="Estate Sales Bakersfield owner overview"
     >
       <picture className="brand__logo">
         <source
           media="(max-width: 767px)"
-          srcSet="/images/Logo-gold-black-02.webp"
+          srcSet="/images/Logo-gold-white-02.webp"
         />
         <img
           alt=""
           aria-hidden="true"
           className="brand__logo-image"
           height={340}
-          src="/images/Logo-gold-black-01.webp"
+          src="/images/Logo-gold-white-01.webp"
           width={2000}
         />
       </picture>
@@ -120,15 +120,18 @@ export function AdminShell({
             <Icon name="shield" />
             Two-step verification
           </Link>
-          <AccountMenu account={account} />
+          <AccountMenu account={account} variant="admin" />
         </div>
       </aside>
       <header className="admin-topbar">
         <AdminBrand />
-        <div>
+        <div className="admin-topbar__actions">
           <span>Owner portal</span>
-          <Link href="/account/security">Security</Link>
-          <AccountMenu account={account} />
+          <Link className="admin-topbar__security" href="/account/security">
+            <Icon name="shield" size={18} />
+            <span>Security</span>
+          </Link>
+          <AccountMenu account={account} variant="admin" />
         </div>
       </header>
       <main className="admin-main" id="main-content">

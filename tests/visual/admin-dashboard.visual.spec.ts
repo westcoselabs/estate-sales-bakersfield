@@ -7,10 +7,14 @@ async function renderAdminFixture(
   viewport: { width: number; height: number },
 ) {
   await page.setViewportSize(viewport);
-  const [globalCss, css] = await Promise.all([
+  const [globalCss, css, fullLogo, compactLogo] = await Promise.all([
     readFile(path.join(process.cwd(), "src/app/globals.css"), "utf8"),
     readFile(path.join(process.cwd(), "src/app/foundation.css"), "utf8"),
+    readFile(path.join(process.cwd(), "public/images/Logo-gold-white-01.webp")),
+    readFile(path.join(process.cwd(), "public/images/Logo-gold-white-02.webp")),
   ]);
+  const fullLogoUrl = `data:image/webp;base64,${fullLogo.toString("base64")}`;
+  const compactLogoUrl = `data:image/webp;base64,${compactLogo.toString("base64")}`;
   await page.setContent(`
     <!doctype html>
     <html lang="en">
@@ -25,7 +29,7 @@ async function renderAdminFixture(
           <a class="skip-link" href="#main-content">Skip to main content</a>
           <aside class="admin-sidebar">
             <div class="admin-sidebar__brand">
-              <a class="brand" href="#"><strong>ESTATE SALES BAKERSFIELD</strong></a>
+              <a class="brand admin-brand" href="#" aria-label="Estate Sales Bakersfield owner overview"><picture class="brand__logo"><source media="(max-width: 767px)" srcset="${compactLogoUrl}"><img alt="" class="brand__logo-image" height="340" src="${fullLogoUrl}" width="2000"></picture></a>
               <span>Owner control center</span>
             </div>
             <div class="admin-sidebar__identity">
@@ -46,11 +50,12 @@ async function renderAdminFixture(
               <span class="admin-sidebar__label">Website</span>
               <a href="#">View website</a>
               <a href="#">Admin account</a>
+              <details class="account-menu account-menu--admin"><summary aria-label="Open account menu for Brandon Reed"><span class="account-avatar account-avatar--medium" role="img">BR</span><span class="account-menu__name">Brandon Reed</span><svg class="account-menu__chevron" viewBox="0 0 24 24" width="16" height="16"><path d="m7.5 9.5 4.5 4.5 4.5-4.5" fill="none" stroke="currentColor"/></svg></summary><div class="account-menu__popover"><div class="account-menu__identity"><span class="account-avatar account-avatar--large">BR</span><span><strong>Brandon Reed</strong><small>Account</small></span></div><a href="#">Dashboard</a><a href="#">Profile</a><button>Log out</button></div></details>
             </div>
           </aside>
           <header class="admin-topbar">
-            <a class="brand" href="#"><strong>ESB</strong></a>
-            <div><span>Owner portal</span><button class="ui-button">CB</button></div>
+            <a class="brand admin-brand" href="#" aria-label="Estate Sales Bakersfield owner overview"><picture class="brand__logo"><source media="(max-width: 767px)" srcset="${compactLogoUrl}"><img alt="" class="brand__logo-image" height="340" src="${fullLogoUrl}" width="2000"></picture></a>
+            <div class="admin-topbar__actions"><span>Owner portal</span><a class="admin-topbar__security" href="#"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 21.25c5-2.1 7.5-5.4 7.5-9.9V5.6L12 2.75 4.5 5.6v5.75c0 4.5 2.5 7.8 7.5 9.9Z" fill="none" stroke="currentColor"/></svg><span>Security</span></a><details class="account-menu account-menu--admin"><summary aria-label="Open account menu for Brandon Reed"><span class="account-avatar account-avatar--medium" role="img">BR</span><span class="account-menu__name">Brandon Reed</span><svg class="account-menu__chevron" viewBox="0 0 24 24" width="16" height="16"><path d="m7.5 9.5 4.5 4.5 4.5-4.5" fill="none" stroke="currentColor"/></svg></summary><div class="account-menu__popover"><div class="account-menu__identity"><span class="account-avatar account-avatar--large">BR</span><span><strong>Brandon Reed</strong><small>Account</small></span></div><a href="#">Dashboard</a><a href="#">Profile</a><button>Log out</button></div></details></div>
           </header>
           <main class="admin-main" id="main-content">
             <div class="admin-page">
@@ -233,7 +238,7 @@ test("admin visual system holds at desktop width", async ({
 test("admin visual system is touch-safe on a small phone", async ({
   page,
 }, testInfo) => {
-  await renderAdminFixture(page, { width: 375, height: 812 });
+  await renderAdminFixture(page, { width: 320, height: 812 });
 
   await expect(page.locator(".admin-sidebar")).toBeHidden();
   await expect(page.locator(".admin-bottom-nav")).toBeVisible();
@@ -256,6 +261,21 @@ test("admin visual system is touch-safe on a small phone", async ({
     () => document.documentElement.scrollWidth <= window.innerWidth,
   );
   expect(viewportFits).toBe(true);
+
+  const mobileAccountMenu = page.locator(".admin-topbar .account-menu");
+  await mobileAccountMenu.locator("summary").click();
+  await expect(
+    mobileAccountMenu.locator(".account-menu__popover"),
+  ).toBeVisible();
+  const menuBounds = await mobileAccountMenu
+    .locator(".account-menu__popover")
+    .evaluate((menu) => {
+      const bounds = menu.getBoundingClientRect();
+      return { left: bounds.left, right: bounds.right };
+    });
+  expect(menuBounds.left).toBeGreaterThanOrEqual(0);
+  expect(menuBounds.right).toBeLessThanOrEqual(320);
+  await mobileAccountMenu.locator("summary").click();
 
   await page.screenshot({
     fullPage: true,
