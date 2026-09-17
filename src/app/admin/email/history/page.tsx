@@ -73,7 +73,8 @@ export default async function EmailHistoryPage() {
           <div className="admin-empty-state">
             <h2>No deliveries recorded</h2>
             <p>
-              New verification, reset, and receipt messages will appear here.
+              New verification, welcome, reset, and receipt messages will appear
+              here.
             </p>
           </div>
         )}

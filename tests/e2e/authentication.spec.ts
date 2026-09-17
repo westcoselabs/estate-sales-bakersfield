@@ -14,7 +14,7 @@ import {
 } from "./event-builder-support";
 
 interface CapturedEmail {
-  readonly kind: "EMAIL_VERIFICATION" | "PASSWORD_RESET";
+  readonly kind: "EMAIL_VERIFICATION" | "PASSWORD_RESET" | "WELCOME";
   readonly to: string;
   readonly actionUrl: string;
 }

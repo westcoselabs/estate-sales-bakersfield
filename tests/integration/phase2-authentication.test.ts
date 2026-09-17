@@ -101,6 +101,14 @@ describe("Phase 2 authentication persistence", () => {
     const rawToken = tokenFrom(email.messages[0] as AuthenticationEmailMessage);
     expect(token.tokenHash).toBe(tokenProvider.hash(rawToken));
     expect(JSON.stringify(token)).not.toContain(rawToken);
+    expect(email.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "WELCOME",
+          actionUrl: "https://integration.example.test/search",
+        }),
+      ]),
+    );
     await expect(
       prisma.auditEntry.count({
         where: { targetId: user.id, action: "ACCOUNT_CREATED" },
@@ -129,7 +137,11 @@ describe("Phase 2 authentication persistence", () => {
         email: normalizedEmail,
         password: "phase-two-delivery-failure-password",
       }),
-    ).resolves.toEqual({ accepted: true, emailDeliveryAttempted: false });
+    ).resolves.toEqual({
+      accepted: true,
+      emailDeliveryAttempted: false,
+      welcomeEmailDeliveryAttempted: false,
+    });
 
     const user = await prisma.user.findUniqueOrThrow({
       where: { normalizedEmail },
@@ -144,12 +156,15 @@ describe("Phase 2 authentication persistence", () => {
       }),
     ).resolves.toBe(1);
     await expect(
-      prisma.emailDelivery.findFirstOrThrow({ where: { userId: user.id } }),
-    ).resolves.toMatchObject({
-      status: "FAILED",
-      attempts: 1,
-      lastErrorCode: "Error",
-    });
+      prisma.emailDelivery.count({
+        where: {
+          userId: user.id,
+          status: "FAILED",
+          attempts: 1,
+          lastErrorCode: "Error",
+        },
+      }),
+    ).resolves.toBe(2);
 
     const recovery = fixture();
     await recovery.workflow.resendVerification(normalizedEmail);

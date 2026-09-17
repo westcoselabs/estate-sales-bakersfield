@@ -1,6 +1,7 @@
 export type EmailTemplateKey =
   | "EMAIL_VERIFICATION"
   | "PASSWORD_RESET"
+  | "WELCOME"
   | "PURCHASE_RECEIPT"
   | "RECENT_LISTINGS";
 
@@ -164,7 +165,8 @@ export interface AdminEmailCampaignSummaryRecord {
 
 export interface EmailDeliveryHistoryRecord {
   id: string;
-  kind: "EMAIL_VERIFICATION" | "PASSWORD_RESET" | "PURCHASE_RECEIPT";
+  kind:
+    "EMAIL_VERIFICATION" | "PASSWORD_RESET" | "WELCOME" | "PURCHASE_RECEIPT";
   status: string;
   attempts: number;
   sentAt: Date | null;

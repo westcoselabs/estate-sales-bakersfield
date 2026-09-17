@@ -143,6 +143,14 @@ export class PrismaAccountRepository implements AccountRepository {
           },
           select: { id: true, userId: true },
         });
+        const welcomeDelivery = await transaction.emailDelivery.create({
+          data: {
+            userId: account.id,
+            kind: "WELCOME",
+            recipientHash: input.recipientHash,
+          },
+          select: { id: true, userId: true },
+        });
         if (input.marketingOptIn) {
           await transaction.marketingPreference.create({
             data: {
@@ -177,6 +185,7 @@ export class PrismaAccountRepository implements AccountRepository {
           status: "CREATED" as const,
           account: mapAccount(account),
           delivery,
+          welcomeDelivery,
         };
       });
     } catch (error) {

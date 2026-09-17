@@ -6,6 +6,7 @@ import {
   renderEmailTemplate,
   sanitizeEmailHtml,
 } from "@/modules/email/application/rendering";
+import { SYSTEM_EMAIL_DEFAULTS } from "@/modules/email/application/defaults";
 
 describe("managed email rendering", () => {
   it("escapes text and inserts only explicitly trusted HTML", () => {
@@ -43,6 +44,20 @@ describe("managed email rendering", () => {
     );
     expect(emailContentDigest("Other", "<p>Body</p>")).not.toBe(
       emailContentDigest("Subject", "<p>Body</p>"),
+    );
+  });
+
+  it("ships editable system templates for password reset and welcome email", () => {
+    expect(SYSTEM_EMAIL_DEFAULTS.PASSWORD_RESET).toMatchObject({
+      category: "TRANSACTIONAL",
+      requiredVariables: ["DISPLAY_NAME", "ACTION_URL", "EXPIRY"],
+    });
+    expect(SYSTEM_EMAIL_DEFAULTS.WELCOME).toMatchObject({
+      category: "TRANSACTIONAL",
+      requiredVariables: ["DISPLAY_NAME", "ACTION_URL"],
+    });
+    expect(SYSTEM_EMAIL_DEFAULTS.WELCOME.html).toContain(
+      "Explore estate sales",
     );
   });
 });

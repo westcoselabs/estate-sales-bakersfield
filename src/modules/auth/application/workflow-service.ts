@@ -52,6 +52,7 @@ function actionUrl(baseUrl: URL, path: string, token: string): string {
 export interface RegistrationResult {
   readonly accepted: true;
   readonly emailDeliveryAttempted: boolean;
+  readonly welcomeEmailDeliveryAttempted: boolean;
 }
 
 export interface DeliveryTrackingFailure {
@@ -115,7 +116,22 @@ export class AuthenticationWorkflowService {
       },
       now,
     );
-    return { accepted: true, emailDeliveryAttempted: sent };
+    const welcomeSent = await this.deliver(
+      created.welcomeDelivery.id,
+      {
+        kind: "WELCOME",
+        to: created.account.email,
+        displayName: created.account.displayName,
+        actionUrl: new URL("/search", this.applicationUrl).toString(),
+        idempotencyKey: created.welcomeDelivery.id,
+      },
+      now,
+    );
+    return {
+      accepted: true,
+      emailDeliveryAttempted: sent,
+      welcomeEmailDeliveryAttempted: welcomeSent,
+    };
   }
 
   async login(

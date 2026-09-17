@@ -51,6 +51,7 @@ function dependencies() {
         status: "CREATED" as const,
         account,
         delivery: { id: "delivery-1", userId: account.id },
+        welcomeDelivery: { id: "delivery-welcome", userId: account.id },
       }),
     ),
     findByNormalizedEmail: vi.fn<AccountRepository["findByNormalizedEmail"]>(
@@ -154,7 +155,14 @@ describe("AuthenticationWorkflowService", () => {
         idempotencyKey: "delivery-1",
       }),
     );
-    expect(accounts.markDeliverySent).toHaveBeenCalled();
+    expect(email.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "WELCOME",
+        actionUrl: "https://preview.example.test/search",
+        idempotencyKey: "delivery-welcome",
+      }),
+    );
+    expect(accounts.markDeliverySent).toHaveBeenCalledTimes(2);
   });
 
   it("maps a duplicate registration to a typed conflict without email", async () => {
@@ -280,14 +288,48 @@ describe("AuthenticationWorkflowService", () => {
         email: "person@example.test",
         password: "a-valid-registration-password",
       }),
-    ).resolves.toEqual({ accepted: true, emailDeliveryAttempted: true });
-    expect(email.send).toHaveBeenCalledOnce();
+    ).resolves.toEqual({
+      accepted: true,
+      emailDeliveryAttempted: true,
+      welcomeEmailDeliveryAttempted: true,
+    });
+    expect(email.send).toHaveBeenCalledTimes(2);
     expect(accounts.markDeliveryFailed).not.toHaveBeenCalled();
     expect(reportDeliveryTrackingFailure).toHaveBeenCalledWith({
       deliveryId: "delivery-1",
       status: "SENT",
       errorType: "Error",
     });
+  });
+
+  it("accepts registration and tracks a failed welcome message independently", async () => {
+    const { accounts, email, service } = dependencies();
+    email.send
+      .mockResolvedValueOnce({ providerMessageId: "verification-message" })
+      .mockRejectedValueOnce(new Error("welcome provider failed"));
+
+    await expect(
+      service.register({
+        displayName: "Test person",
+        email: "person@example.test",
+        password: "a-valid-registration-password",
+      }),
+    ).resolves.toEqual({
+      accepted: true,
+      emailDeliveryAttempted: true,
+      welcomeEmailDeliveryAttempted: false,
+    });
+    expect(accounts.markDeliverySent).toHaveBeenCalledWith(
+      "delivery-1",
+      "verification-message",
+      now,
+      undefined,
+    );
+    expect(accounts.markDeliveryFailed).toHaveBeenCalledWith(
+      "delivery-welcome",
+      "Error",
+      now,
+    );
   });
 
   it("records provider failures without exposing the raw token", async () => {

@@ -50,6 +50,7 @@ enum OrganizerStatus {
 enum EmailDeliveryKind {
   EMAIL_VERIFICATION
   PASSWORD_RESET
+  WELCOME
   PURCHASE_RECEIPT
 
   @@map("email_delivery_kind")
@@ -123,6 +124,7 @@ enum EmailTemplateCategory {
 enum EmailTemplateKey {
   EMAIL_VERIFICATION
   PASSWORD_RESET
+  WELCOME
   PURCHASE_RECEIPT
   RECENT_LISTINGS
 

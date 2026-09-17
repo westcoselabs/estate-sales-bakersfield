@@ -85,7 +85,8 @@ export interface PasswordHasher {
   needsRehash(encodedHash: string): boolean;
 }
 
-export type AuthenticationEmailKind = "EMAIL_VERIFICATION" | "PASSWORD_RESET";
+export type AuthenticationEmailKind =
+  "EMAIL_VERIFICATION" | "PASSWORD_RESET" | "WELCOME";
 
 export interface AuthenticationEmailMessage {
   readonly kind: AuthenticationEmailKind;
@@ -119,6 +120,7 @@ export interface AccountRepository {
         readonly status: "CREATED";
         readonly account: AuthenticationAccount;
         readonly delivery: EmailDeliveryRecord;
+        readonly welcomeDelivery: EmailDeliveryRecord;
       }
     | { readonly status: "CONFLICT" }
   >;

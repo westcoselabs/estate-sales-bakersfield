@@ -76,6 +76,20 @@ export const SYSTEM_EMAIL_DEFAULTS: Readonly<
     ),
     requiredVariables: ["DISPLAY_NAME", "ACTION_URL", "EXPIRY"],
   },
+  WELCOME: {
+    name: "Welcome",
+    category: "TRANSACTIONAL",
+    subject: "Welcome to Estate Sales Bakersfield",
+    html: shell(
+      "Welcome to Estate Sales Bakersfield",
+      `<p style="margin:0 0 12px;font-size:16px;line-height:25px">Hi {{DISPLAY_NAME}},</p>
+<p style="margin:0 0 24px;color:#4f5d56;font-size:16px;line-height:25px">Thanks for creating your account. You can now discover local sales, save time planning your route, and list your own estate or yard sale.</p>
+<p style="margin:0 0 22px"><a class="email-button" href="{{ACTION_URL}}" style="display:inline-block;min-width:220px;padding:14px 26px;border-radius:10px;background:#173a2d;color:#fff;font-size:16px;font-weight:700;text-align:center;text-decoration:none">Explore estate sales</a></p>
+<p style="margin:0;color:#6c756f;font-size:13px;line-height:20px">Your account is ready. Please also verify your email using the separate verification message we sent you.</p>`,
+      "Find local estate and yard sales around Bakersfield.",
+    ),
+    requiredVariables: ["DISPLAY_NAME", "ACTION_URL"],
+  },
   PURCHASE_RECEIPT: {
     name: "Purchase receipt",
     category: "TRANSACTIONAL",

@@ -24,6 +24,11 @@ describe("Resend authentication email contract", () => {
       actionUrl:
         "https://preview.example.test/reset-password?token=raw-reset-token",
     });
+    const welcome = renderAuthenticationEmail({
+      ...message,
+      kind: "WELCOME",
+      actionUrl: "https://preview.example.test/search",
+    });
 
     expect(verification.subject).toContain("Verify");
     expect(verification.text).toContain(message.actionUrl);
@@ -41,6 +46,10 @@ describe("Resend authentication email contract", () => {
     expect(reset.text).toContain("1 hour");
     expect(reset.html).toContain("Reset your password");
     expect(reset.html).toContain("Your password will not change");
+    expect(welcome.subject).toContain("Welcome");
+    expect(welcome.text).toContain("Your account is ready");
+    expect(welcome.html).toContain("Explore estate sales");
+    expect(welcome.html).not.toContain("expires in");
   });
 
   it("escapes dynamic names and URLs in every HTML placement", () => {

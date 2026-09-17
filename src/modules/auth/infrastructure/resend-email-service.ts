@@ -43,21 +43,38 @@ function escapeHtml(value: string): string {
 
 export function renderAuthenticationEmail(message: AuthenticationEmailMessage) {
   const verification = message.kind === "EMAIL_VERIFICATION";
+  const welcome = message.kind === "WELCOME";
   const subject = verification
     ? "Verify your Estate Sales Bakersfield email"
-    : "Reset your Estate Sales Bakersfield password";
-  const action = verification ? "Verify email" : "Reset password";
-  const expiry = verification ? "24 hours" : "1 hour";
+    : welcome
+      ? "Welcome to Estate Sales Bakersfield"
+      : "Reset your Estate Sales Bakersfield password";
+  const action = verification
+    ? "Verify email"
+    : welcome
+      ? "Explore estate sales"
+      : "Reset password";
+  const expiry = welcome ? null : verification ? "24 hours" : "1 hour";
   const preheader = verification
     ? "Confirm your email to approve and publish your event."
-    : "Use this secure link to choose a new password.";
-  const heading = verification ? "Verify your email" : "Reset your password";
+    : welcome
+      ? "Your Estate Sales Bakersfield account is ready."
+      : "Use this secure link to choose a new password.";
+  const heading = verification
+    ? "Verify your email"
+    : welcome
+      ? "Welcome to Estate Sales Bakersfield"
+      : "Reset your password";
   const explanation = verification
     ? "Confirm your email address to approve your event, continue to payment, and publish your listing."
-    : "We received a request to reset your password. Use the secure button below to choose a new one.";
+    : welcome
+      ? "Thanks for creating your account. You can now discover local sales, save time planning your route, and list your own estate or yard sale."
+      : "We received a request to reset your password. Use the secure button below to choose a new one.";
   const securityNotice = verification
     ? "If you did not create an Estate Sales Bakersfield account, you can safely ignore this email."
-    : "If you did not request a password reset, you can safely ignore this email. Your password will not change.";
+    : welcome
+      ? "Please also verify your email using the separate verification message we sent you."
+      : "If you did not request a password reset, you can safely ignore this email. Your password will not change.";
   const safeName = escapeHtml(message.displayName);
   const safeUrl = escapeHtml(message.actionUrl);
   const text = [
@@ -72,7 +89,11 @@ export function renderAuthenticationEmail(message: AuthenticationEmailMessage) {
     `${action}:`,
     message.actionUrl,
     "",
-    `This link expires in ${expiry} and can be used once.`,
+    ...(expiry
+      ? [`This link expires in ${expiry} and can be used once.`]
+      : [
+          "Your account is ready. Please verify your email using the separate verification message we sent you.",
+        ]),
     "",
     "If the button does not work, copy and paste the link above into your browser.",
     "",
@@ -111,7 +132,7 @@ export function renderAuthenticationEmail(message: AuthenticationEmailMessage) {
             </tr>
             <tr>
               <td class="email-padding" style="padding:44px 40px 24px;">
-                <p style="margin:0 0 10px;color:#987425;font-size:13px;line-height:20px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;">Secure account link</p>
+                <p style="margin:0 0 10px;color:#987425;font-size:13px;line-height:20px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;">${welcome ? "Your local sale guide" : "Secure account link"}</p>
                 <h1 class="email-heading" style="margin:0 0 18px;color:#173a2d;font-family:Georgia,'Times New Roman',serif;font-size:36px;line-height:42px;font-weight:700;">${heading}</h1>
                 <p style="margin:0 0 12px;color:#20332b;font-size:16px;line-height:25px;">Hi ${safeName},</p>
                 <p style="margin:0;color:#4f5d56;font-size:16px;line-height:25px;">${explanation}</p>
@@ -126,7 +147,7 @@ export function renderAuthenticationEmail(message: AuthenticationEmailMessage) {
                     </td>
                   </tr>
                 </table>
-                <p style="margin:18px 0 0;color:#6c756f;font-size:13px;line-height:20px;">This secure link expires in ${expiry} and can be used once.</p>
+                <p style="margin:18px 0 0;color:#6c756f;font-size:13px;line-height:20px;">${expiry ? `This secure link expires in ${expiry} and can be used once.` : "Browse local sales now, and verify your email when you are ready to list your own sale."}</p>
               </td>
             </tr>
             <tr>
@@ -135,7 +156,7 @@ export function renderAuthenticationEmail(message: AuthenticationEmailMessage) {
                   <tr>
                     <td style="padding:18px 20px;">
                       <p style="margin:0 0 8px;color:#20332b;font-size:13px;line-height:19px;font-weight:700;">Button not working?</p>
-                      <p style="margin:0 0 8px;color:#5c6761;font-size:13px;line-height:19px;">Copy and paste this secure URL into your browser:</p>
+                      <p style="margin:0 0 8px;color:#5c6761;font-size:13px;line-height:19px;">Copy and paste this ${welcome ? "URL" : "secure URL"} into your browser:</p>
                       <p style="margin:0;overflow-wrap:anywhere;word-break:break-all;color:#173a2d;font-size:12px;line-height:18px;"><a href="${safeUrl}" style="color:#173a2d;text-decoration:underline;">${safeUrl}</a></p>
                     </td>
                   </tr>

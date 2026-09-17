@@ -109,7 +109,11 @@ export function createConfiguredAuthenticationWorkflow(): AuthenticationWorkflow
               const revision = template?.activeRevision;
               if (!revision) return null;
               const expiry =
-                message.kind === "EMAIL_VERIFICATION" ? "24 hours" : "1 hour";
+                message.kind === "EMAIL_VERIFICATION"
+                  ? "24 hours"
+                  : message.kind === "PASSWORD_RESET"
+                    ? "1 hour"
+                    : "";
               return {
                 subject: revision.subject,
                 html: revision.html
@@ -122,7 +126,10 @@ export function createConfiguredAuthenticationWorkflow(): AuthenticationWorkflow
                     escapeManagedEmailValue(message.actionUrl),
                   )
                   .replaceAll("{{EXPIRY}}", expiry),
-                text: `${message.kind === "EMAIL_VERIFICATION" ? "Verify your email" : "Reset your password"}: ${message.actionUrl} (expires in ${expiry}).`,
+                text:
+                  message.kind === "WELCOME"
+                    ? `Welcome to Estate Sales Bakersfield, ${message.displayName}. Explore local sales: ${message.actionUrl}`
+                    : `${message.kind === "EMAIL_VERIFICATION" ? "Verify your email" : "Reset your password"}: ${message.actionUrl} (expires in ${expiry}).`,
                 templateRevisionId: revision.id,
               };
             },
