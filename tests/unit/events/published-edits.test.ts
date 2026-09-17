@@ -9,6 +9,7 @@ import type { ImageProcessor, MediaStore } from "@/modules/media";
 import {
   createPublicationSnapshot,
   parsePublicationSnapshot,
+  projectionAt,
 } from "@/modules/payments/application/publication";
 
 import { principal } from "../payments/fixtures";
@@ -123,5 +124,25 @@ describe("published event editing", () => {
     expect(edited.projection.address).toEqual(original.projection.address);
     expect(edited.privacyMode).toBe(original.privacyMode);
     expect(original.projection.title).toBe("Summer Estate Sale");
+  });
+
+  it("keeps a legacy hidden address on its original release schedule", () => {
+    const original = createPublicationSnapshot(
+      readyEvent({ privacyMode: "HIDDEN_UNTIL_START" }),
+    );
+    const changed = readyEvent({
+      privacyMode: "HIDDEN_UNTIL_START",
+      localStartsAt: "2026-07-24T09:00",
+      startsAt: new Date("2026-07-24T16:00:00.000Z"),
+    });
+    const edited = parsePublicationSnapshot(
+      editedPublicationSnapshot(original, changed),
+    );
+    const betweenNewAndOriginalStart = new Date("2026-07-24T18:00:00.000Z");
+
+    expect(edited.addressRevealAt).toBe(original.projection.startsAt);
+    expect(projectionAt(edited, betweenNewAndOriginalStart).address.kind).toBe(
+      "HIDDEN",
+    );
   });
 });

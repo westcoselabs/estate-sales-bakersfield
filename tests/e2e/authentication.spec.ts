@@ -641,7 +641,7 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   browser,
   page,
 }) => {
-  test.slow();
+  test.setTimeout(180_000);
   const suffix = crypto.randomUUID();
   const email = `${runId}-phase3-owner-${suffix}@example.test`;
   const otherEmail = `${runId}-phase3-other-${suffix}@example.test`;
@@ -710,7 +710,6 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   }).format(saleDay);
   const saleDateLabel = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles",
-    weekday: "short",
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -725,11 +724,22 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   await stalePage.getByLabel("Public title").fill("Stale tab overwrite");
   await stalePage.getByRole("button", { name: "Save and continue" }).click();
   await expect(
+    stalePage.getByText(
+      "This listing changed in another tab. The latest version is now loaded; review it and save your changes again.",
+    ),
+  ).toBeVisible();
+  await expect(stalePage.getByLabel("Public title")).toHaveValue(
+    "Stale tab overwrite",
+  );
+  await expect(
+    stalePage.getByRole("complementary", {
+      name: "Listing progress and preview",
+    }),
+  ).toContainText(saleDateLabel);
+  await stalePage.getByRole("button", { name: "Save and continue" }).click();
+  await expect(
     stalePage.getByText("Details saved and confirmed by the server."),
   ).toBeVisible();
-  await expect(
-    stalePage.getByRole("region", { name: "Sale schedule details" }),
-  ).toContainText(saleDateLabel);
   await stalePage.close();
 
   await page
@@ -744,6 +754,16 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
   await page.getByLabel("I confirm this is the sale property.").check();
   await page.getByLabel("Hide address until").check();
   await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(
+    page.getByText(
+      "This listing changed in another tab. The latest version is now loaded; review it and save your changes again.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("I confirm this is the sale property."),
+  ).toBeChecked();
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect(page.getByRole("heading", { name: "Photos" })).toBeVisible();
 
   const image = await sharp({
     create: {
@@ -793,7 +813,8 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     },
     { times: 1 },
   );
-  await page.getByLabel(/Event photos/).setInputFiles([
+  const photoInput = page.getByLabel(/Event photos/);
+  await photoInput.setInputFiles([
     {
       name: "estate-photo.jpg",
       mimeType: "image/jpeg",
@@ -856,7 +877,9 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
       ),
     )
     .toBeGreaterThanOrEqual(2);
+  await expect(photoInput).toBeEnabled({ timeout: 30_000 });
   let interceptedCommittedFinalize = false;
+  await page.unroute("**/api/events/*/photos/*/finalize");
   await page.route(
     "**/api/events/*/photos/*/finalize",
     async (route) => {
@@ -867,7 +890,7 @@ test("builds, previews, approves, invalidates, and reapproves an owned event dra
     },
     { times: 1 },
   );
-  await page.getByLabel(/Event photos/).setInputFiles({
+  await photoInput.setInputFiles({
     name: "ambiguous-response.jpg",
     mimeType: "image/jpeg",
     buffer: image,

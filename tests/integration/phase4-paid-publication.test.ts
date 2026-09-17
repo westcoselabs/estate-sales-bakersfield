@@ -907,7 +907,7 @@ describe("published organizer edits", () => {
           where: { id: 1 },
         })
       ).revision,
-    ).toBeGreaterThan(revisionBefore.revision);
+    ).toBe(revisionBefore.revision + 1n);
     await expect(
       editor.updateDetails(fixture.principal, event.id, {
         expectedVersion: event.version - 1,

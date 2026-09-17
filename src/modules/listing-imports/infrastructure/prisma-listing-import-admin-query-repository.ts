@@ -267,22 +267,6 @@ function safeDuplicateReasons(
     : [];
 }
 
-function publicationSnapshotEndsAt(value: unknown): Date | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const projection = (value as { readonly projection?: unknown }).projection;
-  if (
-    !projection ||
-    typeof projection !== "object" ||
-    Array.isArray(projection)
-  ) {
-    return null;
-  }
-  const endsAt = (projection as { readonly endsAt?: unknown }).endsAt;
-  if (typeof endsAt !== "string") return null;
-  const parsed = new Date(endsAt);
-  return Number.isFinite(parsed.getTime()) ? parsed : null;
-}
-
 function pageResult<T extends { readonly id: string }>(
   rows: readonly T[],
   limit: number,
@@ -526,7 +510,7 @@ export class PrismaListingImportAdminQueryRepository implements ListingImportAdm
                     },
                   },
                   publication: {
-                    select: { canonicalPath: true, snapshot: true },
+                    select: { canonicalPath: true },
                   },
                 },
               },
@@ -658,9 +642,6 @@ export class PrismaListingImportAdminQueryRepository implements ListingImportAdm
         createdAt: match.createdAt,
       } as const;
       if (match.event) {
-        const snapshotEndsAt = publicationSnapshotEndsAt(
-          match.event.publication?.snapshot,
-        );
         duplicates.push({
           ...shared,
           target: {
@@ -678,8 +659,8 @@ export class PrismaListingImportAdminQueryRepository implements ListingImportAdm
               !match.event.deletedAt &&
               !match.event.canceledAt &&
               !match.event.removedAt &&
-              snapshotEndsAt &&
-              snapshotEndsAt > queriedAt,
+              match.event.endsAt &&
+              match.event.endsAt > queriedAt,
             ),
           },
         });

@@ -36,6 +36,7 @@ function paymentRepository(
     findAttemptBySessionId: vi.fn(async () => null),
     attachRecoveredCheckout: vi.fn(async () => null),
     findLatestOwnedAttempt: vi.fn(async () => null),
+    findOwnedStatusRecords: vi.fn(async () => []),
     findPublicationForEvent: vi.fn(async () => null),
     beginWebhook: vi.fn(async () => "PROCESS" as const),
     completeWebhook: vi.fn(async () => undefined),
@@ -251,6 +252,64 @@ describe("Phase 4 payment service", () => {
       paymentState: "PAID",
       fulfillmentState: "FULFILLED",
     });
+  });
+
+  it("loads dashboard payment states in one owned batch", async () => {
+    const first = approvedEvent();
+    const second = approvedEvent({
+      id: "77777777-7777-4777-8777-777777777777",
+      publicId: "def456abc123",
+      approvalStatus: "NOT_APPROVED",
+      workflowState: "PREVIEW_READY",
+    });
+    const attempt = paymentAttempt(first, {
+      checkoutState: "COMPLETE",
+      paymentState: "PAID",
+      fulfillmentState: "FULFILLED",
+    });
+    const findOwnedStatusRecords = vi.fn(async () => [
+      {
+        eventId: first.id,
+        attempt,
+        publication: {
+          canonicalPath: `/estate-sales/${first.slug}-${first.publicId}`,
+          publishedAt: now,
+        },
+      },
+      { eventId: second.id, attempt: null, publication: null },
+    ]);
+    const payments = paymentRepository({ findOwnedStatusRecords });
+    const eventItem = (event: typeof first) => ({
+      id: event.id,
+      title: event.title,
+      eventType: event.eventType,
+      workflowState: event.workflowState,
+      approvalStatus: event.approvalStatus,
+      startsAt: event.startsAt?.toISOString() ?? null,
+      endsAt: event.endsAt?.toISOString() ?? null,
+      timezone: event.timezone,
+      readyPhotoCount: 1,
+      hasReadyCover: true,
+      approvalReady: true,
+      canceledAt: null,
+      version: event.version,
+      updatedAt: event.updatedAt.toISOString(),
+    });
+
+    await expect(
+      service(payments, eventRepository(), stripeProvider()).statuses(
+        principal,
+        [eventItem(first), eventItem(second)],
+      ),
+    ).resolves.toMatchObject([
+      { eventId: first.id, displayState: "PUBLISHED" },
+      { eventId: second.id, displayState: "READY_FOR_REVIEW" },
+    ]);
+    expect(findOwnedStatusRecords).toHaveBeenCalledOnce();
+    expect(findOwnedStatusRecords).toHaveBeenCalledWith(
+      [first.id, second.id],
+      principal.id,
+    );
   });
 
   it("creates hosted Checkout from server price, safe correlation metadata, and server URLs", async () => {

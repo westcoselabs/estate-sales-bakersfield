@@ -31,10 +31,9 @@ export async function loadDashboardListings(
   user: AuthPrincipal,
 ): Promise<readonly DashboardListing[]> {
   const events = await createConfiguredEventService().list(user);
-  const payments = await Promise.all(
-    events.map((event) =>
-      createConfiguredPaymentService().status(user, event.id),
-    ),
+  const payments = await createConfiguredPaymentService().statuses(
+    user,
+    events,
   );
   return events.map((event, index) => ({
     event,

@@ -34,7 +34,10 @@ function searchWhere(search: string): Prisma.EventWhereInput {
   };
 }
 
-function filterWhere(filter: AdminListingFilter): Prisma.EventWhereInput {
+function filterWhere(
+  filter: AdminListingFilter,
+  now: Date,
+): Prisma.EventWhereInput {
   switch (filter) {
     case "drafts":
       return {
@@ -49,14 +52,27 @@ function filterWhere(filter: AdminListingFilter): Prisma.EventWhereInput {
       return { deletedAt: { not: null } };
     case "removed":
       return { removedAt: { not: null } };
+    case "published":
+      return {
+        deletedAt: null,
+        canceledAt: null,
+        removedAt: null,
+        publication: { isNot: null },
+        endsAt: { gt: now },
+      };
+    case "ended":
+      return {
+        deletedAt: null,
+        canceledAt: null,
+        removedAt: null,
+        publication: { isNot: null },
+        endsAt: { lte: now },
+      };
     default:
       return {
         deletedAt: null,
         canceledAt: null,
         removedAt: null,
-        ...(filter === "published" || filter === "ended"
-          ? { publication: { isNot: null } }
-          : {}),
       };
   }
 }
@@ -110,32 +126,16 @@ export class PrismaAdminListingRepository {
       where: {
         AND: [
           searchWhere(input.search),
-          filterWhere(input.filter),
+          filterWhere(input.filter, input.now),
           cursorWhere,
         ],
       },
       orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-      take:
-        input.filter === "published" || input.filter === "ended"
-          ? Math.min(input.limit * 10 + 1, 501)
-          : input.limit + 1,
+      take: input.limit + 1,
       include: listingInclude,
     });
-    const filtered = candidates.filter((event) => {
-      if (input.filter !== "published" && input.filter !== "ended") return true;
-      try {
-        const ended =
-          new Date(
-            parsePublicationSnapshot(event.publication!.snapshot).projection
-              .endsAt,
-          ) <= input.now;
-        return input.filter === "ended" ? ended : !ended;
-      } catch {
-        return false;
-      }
-    });
-    const hasMore = filtered.length > input.limit;
-    const rows = filtered.slice(0, input.limit);
+    const hasMore = candidates.length > input.limit;
+    const rows = candidates.slice(0, input.limit);
     return {
       rows,
       next: hasMore
@@ -388,7 +388,9 @@ export class PrismaAdminListingRepository {
         }
         let snapshot;
         try {
-          snapshot = parsePublicationSnapshot(event.publication.snapshot);
+          snapshot = parsePublicationSnapshot(
+            event.publishedSnapshot ?? event.publication.snapshot,
+          );
         } catch {
           throw new AdminConflictError(
             "NOT_RESTORABLE",

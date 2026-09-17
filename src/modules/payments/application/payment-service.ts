@@ -8,6 +8,7 @@ import {
   EventLifecycleBlockedError,
   EventNotFoundError,
   eventReadiness,
+  type EventListItemDto,
   type EventRecord,
   type EventRepository,
 } from "@/modules/events";
@@ -32,6 +33,7 @@ import type {
 } from "../domain/types";
 import { checkoutEligibility, fulfillmentEligibility } from "./eligibility";
 import type {
+  OwnedPaymentStatusRecord,
   PaymentAuditContext,
   PaymentRepository,
   PublicationCache,
@@ -458,16 +460,85 @@ export class PaymentService {
       this.payments.findLatestOwnedAttempt(event.id, user.id),
       this.payments.findPublicationForEvent(event.id),
     ]);
+    return this.paymentStatus(
+      {
+        id: event.id,
+        canceledAt: event.canceledAt,
+        endsAt: event.endsAt,
+        approvalStatus: event.approvalStatus,
+        approvalReady: eventReadiness(event).ready,
+        updatedAt: event.updatedAt,
+      },
+      { eventId: event.id, attempt, publication },
+    );
+  }
+
+  async statuses(
+    principal: AuthPrincipal | null,
+    events: readonly EventListItemDto[],
+  ): Promise<readonly PaymentStatusDto[]> {
+    const user = requireUserPrincipal(principal);
+    if (events.length === 0) return [];
+    const ids = events.map((event) => event.id);
+    if (
+      new Set(ids).size !== ids.length ||
+      ids.some((eventId) => !DATABASE_ID.test(eventId))
+    ) {
+      throw new EventNotFoundError();
+    }
+    const records = new Map(
+      (await this.payments.findOwnedStatusRecords(ids, user.id)).map(
+        (record) => [record.eventId, record],
+      ),
+    );
+    return events.map((event) => {
+      const record = records.get(event.id);
+      if (!record) throw new EventNotFoundError();
+      return this.paymentStatus(event, record);
+    });
+  }
+
+  private paymentStatus(
+    event:
+      | Pick<
+          EventListItemDto,
+          | "id"
+          | "canceledAt"
+          | "endsAt"
+          | "approvalStatus"
+          | "approvalReady"
+          | "updatedAt"
+        >
+      | {
+          readonly id: string;
+          readonly canceledAt: Date | null;
+          readonly endsAt: Date | null;
+          readonly approvalStatus: EventRecord["approvalStatus"];
+          readonly approvalReady: boolean;
+          readonly updatedAt: Date;
+        },
+    record: OwnedPaymentStatusRecord,
+  ): PaymentStatusDto {
+    const { attempt, publication } = record;
+    const canceledAt = event.canceledAt
+      ? event.canceledAt instanceof Date
+        ? event.canceledAt
+        : new Date(event.canceledAt)
+      : null;
+    const endsAt = event.endsAt
+      ? event.endsAt instanceof Date
+        ? event.endsAt
+        : new Date(event.endsAt)
+      : null;
     let displayState: PaymentStatusDto["displayState"];
-    if (event.canceledAt) displayState = "CANCELED";
+    if (canceledAt) displayState = "CANCELED";
     else if (publication)
-      displayState =
-        event.endsAt && event.endsAt <= this.now() ? "FINISHED" : "PUBLISHED";
+      displayState = endsAt && endsAt <= this.now() ? "FINISHED" : "PUBLISHED";
     else if (!attempt) {
       displayState =
         event.approvalStatus === "APPROVED"
           ? "READY_FOR_PAYMENT"
-          : eventReadiness(event).ready
+          : event.approvalReady
             ? "READY_FOR_REVIEW"
             : "DRAFT_INCOMPLETE";
     } else if (attempt.fulfillmentState === "MANUAL_REVIEW") {
@@ -507,7 +578,12 @@ export class PaymentService {
           attempt.fulfillmentState,
         ),
       ),
-      updatedAt: (attempt?.updatedAt ?? event.updatedAt).toISOString(),
+      updatedAt: (
+        attempt?.updatedAt ??
+        (event.updatedAt instanceof Date
+          ? event.updatedAt
+          : new Date(event.updatedAt))
+      ).toISOString(),
     };
   }
 

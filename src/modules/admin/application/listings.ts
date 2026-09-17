@@ -22,15 +22,14 @@ function lifecycle(event: {
 
 function publicationStatus(
   publication: { snapshot: unknown } | null,
+  currentSnapshot: unknown,
+  endsAt: Date | null,
   now: Date,
 ) {
   if (!publication) return "UNPUBLISHED";
   try {
-    return new Date(
-      parsePublicationSnapshot(publication.snapshot).projection.endsAt,
-    ) <= now
-      ? "ENDED"
-      : "PUBLISHED";
+    parsePublicationSnapshot(currentSnapshot ?? publication.snapshot);
+    return endsAt && endsAt <= now ? "ENDED" : "PUBLISHED";
   } catch {
     return "INVALID_SNAPSHOT";
   }
@@ -62,7 +61,12 @@ export class AdminListingDirectory {
         workflowState: event.workflowState,
         lifecycle: lifecycle(event),
         payment: event.paymentAttempts[0] ?? null,
-        publicationStatus: publicationStatus(event.publication, this.clock()),
+        publicationStatus: publicationStatus(
+          event.publication,
+          event.publishedSnapshot,
+          event.endsAt,
+          this.clock(),
+        ),
         photoCount: event.photos.length,
         readyPhotoCount: event.photos.filter(
           (photo) => photo.status === "READY",
@@ -89,7 +93,9 @@ export class AdminEventDetail {
     let snapshot: ReturnType<typeof parsePublicationSnapshot> | null = null;
     if (event.publication) {
       try {
-        snapshot = parsePublicationSnapshot(event.publication.snapshot);
+        snapshot = parsePublicationSnapshot(
+          event.publishedSnapshot ?? event.publication.snapshot,
+        );
       } catch {
         snapshot = null;
       }

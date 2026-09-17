@@ -845,15 +845,10 @@ export function EventBuilder({
           });
         } catch (error) {
           if (!(error instanceof StaleVersionError)) throw error;
-          setStepFeedback(target, {
-            kind: "success",
-            text: "Your draft was updated in the background. Refreshing the latest version and saving your changes…",
-          });
-          const latest = await refreshEvent();
-          response = await request<EventResponse>(endpoint, method, {
-            ...body,
-            expectedVersion: latest.version,
-          });
+          await refreshEvent();
+          throw new Error(
+            "This listing changed in another tab. The latest version is now loaded; review it and save your changes again.",
+          );
         }
         acceptEvent(response.event, target);
         if (!complete(response.event)) {

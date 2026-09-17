@@ -15,10 +15,7 @@
       "robots": "index, follow",
       "h1Count": 1,
       "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
-      "structuredTypes": [
-        "Organization",
-        "WebSite"
-      ],
+      "structuredTypes": ["Organization", "WebSite"],
       "analyticsPresent": true,
       "googleVerification": null
     },
@@ -31,9 +28,7 @@
       "robots": "index, follow",
       "h1Count": 1,
       "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
-      "structuredTypes": [
-        "BreadcrumbList"
-      ],
+      "structuredTypes": ["BreadcrumbList"],
       "analyticsPresent": true,
       "googleVerification": null
     },
@@ -46,9 +41,7 @@
       "robots": "index, follow",
       "h1Count": 1,
       "ogImage": "https://estatesalesbakersfield.com/images/marketplace-hero.webp",
-      "structuredTypes": [
-        "BreadcrumbList"
-      ],
+      "structuredTypes": ["BreadcrumbList"],
       "analyticsPresent": true,
       "googleVerification": null
     },

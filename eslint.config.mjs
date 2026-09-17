@@ -77,10 +77,12 @@ export default defineConfig([
     },
   },
   globalIgnores([
+    ".tmp/**",
     ".next/**",
     "coverage/**",
     "node_modules/**",
     "playwright-report/**",
+    "public/maplibre/**",
     "src/generated/prisma/**",
     "test-results/**",
   ]),

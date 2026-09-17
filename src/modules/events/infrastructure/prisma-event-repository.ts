@@ -566,17 +566,28 @@ export class PrismaEventRepository implements EventRepository {
     eventId: string,
     userId: string,
   ): Promise<EventRecord | null> {
-    const event = await this.findOwnedWith(transaction, eventId, userId);
-    if (!event?.publication) return event;
-    const publication = await transaction.eventPublication.findUniqueOrThrow({
-      where: { eventId },
-      select: { snapshot: true },
+    const stored = await transaction.event.findFirst({
+      where: {
+        id: eventId,
+        organizer: { userId },
+        deletedAt: null,
+        removedAt: null,
+      },
+      include: {
+        ...eventInclude,
+        publication: {
+          select: { ...eventInclude.publication.select, snapshot: true },
+        },
+      },
     });
+    if (!stored) return null;
+    const event = mapEvent(stored);
+    if (!stored.publication) return event;
     await transaction.event.update({
       where: { id: eventId },
       data: {
         publishedSnapshot: editedPublicationSnapshot(
-          publication.snapshot,
+          stored.publication.snapshot,
           event,
         ) as unknown as Prisma.InputJsonValue,
       },

@@ -10,9 +10,7 @@
   "geoapify": {
     "source": "local .env key through the app provider",
     "suggestions": 1,
-    "cities": [
-      "Bakersfield"
-    ],
+    "cities": ["Bakersfield"],
     "validationStatus": "VERIFIED",
     "city": "Bakersfield",
     "region": "CA",

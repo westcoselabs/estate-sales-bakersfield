@@ -547,9 +547,7 @@ export class PrismaListingImportReviewRepository
             AND event."deleted_at" IS NULL
             AND event."canceled_at" IS NULL
             AND event."removed_at" IS NULL
-            AND (
-              publication."snapshot" -> 'projection' ->> 'endsAt'
-            )::TIMESTAMPTZ > CURRENT_TIMESTAMP
+            AND event."ends_at" > CURRENT_TIMESTAMP
           FOR SHARE OF event, publication
         `)
       : await transaction.$queryRaw<{ readonly id: string }[]>(Prisma.sql`

@@ -172,12 +172,12 @@ test("renders public discovery content without client JavaScript", async ({
   await page.goto("/");
   await expect(
     page.getByRole("heading", {
-      name: "Discover local sales and one-of-a-kind finds.",
+      name: "Local Sales, All in One Place.",
     }),
   ).toBeVisible();
   await page.goto("/search?sale=estate&date=weekend&view=list");
   await expect(
-    page.getByRole("region", { name: /sales shown|No sales shown/ }),
+    page.getByRole("region", { name: /sales? shown|No sales shown/ }),
   ).toBeVisible();
   await context.close();
 });

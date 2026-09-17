@@ -43,15 +43,15 @@ export class PrismaOverviewReportingRepository {
           paidAt: true,
         },
       }),
-      this.prisma.eventPublication.findMany({
+      this.prisma.eventPublication.count({
         where: {
           event: {
             deletedAt: null,
             canceledAt: null,
             removedAt: null,
+            endsAt: { gt: range.to },
           },
         },
-        select: { snapshot: true },
       }),
     ]);
     return {

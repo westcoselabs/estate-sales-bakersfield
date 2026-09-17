@@ -234,7 +234,7 @@ export default async function AdminListingDetailPage({
                 <dt>Snapshot</dt>
                 <dd>
                   {event.publication.snapshot
-                    ? "Valid immutable snapshot"
+                    ? "Valid current snapshot"
                     : "Invalid snapshot"}
                 </dd>
               </div>

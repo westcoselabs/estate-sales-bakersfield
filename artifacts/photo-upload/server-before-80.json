@@ -7,12 +7,7 @@
   "p95Milliseconds": 1230,
   "peakRssMiB": 276,
   "outputMiB": 84.84,
-  "inputBytes": [
-    3305362,
-    3306050,
-    13546771,
-    374323
-  ],
+  "inputBytes": [3305362, 3306050, 13546771, 374323],
   "sharp": {
     "aom": "3.14.1",
     "archive": "3.8.9",

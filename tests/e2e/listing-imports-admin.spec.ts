@@ -449,7 +449,7 @@ test("reviews a manual listing import and manages a one-time ingestion credentia
 
     await page.goto("/search?sale=estate");
     const mapProjection = page.getByRole("button", {
-      name: `Show ${reviewedTitle} on the map`,
+      name: `Show ${reviewedTitle} on the map (approximate location)`,
       exact: true,
     });
     await expect(mapProjection).toHaveCount(1);
@@ -497,13 +497,12 @@ test("reviews a manual listing import and manages a one-time ingestion credentia
       '[data-external-listing-placeholder="true"]',
     );
     await expect(placeholder).toBeVisible();
-    await expect(placeholder.locator("img")).toHaveAttribute(
-      "src",
-      "/images/marketplace-hero.webp",
-    );
-    await expect(publicListing.locator("img")).toHaveCount(1);
     await expect(
-      publicListing.locator(".public-listing-detail-tabs"),
+      placeholder.getByRole("img", { name: /Marketplace placeholder for/u }),
+    ).toHaveAttribute("src", "/images/marketplace-hero.webp");
+    await expect(publicListing.locator("img")).toHaveCount(2);
+    await expect(
+      publicListing.getByRole("tablist", { name: "Listing details" }),
     ).toHaveCount(0);
     await expect(publicListing.locator(".public-gallery-section")).toHaveCount(
       0,

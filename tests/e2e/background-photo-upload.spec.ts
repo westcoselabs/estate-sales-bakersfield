@@ -434,6 +434,9 @@ test("uploads in the background while review and unsaved details stay usable", a
     const about = page.locator(".public-listing-about");
     const pictures = page.locator(".public-gallery-section");
     await expect(about).toBeVisible();
+    const detailBox = await details.boundingBox();
+    const aboutBox = await about.boundingBox();
+    await page.getByRole("tab", { name: "Pictures" }).click();
     await expect(pictures).toBeVisible();
     await pictures.scrollIntoViewIfNeeded();
     await expect
@@ -449,15 +452,17 @@ test("uploads in the background while review and unsaved details stay usable", a
           ),
       )
       .toBe(true);
-    const detailBox = await details.boundingBox();
-    for (const card of [about, pictures]) {
-      const box = await card.boundingBox();
-      expect(Math.abs(box!.width - detailBox!.width)).toBeLessThan(2);
-      expect(Math.abs(box!.x - detailBox!.x)).toBeLessThan(2);
-    }
+    const pictureBox = await pictures.boundingBox();
+    expect(aboutBox).not.toBeNull();
+    expect(aboutBox!.width).toBeLessThan(detailBox!.width);
+    expect(Math.abs(aboutBox!.x - detailBox!.x)).toBeLessThan(2);
+    expect(Math.abs(pictureBox!.width - detailBox!.width)).toBeLessThan(2);
+    expect(Math.abs(pictureBox!.x - detailBox!.x)).toBeLessThan(2);
     await details.screenshot({
       path: testInfo.outputPath("desktop-full-width-details.png"),
     });
+    await page.getByRole("tab", { name: "About" }).click();
+    await expect(about).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
     const toggle = page.getByRole("tablist", { name: "Listing details" });
     await expect(toggle).toBeVisible();

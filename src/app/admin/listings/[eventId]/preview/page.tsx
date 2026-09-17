@@ -69,7 +69,7 @@ export default async function AdminListingPreviewPage({
         <div>
           <p className="eyebrow">
             {mode === "public"
-              ? "Retained immutable public snapshot"
+              ? "Current public listing snapshot"
               : "Current mutable organizer draft"}
           </p>
           <h1>{title}</h1>

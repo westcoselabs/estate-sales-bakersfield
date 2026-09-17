@@ -37,6 +37,15 @@ export interface PaymentAuditContext {
   readonly requestId?: string;
 }
 
+export interface OwnedPaymentStatusRecord {
+  readonly eventId: string;
+  readonly attempt: PaymentAttemptRecord | null;
+  readonly publication: {
+    readonly canonicalPath: string;
+    readonly publishedAt: Date;
+  } | null;
+}
+
 export interface PaymentRepository {
   findActiveAttempt(eventId: string): Promise<PaymentAttemptRecord | null>;
   createAttempt(input: {
@@ -86,6 +95,10 @@ export interface PaymentRepository {
     eventId: string,
     userId: string,
   ): Promise<PaymentAttemptRecord | null>;
+  findOwnedStatusRecords(
+    eventIds: readonly string[],
+    userId: string,
+  ): Promise<readonly OwnedPaymentStatusRecord[]>;
   findPublicationForEvent(eventId: string): Promise<PublicationRecord | null>;
   beginWebhook(
     event: VerifiedStripeWebhookEvent,

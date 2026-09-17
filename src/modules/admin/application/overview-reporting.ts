@@ -1,4 +1,3 @@
-import { parsePublicationSnapshot } from "@/modules/payments";
 import type { AuthPrincipal } from "@/modules/auth";
 
 import { authorizeAdminService } from "./security";
@@ -54,17 +53,7 @@ export class AdminOverviewReporting {
         this.repository.warnings(),
       ]);
 
-    const activeListings = metrics.activePublications.filter((publication) => {
-      try {
-        return (
-          new Date(
-            parsePublicationSnapshot(publication.snapshot).projection.endsAt,
-          ) > range.to
-        );
-      } catch {
-        return false;
-      }
-    }).length;
+    const activeListings = metrics.activePublications;
     const totals = moneyTotals(metrics.paid);
     const trendMap = new Map<
       string,

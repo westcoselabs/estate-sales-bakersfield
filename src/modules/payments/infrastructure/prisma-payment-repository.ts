@@ -460,6 +460,36 @@ export class PrismaPaymentRepository implements PaymentRepository {
     return attempt ? mapAttempt(attempt) : null;
   }
 
+  async findOwnedStatusRecords(eventIds: readonly string[], userId: string) {
+    if (eventIds.length === 0) return [];
+    const events = await this.prisma.event.findMany({
+      where: {
+        id: { in: [...eventIds] },
+        organizer: { userId },
+        deletedAt: null,
+        removedAt: null,
+      },
+      select: {
+        id: true,
+        paymentAttempts: {
+          where: { userId },
+          orderBy: { attemptGeneration: "desc" },
+          take: 1,
+        },
+        publication: {
+          select: { canonicalPath: true, publishedAt: true },
+        },
+      },
+    });
+    return events.map((event) => ({
+      eventId: event.id,
+      attempt: event.paymentAttempts[0]
+        ? mapAttempt(event.paymentAttempts[0])
+        : null,
+      publication: event.publication,
+    }));
+  }
+
   async findPublicationForEvent(eventId: string) {
     const publication = await this.prisma.eventPublication.findUnique({
       where: { eventId },
