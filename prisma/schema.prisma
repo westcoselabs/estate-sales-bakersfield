@@ -574,11 +574,15 @@ model UploadReservation {
   expiresAt        DateTime  @map("expires_at") @db.Timestamptz(3)
   consumedAt       DateTime? @map("consumed_at") @db.Timestamptz(3)
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  clientUploadId   String?   @map("client_upload_id") @db.Uuid
+  maximumSizeInBytes Int     @default(15728640) @map("maximum_size_in_bytes")
+  processingAttemptId String? @map("processing_attempt_id") @db.Uuid
 
   event Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
   photo EventPhoto @relation(fields: [photoId], references: [id], onDelete: Cascade)
 
   @@index([eventId, expiresAt])
+  @@unique([eventId, clientUploadId])
   @@map("upload_reservations")
 }
 

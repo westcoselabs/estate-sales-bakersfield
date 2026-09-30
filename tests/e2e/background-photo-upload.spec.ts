@@ -306,7 +306,12 @@ test("uploads in the background while review and unsaved details stay usable", a
         }),
       )
       .toBe(0.6);
-    const { data, info } = await sharp(await cover.screenshot())
+    // Give the preview room below the sticky navigation before measuring its pixels.
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    const { data, info } = await sharp(
+      await cover.screenshot({ path: testInfo.outputPath("cover-pixels.png") }),
+    )
       .removeAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
@@ -321,7 +326,8 @@ test("uploads in the background while review and unsaved details stay usable", a
       if (red > 195 && green > 135 && green < 205 && blue < 65)
         edges.right += 1;
     }
-    for (const count of Object.values(edges)) expect(count).toBeGreaterThan(20);
+    for (const [edge, count] of Object.entries(edges))
+      expect(count, `${edge}: ${JSON.stringify(edges)}`).toBeGreaterThan(20);
     await page.locator(".builder-preview-card").screenshot({
       path: testInfo.outputPath("uncropped-background-upload-cover.png"),
     });
@@ -337,13 +343,17 @@ test("uploads in the background while review and unsaved details stay usable", a
     const retryRow = manager
       .locator(":scope > li")
       .filter({ hasText: "retry-transfer.jpg" });
-    await expect(retryRow).toHaveAttribute("data-status", "failed", {
-      timeout: 30_000,
-    });
-    await expect(
-      retryRow.getByRole("button", { name: "Retry", exact: true }),
-    ).toBeEnabled();
-    await retryRow.getByRole("button", { name: "Retry", exact: true }).click();
+    if (process.env.TEST_PHOTO_UPLOAD_V2 !== "true") {
+      await expect(retryRow).toHaveAttribute("data-status", "failed", {
+        timeout: 30_000,
+      });
+      await expect(
+        retryRow.getByRole("button", { name: "Retry", exact: true }),
+      ).toBeEnabled();
+      await retryRow
+        .getByRole("button", { name: "Retry", exact: true })
+        .click();
+    }
     await expect(retryRow).toHaveAttribute("data-status", "ready", {
       timeout: 30_000,
     });
@@ -361,12 +371,16 @@ test("uploads in the background while review and unsaved details stay usable", a
     expect(activePhotos).toHaveLength(4);
     expect(activePhotos.every((photo) => photo.status === "READY")).toBe(true);
     expect(activePhotos.filter((photo) => photo.isCover)).toHaveLength(1);
-    expect(removedPhotos).toHaveLength(1);
-    expect(removedPhotos[0]).toMatchObject({
-      status: "FAILED",
-      isCover: false,
-      errorCode: "MEDIA_DELETION_PENDING",
-    });
+    if (process.env.TEST_PHOTO_UPLOAD_V2 === "true") {
+      expect(removedPhotos).toHaveLength(0);
+    } else {
+      expect(removedPhotos).toHaveLength(1);
+      expect(removedPhotos[0]).toMatchObject({
+        status: "FAILED",
+        isCover: false,
+        errorCode: "MEDIA_DELETION_PENDING",
+      });
+    }
     expect(transferCounts.get("retry-transfer.jpg")).toBe(2);
     for (const fileName of [
       "slow-portrait.jpg",

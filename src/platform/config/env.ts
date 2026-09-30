@@ -62,6 +62,7 @@ export const serverEnvironmentSchema = z
     NODE_ENV: z.enum(["development", "test", "production"]),
     APP_ENV: appEnvironmentSchema,
     PRODUCTION_BETA_MODE: optionalBooleanFlag,
+    PHOTO_UPLOAD_V2_PERCENT: z.coerce.number().int().min(0).max(100).default(0),
     PUBLIC_INDEXING_ENABLED: optionalBooleanFlag,
     PUBLIC_IMPORTED_INDEXING_ENABLED: optionalBooleanFlag,
     // Daily Hobby workers may start within the scheduled hour. Revisit on Pro.

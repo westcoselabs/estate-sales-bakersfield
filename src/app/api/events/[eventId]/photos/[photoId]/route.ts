@@ -1,4 +1,5 @@
 import { requireUser } from "@/modules/auth";
+import { z } from "zod";
 import {
   createConfiguredEventService,
   photoMutationSchema,
@@ -21,13 +22,16 @@ export async function DELETE(request: Request, context: Context) {
   try {
     assertAuthenticationOrigin(request);
     const { eventId, photoId } = await context.params;
-    const input = photoMutationSchema.parse(await readJson(request));
+    const input = photoMutationSchema
+      .extend({ cleanupNow: z.boolean().optional() })
+      .parse(await readJson(request));
     const event = await createConfiguredEventService().deletePhoto(
       await requireUser(),
       eventId,
       photoId,
       input.expectedVersion,
       { requestId },
+      input.cleanupNow,
     );
     return authJson({ event, requestId }, { requestId });
   } catch (error) {

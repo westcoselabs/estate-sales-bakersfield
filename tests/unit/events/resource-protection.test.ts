@@ -9,6 +9,7 @@ import {
   MAXIMUM_SOURCE_BYTES_PER_ACCOUNT,
   MAXIMUM_ACCOUNT_PHOTO_PROCESSING,
 } from "@/modules/events/domain/resource-policy";
+import { readyEvent } from "./fixtures";
 import { principal } from "../payments/fixtures";
 
 describe("event resource admission", () => {
@@ -92,12 +93,14 @@ describe("event resource admission", () => {
     const first = new DatabaseEventWorkLimiter({} as never);
     const second = new DatabaseEventWorkLimiter({} as never);
     const release = first.acquireProcessing();
+    const secondRelease = second.acquireProcessing();
     expect(() => second.acquireProcessing()).toThrow(EventResourceLimitError);
     release();
     release();
     const nextRelease = second.acquireProcessing();
     expect(() => first.acquireProcessing()).toThrow(EventResourceLimitError);
     nextRelease();
+    secondRelease();
   });
 
   it("fails closed on limiter failure and returns provider retry time on denial", async () => {
@@ -122,15 +125,20 @@ describe("event resource admission", () => {
   });
 
   it("leaves the upload untouched when no runtime processing slot is available", async () => {
-    const findOwned = vi.fn();
+    const current = readyEvent({ id: "22222222-2222-4222-8222-222222222222" });
+    const findOwned = vi.fn(async () => current);
     const read = vi.fn();
     const limiter = new DatabaseEventWorkLimiter({
       consume: async () => ({ allowed: true }),
     } as never);
     const release = limiter.acquireProcessing();
+    const secondRelease = limiter.acquireProcessing();
     try {
       const service = new EventService(
-        { findOwned } as never,
+        {
+          findOwned,
+          findPhotoReservation: async () => ({ stagingObjectKey: "unused" }),
+        } as never,
         {} as never,
         { read } as never,
         {} as never,
@@ -139,16 +147,17 @@ describe("event resource admission", () => {
         limiter,
       );
       await expect(
-        service.finalizePhoto(principal, "event", "photo", {
+        service.finalizePhoto(principal, current.id, "photo", {
           reservationId: "reservation",
           expectedVersion: 1,
           pathname: "unused",
         }),
       ).rejects.toMatchObject({ code: "PROCESSING_BUSY" });
-      expect(findOwned).not.toHaveBeenCalled();
+      expect(findOwned).toHaveBeenCalled();
       expect(read).not.toHaveBeenCalled();
     } finally {
       release();
+      secondRelease();
     }
   });
 
@@ -233,7 +242,10 @@ describe("event resource admission", () => {
     const updateMany = vi.fn();
     const transaction = {
       $queryRaw: async () => [],
-      eventPhoto: { count: async () => 2 },
+      eventPhoto: {
+        count: async () => 2,
+        findFirst: async () => ({ id: "photo" }),
+      },
       event: { updateMany },
     };
     const repository = new PrismaEventRepository({

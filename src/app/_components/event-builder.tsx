@@ -26,6 +26,8 @@ import type {
   EventType,
 } from "@/modules/events";
 import { uploadPrivateMedia } from "@/modules/media/client";
+import { PhotoUploadError } from "@/modules/media/client/upload";
+import { createPhotoPreparer } from "@/modules/media/client/photo-preparer";
 import { preparePhotoForUpload } from "@/modules/media/client/prepare-photo";
 
 import {
@@ -39,6 +41,9 @@ import { photoBatchSummary, photoUploadTimeoutMs } from "./photo-upload-state";
 import {
   createPhotoMutationQueue,
   runPhotoUploadPipeline,
+  runStagedPhotoUploadPipeline,
+  waitForPhotoRetry,
+  waitForPhotoConnection,
 } from "./photo-upload-pipeline";
 import uploadStyles from "./photo-upload-progress.module.css";
 import { EventScheduleEditor } from "./event-schedule-editor";
@@ -85,11 +90,25 @@ interface MessageResponse {
 
 type Feedback = { readonly kind: "success" | "error"; readonly text: string };
 type UploadStatus =
-  "selected" | "reserving" | "uploading" | "processing" | "ready" | "failed";
+  | "selected"
+  | "preparing"
+  | "reserving"
+  | "uploading"
+  | "processing"
+  | "ready"
+  | "failed";
+
+type UploadReservationDetails<T = EventPhotoReservationDto> =
+  T extends EventPhotoReservationDto ? Omit<T, "event"> : never;
 
 interface UploadItem {
   readonly id: string;
   readonly file?: File | undefined;
+  readonly prepared?: boolean;
+  readonly originalBytes?: number;
+  readonly loadedBytes?: number;
+  readonly clientUploadId?: string;
+  readonly reservation?: UploadReservationDetails | undefined;
   readonly fileName: string;
   readonly fileSize: number;
   readonly previewUrl: string;
@@ -268,6 +287,7 @@ function PhotoActionDropdown({
 type UploadAttemptResult = "ready" | "failed" | "pending";
 
 interface ReservedPhotoUpload {
+  readonly transferComplete?: boolean;
   readonly item: UploadItem;
   readonly reservation: EventPhotoReservationDto;
 }
@@ -338,6 +358,7 @@ const LocationConfirmationMap = dynamic(
 
 const UPLOAD_STATUS_LABELS: Readonly<Record<UploadStatus, string>> = {
   selected: "Waiting",
+  preparing: "Preparing",
   reserving: "Preparing",
   uploading: "Uploading",
   processing: "Finishing",
@@ -352,7 +373,7 @@ function formatFileSize(bytes: number): string {
 
 function UploadPreview({ item }: { readonly item: UploadItem }) {
   const [failedSource, setFailedSource] = useState("");
-  if (failedSource === item.previewUrl) {
+  if (!item.previewUrl || failedSource === item.previewUrl) {
     return <div className="upload-preview-fallback">Preview unavailable</div>;
   }
   return (
@@ -503,11 +524,13 @@ export function EventBuilder({
   termsVersion,
   accountEmail,
   initialEmailVerified,
+  photoUploadV2 = false,
 }: {
   readonly initialEvent: EventEditorDto;
   readonly termsVersion: string;
   readonly accountEmail: string;
   readonly initialEmailVerified: boolean;
+  readonly photoUploadV2?: boolean;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState(initialEvent);
@@ -592,6 +615,7 @@ export function EventBuilder({
     "idle" | "valid" | "invalid"
   >("idle");
   const uploadActiveRef = useRef(false);
+  const batchController = useRef<AbortController | null>(null);
   const photoMutationQueue = useRef(createPhotoMutationQueue());
   const disposed = useRef(false);
   const operationActiveRef = useRef(false);
@@ -786,15 +810,20 @@ export function EventBuilder({
     method = "GET",
     body?: unknown,
     timeoutMs = 25_000,
+    signal?: AbortSignal,
   ): Promise<T> {
     if (disposed.current)
       throw new DOMException("Upload stopped", "AbortError");
+    signal?.throwIfAborted();
     const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal?.addEventListener("abort", abort, { once: true });
     controllers.current.add(controller);
     const timer = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
       return await jsonRequest<T>(url, method, body, controller.signal);
     } catch (error) {
+      signal?.throwIfAborted();
       if (error instanceof DOMException && error.name === "AbortError") {
         throw new Error(
           "The server took too long to respond. Nothing was marked saved; try again.",
@@ -803,6 +832,7 @@ export function EventBuilder({
       throw error;
     } finally {
       window.clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
       controllers.current.delete(controller);
     }
   }
@@ -1038,13 +1068,14 @@ export function EventBuilder({
     );
     let acceptedForCapacity = 0;
     const items = selected.map<UploadItem>((file) => {
-      let error = !ACCEPTED_PHOTO_TYPES.has(file.type)
-        ? "Unsupported format. Choose JPEG, PNG, WebP, HEIC, or HEIF."
-        : file.size <= 0
-          ? "This file is empty."
-          : file.size > MAX_PHOTO_BYTES
-            ? "This file exceeds the 15 MB limit."
-            : undefined;
+      let error =
+        !photoUploadV2 && !ACCEPTED_PHOTO_TYPES.has(file.type)
+          ? "Unsupported format. Choose JPEG, PNG, WebP, HEIC, or HEIF."
+          : file.size <= 0
+            ? "This file is empty."
+            : file.size > MAX_PHOTO_BYTES
+              ? "This file exceeds the 15 MB limit."
+              : undefined;
       if (!error && acceptedForCapacity >= remainingCapacity) {
         error = `This sale already has the maximum of ${String(MAX_EVENT_PHOTOS)} photos.`;
       }
@@ -1054,7 +1085,7 @@ export function EventBuilder({
         file,
         fileName: file.name,
         fileSize: file.size,
-        previewUrl: URL.createObjectURL(file),
+        previewUrl: photoUploadV2 ? "" : URL.createObjectURL(file),
         previewIsLocal: true,
         status: error ? "failed" : "selected",
         progress: 0,
@@ -1062,7 +1093,8 @@ export function EventBuilder({
         error,
       };
     });
-    for (const item of items) previewUrls.current.add(item.previewUrl);
+    for (const item of items)
+      if (item.previewUrl) previewUrls.current.add(item.previewUrl);
     setUploads((current) => [...current, ...items]);
     void uploadSelected(items);
   }
@@ -1113,12 +1145,13 @@ export function EventBuilder({
     );
   }
 
-  async function refreshEvent(timeoutMs = 25_000) {
+  async function refreshEvent(timeoutMs = 25_000, signal?: AbortSignal) {
     const response = await request<EventResponse>(
       `/api/events/${draftRef.current.id}`,
       "GET",
       undefined,
       timeoutMs,
+      signal,
     );
     acceptEvent(response.event);
     return response.event;
@@ -1142,6 +1175,7 @@ export function EventBuilder({
     if (!photo) return false;
     updateUpload(item.id, {
       file: undefined,
+      reservation: undefined,
       previewUrl: photo.urls.thumbnail,
       previewIsLocal: false,
       status: "ready",
@@ -1154,33 +1188,31 @@ export function EventBuilder({
     return true;
   }
 
-  async function waitForPhotoReconciliation() {
-    await new Promise<void>((resolve) => {
-      window.setTimeout(resolve, PHOTO_RECONCILIATION_DELAY_MS);
-    });
-  }
-
   async function reconcilePhotoAfterFailure(
     photoId: string,
     finalizeAttempted: boolean,
+    signal: AbortSignal,
   ): Promise<"ready" | "retryable" | "pending"> {
     for (
       let attempt = 0;
       attempt < PHOTO_RECONCILIATION_ATTEMPTS;
       attempt += 1
     ) {
+      signal.throwIfAborted();
       try {
         const event = await refreshEvent(
           PHOTO_RECONCILIATION_REQUEST_TIMEOUT_MS,
+          signal,
         );
         const photo = event.photos.find(
           (candidate) => candidate.id === photoId,
         );
         if (photo?.status === "READY") return "ready";
         if (photo?.status === "FAILED") return "retryable";
+        if (photoUploadV2 && photo?.status === "RESERVED") return "retryable";
         if (!finalizeAttempted && photo?.status === "RESERVED") {
           try {
-            await cleanupReservation(photoId);
+            await cleanupReservation(photoId, signal, true);
             return "retryable";
           } catch {
             return "pending";
@@ -1190,23 +1222,49 @@ export function EventBuilder({
         // A transient read failure is ambiguous; never make Retry available from it.
       }
       if (attempt + 1 < PHOTO_RECONCILIATION_ATTEMPTS) {
-        await waitForPhotoReconciliation();
+        await waitForPhotoRetry(PHOTO_RECONCILIATION_DELAY_MS, signal);
       }
     }
     return "pending";
   }
 
-  async function cleanupReservation(photoId: string) {
-    const response = await request<EventResponse>(
-      `/api/events/${draftRef.current.id}/photos/${photoId}`,
-      "DELETE",
-      { expectedVersion: draftRef.current.version },
-    );
-    acceptEvent(response.event);
+  async function cleanupReservation(
+    photoId: string,
+    signal?: AbortSignal,
+    retryOnly = false,
+  ) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      signal?.throwIfAborted();
+      if (
+        retryOnly &&
+        draftRef.current.photos.some(
+          (photo) => photo.id === photoId && photo.status === "READY",
+        )
+      )
+        throw new Error("This photo has already finished. Refresh to see it.");
+      try {
+        const response = await request<EventResponse>(
+          `/api/events/${draftRef.current.id}/photos/${photoId}`,
+          "DELETE",
+          {
+            expectedVersion: draftRef.current.version,
+            ...(photoUploadV2 && retryOnly ? { cleanupNow: true } : {}),
+          },
+          25_000,
+          signal,
+        );
+        acceptEvent(response.event);
+        return;
+      } catch (error) {
+        if (!(error instanceof StaleVersionError) || attempt === 2) throw error;
+        await refreshEvent();
+      }
+    }
   }
 
   async function reserveUpload(
     item: UploadItem,
+    signal?: AbortSignal,
   ): Promise<ReservedPhotoUpload | undefined> {
     const file = item.file;
     if (!file) {
@@ -1219,16 +1277,45 @@ export function EventBuilder({
       return undefined;
     }
     try {
+      signal?.throwIfAborted();
+      if (photoUploadV2 && item.reservation) await refreshEvent(25_000, signal);
+      if (
+        photoUploadV2 &&
+        item.reservation &&
+        draftRef.current.photos.some((photo) => photo.id === item.photoId)
+      ) {
+        const existing = item.reservation;
+        const state = await request<{ status: string; event: EventEditorDto }>(
+          `/api/events/${draftRef.current.id}/photos/${existing.photoId}/transfer?reservationId=${existing.reservationId}`,
+          "GET",
+          undefined,
+          25_000,
+          signal,
+        );
+        acceptEvent(state.event);
+        if (state.status !== "FAILED") {
+          return {
+            item,
+            reservation: { ...existing, event: state.event },
+            transferComplete: ["UPLOADED", "PROCESSING", "READY"].includes(
+              state.status,
+            ),
+          };
+        }
+      }
+      const clientUploadId = item.photoId
+        ? crypto.randomUUID()
+        : (item.clientUploadId ?? item.id);
       if (
         item.photoId &&
         draftRef.current.photos.some(
           (photo) =>
             photo.id === item.photoId &&
             photo.status !== "READY" &&
-            photo.errorCode !== "MEDIA_DELETION_PENDING",
+            (photoUploadV2 || photo.errorCode !== "MEDIA_DELETION_PENDING"),
         )
       ) {
-        await cleanupReservation(item.photoId);
+        await cleanupReservation(item.photoId, signal, true);
         updateUpload(item.id, { photoId: undefined });
       }
       updateUpload(item.id, {
@@ -1237,17 +1324,31 @@ export function EventBuilder({
         retryable: false,
         error: undefined,
       });
-      const reserved = await request<ReservationResponse>(
-        `/api/events/${draftRef.current.id}/photos/reserve`,
-        "POST",
-        {
-          expectedVersion: draftRef.current.version,
-          contentType: file.type,
-          fileName: item.fileName,
-        },
-      );
-      acceptEvent(reserved.reservation.event);
-      updateUpload(item.id, { photoId: reserved.reservation.photoId });
+      if (photoUploadV2) updateUpload(item.id, { clientUploadId });
+      const reserveRequest = () =>
+        request<ReservationResponse>(
+          `/api/events/${draftRef.current.id}/photos/reserve`,
+          "POST",
+          {
+            expectedVersion: draftRef.current.version,
+            contentType: file.type,
+            fileName: file.name,
+            ...(photoUploadV2 ? { clientUploadId, byteLength: file.size } : {}),
+          },
+          25_000,
+          signal,
+        );
+      let reserved: ReservationResponse;
+      try {
+        reserved = await reserveRequest();
+      } catch (error) {
+        signal?.throwIfAborted();
+        if (!photoUploadV2 || error instanceof ApiRequestError) throw error;
+        reserved = await reserveRequest();
+      }
+      const { event: snapshot, ...reservation } = reserved.reservation;
+      acceptEvent(snapshot);
+      updateUpload(item.id, { photoId: reservation.photoId, reservation });
       return { item, reservation: reserved.reservation };
     } catch (error) {
       updateUpload(item.id, {
@@ -1263,88 +1364,144 @@ export function EventBuilder({
   async function transferReservedUpload(
     reserved: ReservedPhotoUpload,
     expectedVersion: number,
+    batchSignal?: AbortSignal,
+    outcome?: (kind: "retry" | "reconciled") => void,
   ): Promise<TransferredPhotoUpload | undefined> {
     const { item, reservation } = reserved;
     const file = item.file;
     if (!file) return undefined;
+    if (
+      reserved.transferComplete ||
+      reservation.event.photos.some(
+        (photo) =>
+          photo.id === reservation.photoId &&
+          ["READY", "PROCESSING"].includes(photo.status),
+      )
+    ) {
+      updateUpload(item.id, {
+        status: "processing",
+        progress: 100,
+        loadedBytes: file.size,
+        photoId: reservation.photoId,
+        retryable: false,
+      });
+      return { reserved, pathname: reservation.uploadPathname };
+    }
     updateUpload(item.id, {
       status: "uploading",
-      progress: 10,
+      progress: 0,
       retryable: false,
       photoId: reservation.photoId,
       error: undefined,
     });
     const controller = new AbortController();
     controllers.current.add(controller);
-    let uploadTimedOut = false;
-    const timer = window.setTimeout(() => {
-      uploadTimedOut = true;
-      controller.abort();
-    }, photoUploadTimeoutMs(file.size));
+    const abort = () => controller.abort();
+    batchSignal?.addEventListener("abort", abort, { once: true });
+    if (batchSignal?.aborted) abort();
+    const timer = window.setTimeout(abort, photoUploadTimeoutMs(file.size));
     try {
-      let pathname: string;
-      if (reservation.transport === "vercel-client") {
-        const uploaded = await uploadPrivateMedia({
-          pathname: reservation.uploadPathname,
-          file,
-          handleUploadUrl: `/api/events/${draftRef.current.id}/photos/upload`,
-          clientPayload: JSON.stringify({
-            expectedVersion,
-            reservationId: reservation.reservationId,
-            photoId: reservation.photoId,
-          }),
-          contentType: file.type,
-          abortSignal: controller.signal,
-          onProgress(percentage) {
-            updateUpload(item.id, {
-              progress: Math.min(90, 10 + Math.round(percentage * 0.8)),
+      let pathname = reservation.uploadPathname;
+      for (let attempt = 0; attempt < (photoUploadV2 ? 3 : 1); attempt++) {
+        controller.signal.throwIfAborted();
+        if (photoUploadV2) await waitForPhotoConnection(controller.signal);
+        try {
+          if (reservation.transport === "vercel-client") {
+            const uploaded = await uploadPrivateMedia({
+              pathname,
+              file,
+              handleUploadUrl: `/api/events/${draftRef.current.id}/photos/upload`,
+              clientPayload: JSON.stringify({
+                ...(photoUploadV2 ? {} : { expectedVersion }),
+                reservationId: reservation.reservationId,
+                photoId: reservation.photoId,
+              }),
+              contentType: file.type,
+              abortSignal: controller.signal,
+              onProgress(percentage) {
+                updateUpload(item.id, {
+                  progress: photoUploadV2
+                    ? Math.round(percentage)
+                    : Math.min(90, 10 + Math.round(percentage * 0.8)),
+                  loadedBytes: Math.round((file.size * percentage) / 100),
+                });
+              },
             });
-          },
-        });
-        pathname = uploaded.pathname;
-      } else {
-        const upload = await fetch(reservation.uploadUrl, {
-          method: reservation.method,
-          headers: {
-            ...reservation.uploadHeaders,
-            "Content-Type": file.type,
-          },
-          body: file,
-          signal: controller.signal,
-        });
-        if (!upload.ok) {
-          throw new Error(
-            `The photo upload failed (${String(upload.status)}). Please retry.`,
+            pathname = uploaded.pathname;
+          } else {
+            const response = await fetch(reservation.uploadUrl, {
+              method: reservation.method,
+              headers: {
+                ...reservation.uploadHeaders,
+                "Content-Type": file.type,
+              },
+              body: file,
+              signal: controller.signal,
+            });
+            if (!response.ok)
+              throw new ApiRequestError(
+                `The photo upload failed (${String(response.status)}). Please retry.`,
+                response.status === 429 || response.status >= 500
+                  ? "TRANSFER_TRANSIENT"
+                  : "TRANSFER_REJECTED",
+              );
+          }
+          break;
+        } catch (error) {
+          if (
+            !photoUploadV2 ||
+            controller.signal.aborted ||
+            (error instanceof PhotoUploadError &&
+              error.code !== "TRANSFER_FAILED") ||
+            (error instanceof ApiRequestError &&
+              error.code !== "TRANSFER_TRANSIENT")
+          )
+            throw error;
+          await waitForPhotoConnection(controller.signal);
+          const state = await request<{
+            status: string;
+            event: EventEditorDto;
+          }>(
+            `/api/events/${draftRef.current.id}/photos/${reservation.photoId}/transfer?reservationId=${reservation.reservationId}`,
+            "GET",
+            undefined,
+            25_000,
+            controller.signal,
+          );
+          acceptEvent(state.event);
+          if (["UPLOADED", "PROCESSING", "READY"].includes(state.status)) {
+            outcome?.("reconciled");
+            break;
+          }
+          if (state.status === "FAILED" || attempt === 2) throw error;
+          outcome?.("retry");
+          await waitForPhotoRetry(
+            1000 * 2 ** attempt + Math.random() * 500,
+            controller.signal,
           );
         }
-        pathname = reservation.uploadPathname;
       }
-      if (pathname !== reservation.uploadPathname) {
+      if (pathname !== reservation.uploadPathname)
         throw new Error("The uploaded Blob did not match its reservation.");
-      }
-      updateUpload(item.id, { status: "uploading", progress: 90 });
       updateUpload(item.id, {
         status: "processing",
-        progress: 95,
+        progress: photoUploadV2 ? 100 : 95,
+        loadedBytes: file.size,
         retryable: false,
       });
       return { reserved, pathname };
     } catch (error) {
-      const message = uploadTimedOut
-        ? "Upload timed out before the Blob transfer completed. Check your connection and retry."
-        : error instanceof Error
-          ? error.message
-          : "Photo upload failed.";
       updateUpload(item.id, {
         status: "failed",
         progress: 0,
         retryable: true,
         photoId: reservation.photoId,
-        error: message,
+        error: error instanceof Error ? error.message : "Photo upload failed.",
       });
       return undefined;
     } finally {
       window.clearTimeout(timer);
+      batchSignal?.removeEventListener("abort", abort);
       controllers.current.delete(controller);
     }
   }
@@ -1358,19 +1515,23 @@ export function EventBuilder({
     let finalizeAttempted = false;
     try {
       let completed: EventResponse | undefined;
-      for (let attempt = 0; attempt < 4; attempt += 1) {
+      for (let attempt = 0; attempt < (photoUploadV2 ? 12 : 4); attempt += 1) {
         signal.throwIfAborted();
+        if (photoUploadV2) await waitForPhotoConnection(signal);
         finalizeAttempted = true;
         try {
           completed = await request<EventResponse>(
             `/api/events/${draftRef.current.id}/photos/${photoId}/finalize`,
             "POST",
             {
-              expectedVersion: draftRef.current.version,
+              ...(photoUploadV2
+                ? {}
+                : { expectedVersion: draftRef.current.version }),
               reservationId: reservation.reservationId,
               pathname: transfer.pathname,
             },
             90_000,
+            signal,
           );
           break;
         } catch (error) {
@@ -1388,7 +1549,7 @@ export function EventBuilder({
               "RATE_LIMITED",
               "LIMITER_UNAVAILABLE",
             ].includes(error.code ?? "") ||
-            attempt === 3
+            attempt === (photoUploadV2 ? 11 : 3)
           )
             throw error;
           // The server has not consumed this upload. Reuse its bytes after the
@@ -1415,12 +1576,30 @@ export function EventBuilder({
       }
       if (!completed)
         throw new Error("This photo could not be finished. Please try again.");
+      if (
+        completed.event.photos.some(
+          (photo) => photo.id === photoId && photo.status === "PROCESSING",
+        )
+      ) {
+        for (let poll = 0; poll < 60; poll++) {
+          await waitForPhotoRetry(1500, signal);
+          await waitForPhotoConnection(signal);
+          const event = await refreshEvent(25_000, signal);
+          completed = { event };
+          if (
+            !event.photos.some(
+              (photo) => photo.id === photoId && photo.status === "PROCESSING",
+            )
+          )
+            break;
+        }
+      }
       acceptEvent(completed.event);
       if (
         !completed.event.photos.some(
           (photo) => photo.id === photoId && photo.status === "READY",
         ) ||
-        !markUploadReady(item, photoId, completed.event)
+        !markUploadReady(item, photoId, draftRef.current)
       ) {
         throw new Error(
           "Image processing failed. The server did not provide a ready photo.",
@@ -1444,6 +1623,7 @@ export function EventBuilder({
       const reconciliation = await reconcilePhotoAfterFailure(
         photoId,
         finalizeAttempted,
+        signal,
       );
       if (
         reconciliation === "ready" &&
@@ -1458,7 +1638,7 @@ export function EventBuilder({
           retryable: false,
           photoId,
           error:
-            "This photo is still being checked. Refresh the page to check its progress.",
+            "This photo is still being checked. Use Check finishing photos to see its progress.",
         });
         return "pending";
       }
@@ -1481,9 +1661,23 @@ export function EventBuilder({
     ) {
       return;
     }
+    if (photoUploadV2 && uploads.some((item) => item.status === "processing")) {
+      for (const item of batch)
+        updateUpload(item.id, {
+          status: "failed",
+          retryable: Boolean(item.file),
+          error: "Check finishing photos, then retry this photo.",
+        });
+      setStepFeedback("photos", {
+        kind: "error",
+        text: "Check finishing photos before starting another batch.",
+      });
+      return;
+    }
     uploadActiveRef.current = true;
     setUploadActive(true);
     const controller = new AbortController();
+    batchController.current = controller;
     controllers.current.add(controller);
     setStepFeedback("photos", { kind: "success", text: "" });
     const hadReadyPhotos = draftRef.current.photos.some(
@@ -1502,67 +1696,203 @@ export function EventBuilder({
       let succeeded = 0;
       let failed = batch.length - candidates.length;
       let awaitingConfirmation = 0;
-      await runPhotoUploadPipeline(candidates, {
-        concurrency: MAX_PARALLEL_PHOTO_TRANSFERS,
-        signal: controller.signal,
-        process: async (item) => {
-          try {
-            if (!item.file) return;
-            updateUpload(item.id, {
-              status: "reserving",
-              progress: 0,
-              error: undefined,
-            });
-            const prepared = await preparePhotoForUpload(item.file, {
-              signal: controller.signal,
-            });
-            controller.signal.throwIfAborted();
-            const preparedItem = {
-              ...item,
-              file: prepared.file,
-              fileSize: prepared.file.size,
-            };
-            updateUpload(item.id, {
-              file: prepared.file,
-              fileSize: prepared.file.size,
-            });
-            const reservation = await photoMutationQueue.current(() =>
-              reserveUpload(preparedItem),
-            );
-            if (!reservation) {
+      if (photoUploadV2) {
+        const preparer = createPhotoPreparer();
+        const started = performance.now();
+        const originalBytes = candidates.reduce(
+          (sum, item) => sum + (item.originalBytes ?? item.file?.size ?? 0),
+          0,
+        );
+        let preparedBytes = 0;
+        let preparationMs = 0;
+        let softwareDecoded = 0;
+        let transferRetries = 0;
+        let reconciledTransfers = 0;
+        let reservationMs = 0;
+        let transferMs = 0;
+        let finishingMs = 0;
+        try {
+          await runStagedPhotoUploadPipeline(candidates, {
+            signal: controller.signal,
+            prepare: async (item) => {
+              if (!item.file) throw new Error("Select this photo again.");
+              updateUpload(item.id, {
+                status: "preparing",
+                progress: 0,
+                error: undefined,
+                loadedBytes: 0,
+              });
+              if (item.prepared) {
+                preparedBytes += item.file.size;
+                return item;
+              }
+              const result = await preparer.prepare(
+                item.file,
+                controller.signal,
+              );
+              const previewUrl = URL.createObjectURL(result.thumbnail);
+              previewUrls.current.add(previewUrl);
+              releaseLocalPreview(item);
+              const prepared = {
+                ...item,
+                file: result.file,
+                fileSize: result.file.size,
+                prepared: true,
+                originalBytes: result.originalBytes,
+                previewUrl,
+                previewIsLocal: true,
+                status: "reserving" as const,
+                error: undefined,
+              };
+              updateUpload(item.id, prepared);
+              preparedBytes += result.file.size;
+              preparationMs += result.preparationMs;
+              if (result.decoder === "software") softwareDecoded++;
+              return prepared;
+            },
+            reserve: async (item) => {
+              await waitForPhotoConnection(controller.signal);
+              const stageStart = performance.now();
+              const result = await photoMutationQueue.current(() =>
+                reserveUpload(item, controller.signal),
+              );
+              reservationMs += performance.now() - stageStart;
+              if (!result) throw new Error("handled");
+              return result;
+            },
+            transfer: async (reservation) => {
+              const stageStart = performance.now();
+              const result = await transferReservedUpload(
+                reservation,
+                reservation.reservation.event.version,
+                controller.signal,
+                (kind) => {
+                  if (kind === "retry") transferRetries++;
+                  else reconciledTransfers++;
+                },
+              );
+              transferMs += performance.now() - stageStart;
+              if (!result) throw new Error("handled");
+              return result;
+            },
+            finalize: async (transfer) => {
+              const stageStart = performance.now();
+              const result = await finalizeTransferredUpload(
+                transfer,
+                controller.signal,
+              );
+              finishingMs += performance.now() - stageStart;
+              if (result === "ready") succeeded++;
+              else if (result === "pending") {
+                awaitingConfirmation++;
+                // Keep unresolved server work inside the pending bound. Resume
+                // after checking its outcome, rather than admitting more bytes.
+                controller.abort();
+              } else failed++;
+            },
+            failed: (item, error) => {
+              failed++;
+              if (!(error instanceof Error && error.message === "handled"))
+                updateUpload(item.id, {
+                  status: "failed",
+                  retryable: true,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "Photo preparation failed.",
+                });
+            },
+          });
+        } finally {
+          preparer.dispose();
+          if (!controller.signal.aborted && batch.length <= MAX_EVENT_PHOTOS)
+            void fetch(`/api/events/${draftRef.current.id}/photos/metrics`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({
+                batchId: crypto.randomUUID(),
+                selected: batch.length,
+                ready: succeeded,
+                failed,
+                pending: awaitingConfirmation,
+                originalBytes,
+                preparedBytes,
+                reservationMs: Math.round(reservationMs),
+                transferMs: Math.round(transferMs),
+                finishingMs: Math.round(finishingMs),
+                preparationMs: Math.round(preparationMs),
+                totalMs: Math.round(performance.now() - started),
+                softwareDecoded,
+                transferRetries,
+                reconciledTransfers,
+              }),
+            }).catch(() => undefined);
+        }
+      } else {
+        await runPhotoUploadPipeline(candidates, {
+          concurrency: MAX_PARALLEL_PHOTO_TRANSFERS,
+          signal: controller.signal,
+          process: async (item) => {
+            try {
+              if (!item.file) return;
+              updateUpload(item.id, {
+                status: "reserving",
+                progress: 0,
+                error: undefined,
+              });
+              const prepared = await preparePhotoForUpload(item.file, {
+                signal: controller.signal,
+              });
+              controller.signal.throwIfAborted();
+              const preparedItem = {
+                ...item,
+                file: prepared.file,
+                fileSize: prepared.file.size,
+              };
+              updateUpload(item.id, {
+                file: prepared.file,
+                fileSize: prepared.file.size,
+              });
+              const reservation = await photoMutationQueue.current(() =>
+                reserveUpload(preparedItem),
+              );
+              if (!reservation) {
+                failed += 1;
+                return;
+              }
+              controller.signal.throwIfAborted();
+              const transfer = await transferReservedUpload(
+                reservation,
+                reservation.reservation.event.version,
+              );
+              if (!transfer) {
+                failed += 1;
+                return;
+              }
+              const result = await photoMutationQueue.current(() =>
+                finalizeTransferredUpload(transfer, controller.signal),
+              );
+              if (result === "ready") succeeded += 1;
+              else if (result === "pending") awaitingConfirmation += 1;
+              else failed += 1;
+            } catch (error) {
+              if (controller.signal.aborted) return;
               failed += 1;
-              return;
+              updateUpload(item.id, {
+                status: "failed",
+                progress: 0,
+                retryable: true,
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : "This photo could not be uploaded. Please try again.",
+              });
             }
-            controller.signal.throwIfAborted();
-            const transfer = await transferReservedUpload(
-              reservation,
-              reservation.reservation.event.version,
-            );
-            if (!transfer) {
-              failed += 1;
-              return;
-            }
-            const result = await photoMutationQueue.current(() =>
-              finalizeTransferredUpload(transfer, controller.signal),
-            );
-            if (result === "ready") succeeded += 1;
-            else if (result === "pending") awaitingConfirmation += 1;
-            else failed += 1;
-          } catch (error) {
-            if (controller.signal.aborted) return;
-            failed += 1;
-            updateUpload(item.id, {
-              status: "failed",
-              progress: 0,
-              retryable: true,
-              error:
-                error instanceof Error
-                  ? error.message
-                  : "This photo could not be uploaded. Please try again.",
-            });
-          }
-        },
-      });
+          },
+        });
+        if (controller.signal.aborted) return;
+      }
       if (controller.signal.aborted) return;
       try {
         await refreshEvent();
@@ -1583,7 +1913,31 @@ export function EventBuilder({
         kind: failed > 0 || awaitingConfirmation > 0 ? "error" : "success",
         text,
       });
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
+      setUploads((current) =>
+        current.map((item) => {
+          if (["ready", "failed"].includes(item.status)) return item;
+          return item.status === "processing"
+            ? {
+                ...item,
+                error:
+                  "This photo is still finishing. Use Check finishing photos to check its status.",
+              }
+            : {
+                ...item,
+                status: "failed",
+                retryable: true,
+                error: "Upload stopped. Retry this photo to continue.",
+              };
+        }),
+      );
+      setStepFeedback("photos", {
+        kind: "error",
+        text: "Uploads stopped. Completed photos are saved; finishing photos may still complete.",
+      });
     } finally {
+      batchController.current = null;
       controllers.current.delete(controller);
       setUploadActive(false);
       uploadActiveRef.current = false;
@@ -1723,6 +2077,46 @@ export function EventBuilder({
           error instanceof Error
             ? error.message
             : "Photo readiness could not be confirmed.",
+      });
+    } finally {
+      finishOperation();
+    }
+  }
+
+  async function checkFinishingPhotos() {
+    if (!beginOperation("check-photos")) return;
+    try {
+      const event = await refreshEvent();
+      for (const item of uploads) {
+        if (!item.photoId || item.status === "ready") continue;
+        if (markUploadReady(item, item.photoId, event)) continue;
+        const photo = event.photos.find(
+          (candidate) => candidate.id === item.photoId,
+        );
+        if (!photo) {
+          updateUpload(item.id, {
+            photoId: undefined,
+            reservation: undefined,
+            status: "failed",
+            retryable: Boolean(item.file),
+            error: "The previous attempt expired. Retry this photo.",
+          });
+          continue;
+        }
+        if (photo?.status === "FAILED" || photo?.status === "RESERVED")
+          updateUpload(item.id, {
+            status: "failed",
+            retryable: Boolean(item.file),
+            error: "Retry this photo to finish uploading.",
+          });
+      }
+    } catch (error) {
+      setStepFeedback("photos", {
+        kind: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Photo status could not be checked.",
       });
     } finally {
       finishOperation();
@@ -1913,7 +2307,9 @@ export function EventBuilder({
     (item) => item.status === "failed",
   ).length;
   const uploadInFlightCount = uploads.filter((item) =>
-    ["selected", "reserving", "uploading", "processing"].includes(item.status),
+    ["selected", "preparing", "reserving", "uploading", "processing"].includes(
+      item.status,
+    ),
   ).length;
   const uploadsByPhotoId = new Map(
     uploads.flatMap((upload) =>
@@ -2441,7 +2837,7 @@ export function EventBuilder({
                 <input
                   className="photo-input"
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
                   multiple
                   aria-label="Event photos (JPEG, PNG, WebP, HEIC, or HEIF; maximum 15 MB each)"
                   onChange={choosePhotos}
@@ -2474,6 +2870,54 @@ export function EventBuilder({
                 <small>JPEG, PNG, WebP, HEIC, or HEIF · Max 15 MB each</small>
                 <small>Up to {MAX_EVENT_PHOTOS} photos</small>
               </label>
+              {photoUploadV2 && uploadActive ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => batchController.current?.abort()}
+                >
+                  Stop uploads
+                </button>
+              ) : null}
+              {photoUploadV2 &&
+              !uploadActive &&
+              uploads.some((item) => item.status === "processing") ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={Boolean(pending)}
+                  onClick={() => void checkFinishingPhotos()}
+                >
+                  Check finishing photos
+                </button>
+              ) : null}
+              {photoUploadV2 && uploads.length > 0 ? (
+                <p role="status" className="upload-queue-summary">
+                  {
+                    uploads.filter((item) =>
+                      ["selected", "preparing", "reserving"].includes(
+                        item.status,
+                      ),
+                    ).length
+                  }{" "}
+                  preparing |{" "}
+                  {uploads.filter((item) => item.status === "uploading").length}{" "}
+                  uploading |{" "}
+                  {
+                    uploads.filter((item) => item.status === "processing")
+                      .length
+                  }{" "}
+                  finishing | {uploadReadyCount} ready | {uploadFailedCount}{" "}
+                  failed.{" "}
+                  {formatFileSize(
+                    uploads.reduce(
+                      (sum, item) => sum + (item.loadedBytes ?? 0),
+                      0,
+                    ),
+                  )}{" "}
+                  transferred. Keep this page open until all photos are ready.
+                </p>
+              ) : null}
               {uploads.length ? (
                 <div className="upload-queue-region" hidden>
                   <p className="upload-queue-summary" role="status">

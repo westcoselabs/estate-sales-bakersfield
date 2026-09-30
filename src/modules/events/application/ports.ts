@@ -21,6 +21,8 @@ export interface PhotoReservationRecord {
   readonly consumedAt: Date | null;
   readonly sourceContentType: string | null;
   readonly expectedVersion: number;
+  readonly maximumSizeInBytes?: number;
+  readonly processingAttemptId?: string | null;
 }
 
 export interface ReadyPhotoWrite {
@@ -135,7 +137,10 @@ export interface EventRepository {
     readonly photoId: string;
     readonly eventId: string;
     readonly userId: string;
-    readonly expectedVersion: number;
+    readonly expectedVersion?: number | undefined;
+    readonly clientUploadId?: string | undefined;
+    readonly byteLength?: number | undefined;
+    readonly now?: Date;
     readonly stagingObjectKey: string;
     readonly expiresAt: Date;
     readonly sourceContentType: string;
@@ -152,7 +157,8 @@ export interface EventRepository {
     readonly photoId: string;
     readonly eventId: string;
     readonly userId: string;
-    readonly expectedVersion: number;
+    readonly expectedVersion?: number | undefined;
+    readonly processingAttemptId?: string;
     readonly now: Date;
   }): Promise<boolean>;
   completePhoto(input: {
@@ -160,9 +166,10 @@ export interface EventRepository {
     readonly photoId: string;
     readonly eventId: string;
     readonly userId: string;
-    readonly expectedVersion: number;
+    readonly expectedVersion?: number | undefined;
     readonly photo: ReadyPhotoWrite;
     readonly workflowState: "INCOMPLETE_DRAFT" | "PREVIEW_READY";
+    readonly processingAttemptId?: string;
     readonly now: Date;
     readonly audit: EventAuditContext;
   }): Promise<EventRecord | null>;
@@ -172,6 +179,7 @@ export interface EventRepository {
     readonly eventId: string;
     readonly userId: string;
     readonly errorCode: string;
+    readonly processingAttemptId?: string;
     readonly now: Date;
   }): Promise<void>;
   setCover(input: {

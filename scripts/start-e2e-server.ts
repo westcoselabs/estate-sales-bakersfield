@@ -38,6 +38,8 @@ async function main(): Promise<void> {
     NODE_ENV: "production",
     APP_URL: `http://127.0.0.1:${String(port)}`,
     LOG_LEVEL: "silent",
+    PHOTO_UPLOAD_V2_PERCENT:
+      process.env.TEST_PHOTO_UPLOAD_V2 === "true" ? "100" : "0",
     AUTH_FINGERPRINT_SECRET: "phase-three-e2e-fingerprint-secret-32-characters",
     ADMIN_MFA_ENCRYPTION_KEY: "11".repeat(32),
     AUTH_EMAIL_CAPTURE_PATH: capturePath,

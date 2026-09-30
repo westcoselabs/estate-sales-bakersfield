@@ -1,8 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 
+import { getServerEnvironment } from "@/platform/config/env";
 import { getCurrentUser } from "@/modules/auth";
 import {
   createConfiguredEventService,
+  photoUploadV2Enabled,
   EventNotFoundError,
   PUBLISHING_TERMS_VERSION,
 } from "@/modules/events";
@@ -52,6 +54,10 @@ export default async function EventEditPage({ params }: Props) {
     >
       <EventBuilder
         initialEvent={event}
+        photoUploadV2={photoUploadV2Enabled(
+          user.id,
+          getServerEnvironment().PHOTO_UPLOAD_V2_PERCENT,
+        )}
         termsVersion={PUBLISHING_TERMS_VERSION}
         accountEmail={user.email}
         initialEmailVerified={Boolean(user.emailVerifiedAt)}

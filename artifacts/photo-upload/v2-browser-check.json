@@ -1,0 +1,233 @@
+{
+  "browser": "149.0.7827.55",
+  "native": {
+    "count": 12,
+    "elapsedMs": 1707.6000000238419,
+    "results": [
+      {
+        "sourceBytes": 70769,
+        "preparedBytes": 19193,
+        "width": 2048,
+        "height": 1536,
+        "decoder": "native",
+        "preparationMs": 85.59999999403954,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 70769,
+        "preparedBytes": 19193,
+        "width": 2048,
+        "height": 1536,
+        "decoder": "native",
+        "preparationMs": 71,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 70769,
+        "preparedBytes": 19193,
+        "width": 2048,
+        "height": 1536,
+        "decoder": "native",
+        "preparationMs": 77.5,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 70769,
+        "preparedBytes": 19193,
+        "width": 2048,
+        "height": 1536,
+        "decoder": "native",
+        "preparationMs": 95.5,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 70769,
+        "preparedBytes": 19193,
+        "width": 2048,
+        "height": 1536,
+        "decoder": "native",
+        "preparationMs": 114.5,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 70769,
+        "preparedBytes": 19193,
+        "width": 2048,
+        "height": 1536,
+        "decoder": "native",
+        "preparationMs": 171.09999999403954,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 70769,
+        "preparedBytes": 19193,
+        "width": 2048,
+        "height": 1536,
+        "decoder": "native",
+        "preparationMs": 174.89999997615814,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 70769,
+        "preparedBytes": 19193,
+        "width": 2048,
+        "height": 1536,
+        "decoder": "native",
+        "preparationMs": 155.60000002384186,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 70769,
+        "preparedBytes": 19193,
+        "width": 2048,
+        "height": 1536,
+        "decoder": "native",
+        "preparationMs": 176.30000001192093,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 70769,
+        "preparedBytes": 19193,
+        "width": 2048,
+        "height": 1536,
+        "decoder": "native",
+        "preparationMs": 152,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 70769,
+        "preparedBytes": 19193,
+        "width": 2048,
+        "height": 1536,
+        "decoder": "native",
+        "preparationMs": 167.80000001192093,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 70769,
+        "preparedBytes": 19193,
+        "width": 2048,
+        "height": 1536,
+        "decoder": "native",
+        "preparationMs": 140.80000001192093,
+        "type": "image/jpeg"
+      }
+    ]
+  },
+  "software": {
+    "count": 12,
+    "elapsedMs": 2716.9000000059605,
+    "results": [
+      {
+        "sourceBytes": 718114,
+        "preparedBytes": 322810,
+        "width": 1280,
+        "height": 854,
+        "decoder": "software",
+        "preparationMs": 352.59999999403954,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 718114,
+        "preparedBytes": 322810,
+        "width": 1280,
+        "height": 854,
+        "decoder": "software",
+        "preparationMs": 145.5,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 718114,
+        "preparedBytes": 322810,
+        "width": 1280,
+        "height": 854,
+        "decoder": "software",
+        "preparationMs": 189.2000000178814,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 718114,
+        "preparedBytes": 322810,
+        "width": 1280,
+        "height": 854,
+        "decoder": "software",
+        "preparationMs": 187.09999999403954,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 718114,
+        "preparedBytes": 322810,
+        "width": 1280,
+        "height": 854,
+        "decoder": "software",
+        "preparationMs": 185.40000000596046,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 718114,
+        "preparedBytes": 322810,
+        "width": 1280,
+        "height": 854,
+        "decoder": "software",
+        "preparationMs": 225.90000000596046,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 718114,
+        "preparedBytes": 322810,
+        "width": 1280,
+        "height": 854,
+        "decoder": "software",
+        "preparationMs": 208,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 718114,
+        "preparedBytes": 322810,
+        "width": 1280,
+        "height": 854,
+        "decoder": "software",
+        "preparationMs": 200.69999998807907,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 718114,
+        "preparedBytes": 322810,
+        "width": 1280,
+        "height": 854,
+        "decoder": "software",
+        "preparationMs": 230.69999998807907,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 718114,
+        "preparedBytes": 322810,
+        "width": 1280,
+        "height": 854,
+        "decoder": "software",
+        "preparationMs": 213,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 718114,
+        "preparedBytes": 322810,
+        "width": 1280,
+        "height": 854,
+        "decoder": "software",
+        "preparationMs": 221.2000000178814,
+        "type": "image/jpeg"
+      },
+      {
+        "sourceBytes": 718114,
+        "preparedBytes": 322810,
+        "width": 1280,
+        "height": 854,
+        "decoder": "software",
+        "preparationMs": 213.89999997615814,
+        "type": "image/jpeg"
+      }
+    ]
+  },
+  "heicFixtureSha256": "7f8b363e4936c0666a25f64f3a92fda10bd8e5453be4592530b65a55dd98f3f2",
+  "limitations": "Desktop Chromium conversion check only. Repeated fixtures; no network upload, database, iPhone, color-fidelity, or 180-second acceptance measurement."
+}

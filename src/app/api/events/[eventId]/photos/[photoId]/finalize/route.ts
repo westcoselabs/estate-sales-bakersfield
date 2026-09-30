@@ -33,11 +33,17 @@ export async function POST(request: Request, context: Context) {
       input,
       { requestId },
     );
+    const processing = event.photos.some(
+      (photo) => photo.id === photoId && photo.status === "PROCESSING",
+    );
     logger.info(
       { requestId, operation: "events.finalize-photo" },
-      "Event photo finalized as READY",
+      "Event photo finalization checked",
     );
-    return authJson({ event, requestId }, { requestId });
+    return authJson(
+      { event, requestId, processing },
+      { requestId, status: processing ? 202 : 200 },
+    );
   } catch (error) {
     return eventApiError(error, request, "events.finalize-photo");
   }

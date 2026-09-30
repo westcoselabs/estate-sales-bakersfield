@@ -85,7 +85,14 @@ export const eventLocationSchema = z.object({
 });
 
 export const photoReservationSchema = z.object({
-  expectedVersion: expectedVersionSchema,
+  expectedVersion: expectedVersionSchema.optional(),
+  clientUploadId: z.uuid().optional(),
+  byteLength: z
+    .number()
+    .int()
+    .positive()
+    .max(15 * 1024 * 1024)
+    .optional(),
   contentType: z.enum([
     "image/jpeg",
     "image/png",
@@ -97,13 +104,13 @@ export const photoReservationSchema = z.object({
 });
 
 export const photoFinalizationSchema = z.object({
-  expectedVersion: expectedVersionSchema,
+  expectedVersion: expectedVersionSchema.optional(),
   reservationId: z.uuid(),
   pathname: z.string().min(1).max(500),
 });
 
 export const photoUploadClientPayloadSchema = z.object({
-  expectedVersion: expectedVersionSchema,
+  expectedVersion: expectedVersionSchema.optional(),
   reservationId: z.uuid(),
   photoId: z.uuid(),
 });

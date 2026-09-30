@@ -10,10 +10,13 @@ import {
 } from "../domain/resource-policy";
 
 export class DatabaseEventWorkLimiter implements EventWorkLimiter {
-  constructor(private readonly limiter: PrismaAuthenticationRateLimiter) {}
+  constructor(
+    private readonly limiter: PrismaAuthenticationRateLimiter,
+    private readonly processingLimit: 1 | 2 = 2,
+  ) {}
 
   acquireProcessing(): () => void {
-    if (activeImageProcesses >= 1) {
+    if (activeImageProcesses >= this.processingLimit) {
       throw new EventResourceLimitError(
         "Image processing is busy. Please retry this photo shortly.",
         "PROCESSING_BUSY",

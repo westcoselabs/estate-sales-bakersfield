@@ -6,7 +6,7 @@ const vercelBlobUploadOrigin = "https://vercel.com";
 
 const contentSecurityPolicy = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' https://www.googletagmanager.com${isDevelopment ? " 'unsafe-eval'" : ""}`,
+  `script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' https://www.googletagmanager.com${isDevelopment ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data: https://tiles.openfreemap.org https://*.google-analytics.com https://www.googletagmanager.com",
   "font-src 'self' data:",

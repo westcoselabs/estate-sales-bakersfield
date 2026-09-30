@@ -46,7 +46,8 @@
     "payments:reconcile": "node --conditions=react-server --import tsx scripts/reconcile-payment.ts",
     "verify:credential-free": "tsx scripts/verify.ts credential-free",
     "verify": "tsx scripts/verify.ts offline",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test:photos:browser": "tsx scripts/check-photo-preparation-browser.ts"
   },
   "dependencies": {
     "@codemirror/lang-html": "6.4.11",
@@ -59,6 +60,7 @@
     "@vercel/blob": "2.6.1",
     "csv-parse": "7.0.2",
     "dotenv": "17.4.2",
+    "libheif-js": "1.23.2",
     "maplibre-gl": "6.4.1",
     "next": "16.3.3",
     "otpauth": "9.5.2",
@@ -85,6 +87,7 @@
     "@types/sanitize-html": "2.16.1",
     "@vitest/coverage-v8": "4.1.10",
     "dependency-cruiser": "18.1.0",
+    "esbuild": "0.28.1",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.3",
     "prettier": "3.9.5",

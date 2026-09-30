@@ -81,6 +81,8 @@ export interface EventPhotoRecord {
     readonly id: string;
     readonly expiresAt: Date;
     readonly consumedAt: Date | null;
+    readonly clientUploadId?: string | null;
+    readonly maximumSizeInBytes?: number;
   } | null;
 }
 

@@ -52,3 +52,6 @@ export type {
   PublicEventScheduleDay,
 } from "./domain/types";
 export { MAXIMUM_EVENT_PHOTOS } from "./domain/types";
+
+export { photoUploadV2Enabled } from "./application/photo-upload-rollout";
+export { photoUploadMetricsSchema } from "./application/photo-upload-metrics";

@@ -4,7 +4,11 @@ import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 
 import type { EventRepository } from "../application/ports";
 import { editedPublicationSnapshot } from "../application/published-edits";
-import { EventResourceLimitError } from "../domain/errors";
+import { draftWorkflowState } from "../application/policy";
+import {
+  EventValidationError,
+  EventResourceLimitError,
+} from "../domain/errors";
 import { readScheduleDays } from "../domain/schedule";
 import {
   MAXIMUM_ACTIVE_DRAFTS_PER_ACCOUNT,
@@ -114,6 +118,8 @@ function mapPhoto(photo: EventPayload["photos"][number]): EventPhotoRecord {
           id: photo.uploadReservation.id,
           expiresAt: photo.uploadReservation.expiresAt,
           consumedAt: photo.uploadReservation.consumedAt,
+          clientUploadId: photo.uploadReservation.clientUploadId,
+          maximumSizeInBytes: photo.uploadReservation.maximumSizeInBytes,
         }
       : null,
   };
@@ -779,12 +785,36 @@ export class PrismaEventRepository implements EventRepository {
         await transaction.$queryRaw(Prisma.sql`
           SELECT "id" FROM "users" WHERE "id" = ${input.userId}::uuid FOR UPDATE
         `);
+        if (input.clientUploadId) {
+          const existing = await transaction.uploadReservation.findFirst({
+            where: {
+              eventId: input.eventId,
+              clientUploadId: input.clientUploadId,
+              event: {
+                organizer: { userId: input.userId },
+                ...this.editableWhere(),
+              },
+            },
+            include: { photo: true },
+          });
+          if (existing) {
+            if (
+              existing.maximumSizeInBytes !== input.byteLength ||
+              existing.photo.sourceContentType !== input.sourceContentType
+            )
+              throw new EventValidationError(
+                "This upload identifier already belongs to another photo.",
+              );
+            return this.findOwnedWith(transaction, input.eventId, input.userId);
+          }
+        }
         const [usage] = await transaction.$queryRaw<
           Array<{ photos: bigint; bytes: bigint }>
         >(Prisma.sql`
           SELECT COUNT(*) AS "photos",
-            COALESCE(SUM(COALESCE(photo."source_size", ${MAXIMUM_RESERVED_PHOTO_BYTES})), 0)::bigint AS "bytes"
+            COALESCE(SUM(COALESCE(photo."source_size", reservation."maximum_size_in_bytes", ${MAXIMUM_RESERVED_PHOTO_BYTES})), 0)::bigint AS "bytes"
           FROM "event_photos" AS photo
+          LEFT JOIN "upload_reservations" AS reservation ON reservation."photo_id" = photo."id"
           JOIN "events" AS event ON event."id" = photo."event_id"
           JOIN "organizer_profiles" AS organizer ON organizer."id" = event."organizer_id"
           WHERE organizer."user_id" = ${input.userId}::uuid
@@ -797,7 +827,8 @@ export class PrismaEventRepository implements EventRepository {
         if (
           !usage ||
           usage.photos >= BigInt(MAXIMUM_RETAINED_PHOTOS_PER_ACCOUNT) ||
-          usage.bytes + BigInt(MAXIMUM_RESERVED_PHOTO_BYTES) >
+          usage.bytes +
+            BigInt(input.byteLength ?? MAXIMUM_RESERVED_PHOTO_BYTES) >
             BigInt(MAXIMUM_SOURCE_BYTES_PER_ACCOUNT)
         ) {
           throw new EventResourceLimitError(
@@ -814,11 +845,21 @@ export class PrismaEventRepository implements EventRepository {
         const current = await transaction.event.findFirst({
           where: {
             id: input.eventId,
-            version: input.expectedVersion,
+            ...(input.clientUploadId || input.expectedVersion === undefined
+              ? {}
+              : { version: input.expectedVersion }),
             organizer: { userId: input.userId },
             ...this.editableWhere(),
           },
-          select: { id: true, workflowState: true },
+          select: {
+            id: true,
+            workflowState: true,
+            photos: {
+              select: { sortOrder: true },
+              orderBy: { sortOrder: "desc" },
+              take: 1,
+            },
+          },
         });
         if (!current) return null;
         const maximum = await transaction.eventPhoto.count({
@@ -828,7 +869,9 @@ export class PrismaEventRepository implements EventRepository {
         const event = await transaction.event.updateMany({
           where: {
             id: input.eventId,
-            version: input.expectedVersion,
+            ...(input.clientUploadId || input.expectedVersion === undefined
+              ? {}
+              : { version: input.expectedVersion }),
             organizer: { userId: input.userId },
             ...this.editableWhere(),
           },
@@ -846,7 +889,7 @@ export class PrismaEventRepository implements EventRepository {
           data: {
             id: input.photoId,
             eventId: input.eventId,
-            sortOrder: maximum,
+            sortOrder: (current.photos?.[0]?.sortOrder ?? -1) + 1,
             stagingObjectKey: input.stagingObjectKey,
             sourceContentType: input.sourceContentType,
             uploadReservation: {
@@ -855,6 +898,10 @@ export class PrismaEventRepository implements EventRepository {
                 eventId: input.eventId,
                 stagingObjectKey: input.stagingObjectKey,
                 expiresAt: input.expiresAt,
+                ...(input.now ? { createdAt: input.now } : {}),
+                clientUploadId: input.clientUploadId ?? null,
+                maximumSizeInBytes:
+                  input.byteLength ?? MAXIMUM_RESERVED_PHOTO_BYTES,
               },
             },
           },
@@ -981,6 +1028,8 @@ export class PrismaEventRepository implements EventRepository {
           consumedAt: reservation.consumedAt,
           sourceContentType: reservation.photo.sourceContentType,
           expectedVersion: reservation.event.version,
+          maximumSizeInBytes: reservation.maximumSizeInBytes,
+          processingAttemptId: reservation.processingAttemptId,
         }
       : null;
   }
@@ -992,6 +1041,28 @@ export class PrismaEventRepository implements EventRepository {
       await transaction.$queryRaw(Prisma.sql`
         SELECT "id" FROM "users" WHERE "id" = ${input.userId}::uuid FOR UPDATE
       `);
+      await transaction.$queryRaw(Prisma.sql`
+        SELECT "id" FROM "events" WHERE "id" = ${input.eventId}::uuid FOR UPDATE
+      `);
+      const active = await transaction.eventPhoto.findFirst({
+        where: {
+          id: input.photoId,
+          eventId: input.eventId,
+          status: "RESERVED",
+          uploadReservation: {
+            is: {
+              id: input.reservationId,
+              consumedAt: null,
+              expiresAt: { gt: input.now },
+            },
+          },
+          event: {
+            organizer: { userId: input.userId },
+            ...this.editableWhere(),
+          },
+        },
+      });
+      if (!active) return false;
       const processing = await transaction.eventPhoto.count({
         where: {
           event: { organizer: { userId: input.userId } },
@@ -1011,7 +1082,6 @@ export class PrismaEventRepository implements EventRepository {
       const event = await transaction.event.updateMany({
         where: {
           id: input.eventId,
-          version: input.expectedVersion,
           organizer: { userId: input.userId },
           ...this.editableWhere(),
         },
@@ -1041,7 +1111,10 @@ export class PrismaEventRepository implements EventRepository {
       );
       await transaction.uploadReservation.update({
         where: { id: input.reservationId },
-        data: { expiresAt: processingExpiresAt },
+        data: {
+          expiresAt: processingExpiresAt,
+          processingAttemptId: input.processingAttemptId ?? null,
+        },
       });
       const cleanup = await transaction.durableJob.updateMany({
         where: {
@@ -1071,16 +1144,40 @@ export class PrismaEventRepository implements EventRepository {
 
   async completePhoto(input: Parameters<EventRepository["completePhoto"]>[0]) {
     return this.prisma.$transaction(async (transaction) => {
+      await transaction.$queryRaw(Prisma.sql`
+        SELECT "id" FROM "users" WHERE "id" = ${input.userId}::uuid FOR UPDATE
+      `);
+      await transaction.$queryRaw(Prisma.sql`
+        SELECT "id" FROM "events" WHERE "id" = ${input.eventId}::uuid FOR UPDATE
+      `);
+      const active = await transaction.eventPhoto.findFirst({
+        where: {
+          id: input.photoId,
+          eventId: input.eventId,
+          status: "PROCESSING",
+          uploadReservation: {
+            is: {
+              id: input.reservationId,
+              consumedAt: null,
+              processingAttemptId: input.processingAttemptId ?? null,
+              expiresAt: { gt: input.now },
+            },
+          },
+          event: {
+            organizer: { userId: input.userId },
+            ...this.editableWhere(),
+          },
+        },
+      });
+      if (!active) return null;
       const event = await transaction.event.updateMany({
         where: {
           id: input.eventId,
-          version: input.expectedVersion,
           organizer: { userId: input.userId },
           ...this.editableWhere(),
         },
         data: {
           ...invalidatedApproval,
-          workflowState: input.workflowState,
           version: { increment: 1 },
           contentRevision: { increment: 1 },
         },
@@ -1093,7 +1190,12 @@ export class PrismaEventRepository implements EventRepository {
           eventId: input.eventId,
           status: "PROCESSING",
           uploadReservation: {
-            is: { id: input.reservationId, consumedAt: null },
+            is: {
+              id: input.reservationId,
+              consumedAt: null,
+              processingAttemptId: input.processingAttemptId ?? null,
+              expiresAt: { gt: input.now },
+            },
           },
         },
         data: {
@@ -1130,6 +1232,16 @@ export class PrismaEventRepository implements EventRepository {
           metadata: { photoId: input.photoId },
         }),
       });
+      const current = await this.findOwnedWith(
+        transaction,
+        input.eventId,
+        input.userId,
+      );
+      if (!current) throw new Error("Event disappeared during processing");
+      await transaction.event.update({
+        where: { id: input.eventId },
+        data: { workflowState: draftWorkflowState(current) },
+      });
       return this.refreshPublishedContent(
         transaction,
         input.eventId,
@@ -1140,14 +1252,30 @@ export class PrismaEventRepository implements EventRepository {
 
   async failPhoto(input: Parameters<EventRepository["failPhoto"]>[0]) {
     await this.prisma.$transaction(async (transaction) => {
-      await transaction.eventPhoto.updateMany({
+      await transaction.$queryRaw(Prisma.sql`
+        SELECT "id" FROM "events" WHERE "id" = ${input.eventId}::uuid FOR UPDATE
+      `);
+      const changed = await transaction.eventPhoto.updateMany({
         where: {
           id: input.photoId,
           eventId: input.eventId,
           status: { in: ["RESERVED", "PROCESSING", "UPLOADED"] },
+          uploadReservation: {
+            is: {
+              id: input.reservationId,
+              ...(input.processingAttemptId
+                ? { processingAttemptId: input.processingAttemptId }
+                : {}),
+            },
+          },
           event: { organizer: { userId: input.userId } },
         },
         data: { status: "FAILED", errorCode: input.errorCode },
+      });
+      if (!changed.count) return;
+      await transaction.event.update({
+        where: { id: input.eventId },
+        data: { version: { increment: 1 } },
       });
       await transaction.uploadReservation.updateMany({
         where: {

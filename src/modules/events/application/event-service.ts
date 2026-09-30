@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { logger } from "@/platform/observability/logger";
 
 import {
   requireSuperAdminPrincipal,
@@ -661,28 +662,36 @@ export class EventService {
     principal: AuthPrincipal | null,
     eventId: string,
     input: {
-      readonly expectedVersion: number;
+      readonly expectedVersion?: number | undefined;
       readonly contentType: (typeof EVENT_PHOTO_CONTENT_TYPES)[number];
+      readonly clientUploadId?: string | undefined;
+      readonly byteLength?: number | undefined;
     },
     audit: EventAuditContext = {},
   ): Promise<EventPhotoReservationDto> {
+    const started = performance.now();
     const user = requireUserPrincipal(principal);
     this.assertEditable(await this.loadOwned(eventId, user.id));
+    if (
+      (input.clientUploadId && input.byteLength === undefined) ||
+      (input.byteLength !== undefined &&
+        (!Number.isSafeInteger(input.byteLength) ||
+          input.byteLength <= 0 ||
+          input.byteLength > MAXIMUM_EVENT_PHOTO_BYTES))
+    )
+      throw new EventValidationError(
+        "An upload must include its prepared byte length.",
+      );
     await this.workLimiter?.consume(user.id, "reserve");
     const reservationId = randomUUID();
     const photoId = randomUUID();
-    const expiresAt = new Date(Date.now() + 10 * 60_000);
-    const authorization = await this.media.authorizePrivateUpload({
-      scope: {
-        environment: this.environment,
-        resourceScope: `event-${eventId}`,
-        reservationId,
-        randomName: "source.bin",
-      },
-      allowedContentTypes: EVENT_PHOTO_CONTENT_TYPES,
-      maximumSizeInBytes: MAXIMUM_EVENT_PHOTO_BYTES,
-      expiresAt,
-    });
+    const expiresAt = new Date(this.now().getTime() + 10 * 60_000);
+    const scope = {
+      environment: this.environment,
+      resourceScope: `event-${eventId}`,
+      reservationId,
+      randomName: "source.bin",
+    };
     const event = this.changed(
       await this.events.createPhotoReservation({
         reservationId,
@@ -690,18 +699,42 @@ export class EventService {
         eventId,
         userId: user.id,
         expectedVersion: input.expectedVersion,
-        stagingObjectKey: authorization.objectKey,
+        clientUploadId: input.clientUploadId,
+        byteLength: input.byteLength,
+        now: this.now(),
+        stagingObjectKey: createMediaObjectKey(scope),
         expiresAt,
         sourceContentType: input.contentType,
         audit,
       }),
     );
+    const photo = event.photos.find((candidate) =>
+      input.clientUploadId
+        ? candidate.reservation?.clientUploadId === input.clientUploadId
+        : candidate.id === photoId,
+    );
+    if (!photo?.reservation)
+      throw new EventStateError("The upload reservation could not be found.");
+    const reservation = photo.reservation;
+    if (
+      photo.status === "FAILED" ||
+      (photo.status === "RESERVED" && reservation.expiresAt <= this.now())
+    )
+      throw new EventStateError(
+        "This upload attempt has expired. Remove it and retry the photo.",
+      );
+    const maximumSizeInBytes =
+      reservation.maximumSizeInBytes ?? MAXIMUM_EVENT_PHOTO_BYTES;
+    const authorization = await this.media.authorizePrivateUpload({
+      scope: { ...scope, reservationId: reservation.id },
+      allowedContentTypes: [input.contentType],
+      maximumSizeInBytes,
+      expiresAt: reservation.expiresAt,
+    });
     const upload =
       authorization.transport === "vercel-client"
-        ? ({
-            transport: "vercel-client" as const,
-          } as const)
-        : ({
+        ? { transport: "vercel-client" as const }
+        : {
             transport: authorization.transport,
             uploadUrl: authorization.uploadUrl.toString(),
             method: authorization.method,
@@ -709,14 +742,23 @@ export class EventService {
               ...authorization.headers,
               "x-content-type": input.contentType,
             },
-          } as const);
+          };
+    logger.info(
+      {
+        operation: "events.reserve-photo",
+        requestId: audit.requestId,
+        milliseconds: Math.round(performance.now() - started),
+        maximumSizeInBytes,
+      },
+      "Photo reserved",
+    );
     return {
       event: toEventEditorDto(event),
-      photoId,
-      reservationId,
+      photoId: photo.id,
+      reservationId: reservation.id,
       uploadPathname: authorization.objectKey,
       expiresAt: authorization.expiresAt.toISOString(),
-      maximumSizeInBytes: MAXIMUM_EVENT_PHOTO_BYTES,
+      maximumSizeInBytes,
       ...upload,
     };
   }
@@ -727,7 +769,7 @@ export class EventService {
     input: {
       readonly reservationId: string;
       readonly photoId: string;
-      readonly expectedVersion: number;
+      readonly expectedVersion?: number | undefined;
       readonly pathname: string;
     },
   ): Promise<{
@@ -740,7 +782,11 @@ export class EventService {
     this.assertEditable(current);
     // Token authorization is read-only and belongs to this owner-scoped
     // reservation. Sibling uploads may have advanced the event meanwhile.
-    if (current.version < input.expectedVersion) throw new EventConflictError();
+    if (
+      input.expectedVersion !== undefined &&
+      current.version < input.expectedVersion
+    )
+      throw new EventConflictError();
     const reservation = await this.events.findPhotoReservation({
       reservationId: input.reservationId,
       photoId: input.photoId,
@@ -750,7 +796,7 @@ export class EventService {
     if (
       !reservation ||
       reservation.consumedAt ||
-      reservation.expiresAt <= new Date() ||
+      reservation.expiresAt <= this.now() ||
       !reservation.sourceContentType ||
       reservation.stagingObjectKey !== input.pathname ||
       !EVENT_PHOTO_CONTENT_TYPES.includes(
@@ -766,8 +812,55 @@ export class EventService {
     return {
       contentType:
         reservation.sourceContentType as (typeof EVENT_PHOTO_CONTENT_TYPES)[number],
-      maximumSizeInBytes: MAXIMUM_EVENT_PHOTO_BYTES,
+      maximumSizeInBytes:
+        reservation.maximumSizeInBytes ?? MAXIMUM_EVENT_PHOTO_BYTES,
       expiresAt: reservation.expiresAt,
+    };
+  }
+
+  async inspectPhotoTransfer(
+    principal: AuthPrincipal | null,
+    eventId: string,
+    photoId: string,
+    reservationId: string,
+  ) {
+    const user = requireUserPrincipal(principal);
+    const current = await this.loadOwned(eventId, user.id);
+    this.assertEditable(current);
+    if (!DATABASE_ID.test(photoId) || !DATABASE_ID.test(reservationId))
+      throw new EventNotFoundError("Photo not found.");
+    const reservation = await this.events.findPhotoReservation({
+      reservationId,
+      photoId,
+      eventId,
+      userId: user.id,
+    });
+    if (!reservation) throw new EventNotFoundError("Photo not found.");
+    const photo = current.photos.find((item) => item.id === photoId);
+    if (
+      photo?.status === "READY" ||
+      (photo?.status === "PROCESSING" && reservation.expiresAt > this.now()) ||
+      photo?.status === "FAILED"
+    )
+      return { status: photo.status, event: toEventEditorDto(current) };
+    if (reservation.consumedAt || reservation.expiresAt <= this.now())
+      return { status: "FAILED" as const, event: toEventEditorDto(current) };
+    const metadata = await this.media.inspect(
+      parseMediaObjectKey(reservation.stagingObjectKey),
+    );
+    const valid =
+      metadata &&
+      metadata.size > 0 &&
+      metadata.size <=
+        (reservation.maximumSizeInBytes ?? MAXIMUM_EVENT_PHOTO_BYTES) &&
+      metadata.contentType === reservation.sourceContentType;
+    return {
+      status: valid
+        ? ("UPLOADED" as const)
+        : metadata
+          ? ("FAILED" as const)
+          : ("MISSING" as const),
+      event: toEventEditorDto(current),
     };
   }
 
@@ -777,12 +870,31 @@ export class EventService {
     photoId: string,
     input: {
       readonly reservationId: string;
-      readonly expectedVersion: number;
+      readonly expectedVersion?: number | undefined;
       readonly pathname: string;
     },
     audit: EventAuditContext = {},
   ): Promise<EventEditorDto> {
     const user = requireUserPrincipal(principal);
+    const current = await this.loadOwned(eventId, user.id);
+    this.assertEditable(current);
+    const reservation = await this.events.findPhotoReservation({
+      reservationId: input.reservationId,
+      photoId,
+      eventId,
+      userId: user.id,
+    });
+    if (!reservation || reservation.stagingObjectKey !== input.pathname)
+      throw new PhotoProcessingError(
+        "The upload reservation is invalid or expired.",
+        "reservation_validation",
+      );
+    const photo = current.photos.find((item) => item.id === photoId);
+    if (
+      photo?.status === "READY" ||
+      (photo?.status === "PROCESSING" && reservation.expiresAt > this.now())
+    )
+      return toEventEditorDto(current);
     await this.workLimiter?.consume(user.id, "finalize");
     // Acquire before downloading or consuming the upload reservation. A busy
     // runtime leaves the original upload intact for a later retry.
@@ -806,7 +918,7 @@ export class EventService {
     photoId: string,
     input: {
       readonly reservationId: string;
-      readonly expectedVersion: number;
+      readonly expectedVersion?: number | undefined;
       readonly pathname: string;
     },
     audit: EventAuditContext = {},
@@ -814,18 +926,25 @@ export class EventService {
     const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
-    if (current.version !== input.expectedVersion)
-      throw new EventConflictError();
     const reservation = await this.events.findPhotoReservation({
       reservationId: input.reservationId,
       photoId,
       eventId,
       userId: user.id,
     });
+    // Another request may finish between the outer read and slot admission.
+    const existing = current.photos.find((photo) => photo.id === photoId);
+    if (
+      reservation?.stagingObjectKey === input.pathname &&
+      (existing?.status === "READY" ||
+        (existing?.status === "PROCESSING" &&
+          reservation.expiresAt > this.now()))
+    )
+      return toEventEditorDto(current);
     if (
       !reservation ||
       reservation.consumedAt ||
-      reservation.expiresAt <= new Date() ||
+      reservation.expiresAt <= this.now() ||
       !reservation.sourceContentType ||
       reservation.stagingObjectKey !== input.pathname
     ) {
@@ -835,39 +954,22 @@ export class EventService {
       );
     }
     const stagingKey = parseMediaObjectKey(reservation.stagingObjectKey);
-    const metadata = await this.media.inspect(stagingKey);
-    if (
-      !metadata ||
-      metadata.size <= 0 ||
-      metadata.size > MAXIMUM_EVENT_PHOTO_BYTES ||
-      metadata.contentType !== reservation.sourceContentType ||
-      !EVENT_PHOTO_CONTENT_TYPES.includes(
-        metadata.contentType as (typeof EVENT_PHOTO_CONTENT_TYPES)[number],
-      )
-    ) {
-      await this.events.failPhoto({
-        reservationId: input.reservationId,
-        photoId,
-        eventId,
-        userId: user.id,
-        errorCode: "UPLOAD_VALIDATION_FAILED",
-        now: new Date(),
-      });
-      await this.media.delete(stagingKey);
-      throw new PhotoProcessingError(
-        "The uploaded file did not pass validation.",
-        "upload_validation",
-      );
-    }
+    const processingAttemptId = randomUUID();
     const marked = await this.events.markPhotoProcessing({
       reservationId: input.reservationId,
       photoId,
       eventId,
       userId: user.id,
-      expectedVersion: input.expectedVersion,
-      now: new Date(),
+      processingAttemptId,
+      now: this.now(),
     });
-    if (!marked) throw new EventConflictError();
+    if (!marked) {
+      const latest = await this.loadOwned(eventId, user.id);
+      const photo = latest.photos.find((item) => item.id === photoId);
+      if (photo?.status === "READY" || photo?.status === "PROCESSING")
+        return toEventEditorDto(latest);
+      throw new EventConflictError();
+    }
 
     const finalKeys = {
       dashboardThumbnail: createMediaObjectKey({
@@ -896,14 +998,41 @@ export class EventService {
       }),
     } as const;
     const createdKeys = Object.values(finalKeys);
-    let processingStage: PhotoProcessingStage = "source_read";
+    const timings: Record<string, number> = {};
+    const started = performance.now();
+    let stageStarted = started;
+    const stage = (name: string) => {
+      timings[name] = Math.round(performance.now() - stageStarted);
+      stageStarted = performance.now();
+    };
+    let processingStage: PhotoProcessingStage = "upload_validation";
     try {
+      const maximumSize =
+        reservation.maximumSizeInBytes ?? MAXIMUM_EVENT_PHOTO_BYTES;
+      const metadata = await this.media.inspect(stagingKey);
+      if (
+        !metadata ||
+        metadata.size <= 0 ||
+        metadata.size > maximumSize ||
+        metadata.contentType !== reservation.sourceContentType ||
+        !EVENT_PHOTO_CONTENT_TYPES.includes(
+          metadata.contentType as (typeof EVENT_PHOTO_CONTENT_TYPES)[number],
+        )
+      )
+        throw new PhotoProcessingError(
+          "The uploaded file did not pass validation.",
+          "upload_validation",
+        );
+      stage("validation");
+      processingStage = "source_read";
       const bytes = await streamBytes(
         await this.media.read(stagingKey),
-        MAXIMUM_EVENT_PHOTO_BYTES,
+        maximumSize,
       );
+      stage("sourceRead");
       processingStage = "image_decode";
       const processed = await this.images.process(bytes);
+      stage("imageProcessing");
       processingStage = "variant_write";
       const writes = await Promise.allSettled(
         (Object.keys(finalKeys) as Array<keyof typeof finalKeys>).map((name) =>
@@ -920,6 +1049,7 @@ export class EventService {
           "variant_write",
         );
       }
+      stage("variantWrite");
       processingStage = "variant_verify";
       const inspections = await Promise.all(
         createdKeys.map((key) => this.media.inspect(key)),
@@ -935,8 +1065,10 @@ export class EventService {
           "variant_verify",
         );
       }
+      stage("variantVerification");
       processingStage = "staging_cleanup";
       await this.media.delete(stagingKey);
+      stage("sourceDeletion");
       const hypotheticalPhoto = {
         ...current.photos.find((photo) => photo.id === photoId)!,
         status: "READY" as const,
@@ -957,7 +1089,7 @@ export class EventService {
         photoId,
         eventId,
         userId: user.id,
-        expectedVersion: input.expectedVersion + 1,
+        processingAttemptId,
         photo: {
           sourceContentType: metadata.contentType,
           sourceSize: metadata.size,
@@ -973,10 +1105,23 @@ export class EventService {
           coverDisplayHash: processed.variants.coverDisplay.sha256,
         },
         workflowState: draftWorkflowState(hypothetical),
-        now: new Date(),
+        now: this.now(),
         audit,
       });
-      return toEventEditorDto(this.changed(result));
+      const completed = toEventEditorDto(this.changed(result));
+      stage("commit");
+      logger.info(
+        {
+          operation: "events.finalize-photo-timing",
+          requestId: audit.requestId,
+          photoId,
+          inputBytes: metadata.size,
+          timings,
+          totalMs: Math.round(performance.now() - started),
+        },
+        "Photo ready",
+      );
+      return completed;
     } catch (error) {
       await Promise.allSettled([
         this.media.delete(stagingKey),
@@ -986,8 +1131,9 @@ export class EventService {
           photoId,
           eventId,
           userId: user.id,
+          processingAttemptId,
           errorCode: "PROCESSING_FAILED",
-          now: new Date(),
+          now: this.now(),
         }),
       ]);
       if (
@@ -1091,12 +1237,24 @@ export class EventService {
     photoId: string,
     expectedVersion: number,
     audit: EventAuditContext = {},
+    cleanupNow = false,
   ): Promise<EventEditorDto> {
     const user = requireUserPrincipal(principal);
     const current = await this.loadOwned(eventId, user.id);
     this.assertEditable(current);
     if (!current.photos.some((photo) => photo.id === photoId)) {
       throw new EventNotFoundError("The event photo was not found.");
+    }
+    if (cleanupNow) {
+      const photo = current.photos.find((item) => item.id === photoId)!;
+      if (photo.status === "READY")
+        throw new EventStateError(
+          "A ready photo cannot be removed by an upload retry.",
+        );
+      if (photo.errorCode === "MEDIA_DELETION_PENDING") {
+        await this.purgeDeletedPhoto(photoId);
+        return toEventEditorDto(await this.loadOwned(eventId, user.id));
+      }
     }
     if (current.publication && current.coverPhotoId === photoId) {
       throw new EventValidationError(
@@ -1120,6 +1278,12 @@ export class EventService {
       audit,
     });
     if (!deleted) throw new EventConflictError();
+    if (cleanupNow) {
+      // Keep the durable purge as a fallback, but free the failed slot before
+      // reserving its replacement in an otherwise full 150-photo batch.
+      await this.purgeDeletedPhoto(photoId);
+      return toEventEditorDto(await this.loadOwned(eventId, user.id));
+    }
     return toEventEditorDto(deleted);
   }
 

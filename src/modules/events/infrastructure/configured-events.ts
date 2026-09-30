@@ -28,6 +28,7 @@ export function createConfiguredEventService(): EventService {
         environment: environment.APP_ENV,
         ...(environment.TEST_RUN_ID ? { scope: environment.TEST_RUN_ID } : {}),
       }),
+      environment.PHOTO_UPLOAD_V2_PERCENT > 0 ? 2 : 1,
     ),
   );
 }
