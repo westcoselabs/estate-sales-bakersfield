@@ -133,3 +133,10 @@ browser previews were checked with the cover and logo loaded and no mobile
 horizontal overflow. The live admin draft was saved as version 5. A new owner
 test was submitted to westcose.co@gmail.com, reference
 01a1ae15-8c83-7d80-b697-1b8545babc6a. The attendee campaign remains DRAFT.
+
+NOVEMBER 5 GMAIL IPHONE LIGHT APPEARANCE
+The reusable template declares color-scheme: light only in a meta tag. Gmail's
+2026 app update honors this for Google-account recipients, keeping the designed
+light email colors even when the phone uses dark mode. This is the user's chosen
+appearance for this campaign. Other email clients and third-party accounts in
+the Gmail app may still change colors. Verify in the owner's Gmail iPhone inbox.
