@@ -4,7 +4,7 @@ This is a local preparation workflow. It never imports contacts, creates app
 accounts, publishes templates, schedules broadcasts, or sends any email.
 
 FIRST CAMPAIGN
-Subject: Simply Decorated: nearly 150 estate sale photos to explore
+Subject: Estate Sale by Simply Decorated
 Partner: Simply Decorated by Riley
 Listing: https://estatesalesbakersfield.com/estate-sales/beautiful-huge-estate-sale-b13a81b2f116
 Verified November 5, 2026: 148 photos; November 5–7, 8 a.m.–1 p.m. Pacific;
@@ -92,20 +92,19 @@ emails with suppression taking precedence, escapes spreadsheet formula-like
 text, and renders escaped template values. It has no network or send capability.
 It is not an email-deliverability or consent verifier.
 
-Layout uses the existing green-and-gold identity, website logo, real sale photos,
-two prominent listing links, an additional browse link, a text alternative,
-tracking parameters, and a provider unsubscribe placeholder. Desktop/mobile
-browser verification is not a substitute for testing in actual email clients
-after the user authorizes a test.
+Layout uses the site's green-and-gold identity, black-and-gold website logo,
+listing cover, rounded light cards, a green primary action, a text alternative,
+tracking parameters, and a provider unsubscribe placeholder. Solid-color
+fallbacks retain the design when inboxes do not support blur or gradients.
 
 Provider references checked November 5, 2026:
 https://resend.com/docs/api-reference/broadcasts/create-broadcast
 https://resend.com/migrate/mailchimp
 
 NOVEMBER 5 DESIGN REVISION
-The partner-sale.html template now uses an editorial layout guided by the
-ui-ux-pro-max skill: brand green/gold, Georgia and Arial system fonts, clear
-hierarchy, a single primary gallery action, and responsive stacked sale details.
+The partner-sale.html template uses the ui-ux-pro-max skill with the website's
+sans-serif type, green and gold palette, premium listing cards, and responsive
+stacked sale details.
 Set COVER_PHOTO_URL and COVER_PHOTO_ALT for each new listing. Use the verified
 public cover image at its original aspect ratio; do not crop information from
 flyers. Update image width/height attributes if a future cover has another ratio.
@@ -114,9 +113,8 @@ This campaign uses the live listing cover at /media/6c540f28-8f3e-42df-accc-0f24
 The current campaign is stored in Admin > Email > Campaigns as a standalone HTML
 draft with the Simply Decorated / Estate Sale Attendees audience selected.
 Saving/editing this draft does not send, schedule, publish a template revision,
-or import contacts again. The public email layout uses inline/table-based styles
-and optional mobile/dark CSS. Real email-client testing remains unperformed;
-no test email has been authorized or sent.
+or import contacts again. The public email layout uses inline/table-based
+styles with an optional mobile breakpoint. Owner inbox tests were submitted.
 
 NOVEMBER 5 DESIGN REVISION 3
 The prior logo file has an opaque white background and showed as a white box
@@ -124,3 +122,14 @@ in the inbox. The campaign now uses a styled text masthead, a dark green
 invitation panel, and the full listing cover immediately beneath it. The
 reusable template uses PHOTO_COUNT from the campaign config. The corrected
 HTML was saved as campaign version 4 and a new owner test was submitted.
+
+NOVEMBER 5 DESIGN REVISION 4
+The user requested closer alignment to the website's frosted glass and premium
+card style. The template now matches the site's black-and-gold navigation logo,
+bold sans-serif type, rounded translucent white cards, soft shadows, green
+button, and listing-card cover treatment. Solid-color fallbacks remain for email
+clients that do not support blur, gradients, or shadows. Desktop and 390px mobile
+browser previews were checked with the cover and logo loaded and no mobile
+horizontal overflow. The live admin draft was saved as version 5. A new owner
+test was submitted to westcose.co@gmail.com, reference
+01a1ae15-8c83-7d80-b697-1b8545babc6a. The attendee campaign remains DRAFT.

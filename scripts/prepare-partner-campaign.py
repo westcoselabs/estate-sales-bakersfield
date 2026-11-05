@@ -110,7 +110,7 @@ def prepare(config_path, archive_path, output_path):
         "WEBSITE_URL": tracked(website, config["campaign_slug"], "brand"),
         "BROWSE_URL": tracked(config.get("browse_url", website + "/search"), config["campaign_slug"], "browse_sales"),
         "PRIVACY_URL": website + "/privacy", "REPLY_TO": config["reply_to"],
-        "LOGO_URL": website + "/images/Logo-gold-white-01.webp",
+        "LOGO_URL": website + "/images/Logo-gold-black-01.webp",
         "MAILING_ADDRESS": config["mailing_address"] or "[Business mailing address needed before sending]",
     }
     template = (ROOT / "campaigns/templates/partner-sale.html").read_text(encoding="utf-8")
