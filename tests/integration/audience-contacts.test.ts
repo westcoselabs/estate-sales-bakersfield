@@ -6,6 +6,7 @@ import {
   previewContactImport,
 } from "@/modules/contacts/infrastructure/contact-directory";
 import { createIntegrationClient } from "./support/database";
+import { administratorMfaProof } from "./support/admin-mfa-fixtures";
 
 const prisma = createIntegrationClient();
 const directory = new ContactDirectory(prisma);
@@ -22,22 +23,25 @@ const save = (raw: unknown, actor = session) =>
 
 beforeAll(async () => {
   const email = `${randomUUID()}@example.com`;
-  const user = await prisma.user.create({
-    data: {
-      displayName: "Contact administrator",
-      email,
-      normalizedEmail: email,
-      passwordHash: "fixture-only",
-      emailVerifiedAt: new Date(),
-      role: "SUPER_ADMIN",
-    },
-  });
+  const user =
+    (await prisma.user.findFirst({ where: { role: "SUPER_ADMIN" } })) ??
+    (await prisma.user.create({
+      data: {
+        displayName: "Contact administrator",
+        email,
+        normalizedEmail: email,
+        passwordHash: "fixture-only",
+        emailVerifiedAt: new Date(),
+        role: "SUPER_ADMIN",
+      },
+    }));
   const stored = await prisma.session.create({
     data: {
       userId: user.id,
       tokenHash: randomBytes(32).toString("hex"),
       expiresAt: new Date(Date.now() + 3_600_000),
       passwordAuthenticatedAt: new Date(),
+      ...(await administratorMfaProof(prisma, user.id)),
     },
   });
   session = { ...stored, principal: user, metadata: {} };

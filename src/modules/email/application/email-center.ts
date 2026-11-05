@@ -14,6 +14,11 @@ import {
   sanitizeEmailHtml,
 } from "./rendering";
 import { EmailApplicationError } from "../domain/errors";
+import {
+  isDraftOnlyCampaign,
+  type CreateCampaignInput,
+  type UpdateCampaignInput,
+} from "../domain/types";
 
 export class EmailCenterService {
   constructor(
@@ -191,15 +196,7 @@ export class EmailCenterService {
 
   createCampaign(
     session: CurrentSession | null,
-    input: {
-      name: string;
-      subject: string;
-      previewText?: string;
-      templateRevisionId: string;
-      listingIds: string[];
-      selectionMode: "ALL_ELIGIBLE" | "SELECTED_USERS";
-      selectedUserIds: string[];
-    },
+    input: CreateCampaignInput,
     requestId?: string,
   ) {
     const actor = requireSuperAdminPrincipal(session?.principal ?? null);
@@ -214,12 +211,7 @@ export class EmailCenterService {
   updateCampaign(
     session: CurrentSession | null,
     id: string,
-    input: {
-      expectedVersion: number;
-      name: string;
-      subject: string;
-      previewText?: string;
-    },
+    input: UpdateCampaignInput,
     requestId?: string,
   ) {
     const actor = requireSuperAdminPrincipal(session?.principal ?? null);
@@ -255,6 +247,13 @@ export class EmailCenterService {
         "Email campaign not found.",
         404,
       );
+    if (isDraftOnlyCampaign(campaign) || !campaign.templateRevision) {
+      throw new EmailApplicationError(
+        "DRAFT_ONLY_CAMPAIGN",
+        "Imported-contact and HTML campaigns are saved drafts. Sending is not enabled for these drafts.",
+        409,
+      );
+    }
     const listings = parseCampaignListingSnapshot(campaign.listingSnapshot);
     const rendered = renderEmailTemplate({
       subject: campaign.subject,

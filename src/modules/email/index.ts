@@ -1,4 +1,14 @@
 export { EmailCenterService } from "./application/email-center";
+export {
+  createCampaignSchema,
+  updateCampaignSchema,
+} from "./application/campaign-input";
+export { isDraftOnlyCampaign } from "./domain/types";
+export type {
+  CreateCampaignInput,
+  UpdateCampaignInput,
+  ContactAudienceOption,
+} from "./domain/types";
 export { SYSTEM_EMAIL_DEFAULTS } from "./application/defaults";
 export {
   createConfiguredEmailCenter,
@@ -13,5 +23,6 @@ export {
   escapeEmailHtml,
   parseCampaignListingSnapshot,
   renderEmailTemplate,
+  renderRecentListingsHtml,
   sanitizeEmailHtml,
 } from "./application/rendering";

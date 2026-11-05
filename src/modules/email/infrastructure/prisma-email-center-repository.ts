@@ -13,6 +13,16 @@ import {
   sanitizeEmailHtml,
 } from "../application/rendering";
 import { SYSTEM_EMAIL_DEFAULTS } from "../application/defaults";
+import {
+  createCampaignSchema,
+  updateCampaignSchema,
+} from "../application/campaign-input";
+import {
+  isDraftOnlyCampaign,
+  type CreateCampaignInput,
+  type UpdateCampaignInput,
+} from "../domain/types";
+import { contactAudienceOptions } from "./contact-audiences";
 
 const templateSelect = {
   id: true,
@@ -402,7 +412,7 @@ export class PrismaEmailCenterRepository {
 
   async campaignComposerOptions() {
     const now = new Date();
-    const [templates, listings, users] = await Promise.all([
+    const [templates, listings, users, contactAudiences] = await Promise.all([
       this.prisma.emailTemplateRevision.findMany({
         where: {
           activeForTemplate: {
@@ -456,22 +466,30 @@ export class PrismaEmailCenterRepository {
         orderBy: { createdAt: "desc" },
         select: { id: true, displayName: true, email: true },
       }),
+      contactAudienceOptions(this.prisma),
     ]);
-    return { templates, listings, users };
+    return { templates, listings, users, contactAudiences };
   }
 
-  async createCampaign(input: {
-    name: string;
-    subject: string;
-    previewText?: string;
-    templateRevisionId: string;
-    listingIds: string[];
-    selectionMode: "ALL_ELIGIBLE" | "SELECTED_USERS";
-    selectedUserIds: string[];
-    actorId: string;
-    actorSessionId: string;
-    requestId?: string;
-  }) {
+  async createCampaign(
+    input: CreateCampaignInput & {
+      actorId: string;
+      actorSessionId: string;
+      requestId?: string;
+    },
+  ) {
+    createCampaignSchema.parse(
+      Object.fromEntries(
+        Object.entries(input).filter(
+          ([key]) => !["actorId", "actorSessionId", "requestId"].includes(key),
+        ),
+      ),
+    );
+    const draftHtml = input.draftHtml
+      ? sanitizeEmailHtml(input.draftHtml)
+      : null;
+    if (draftHtml)
+      assertRequiredVariables(draftHtml, ["RESEND_UNSUBSCRIBE_URL"]);
     const options = await this.campaignComposerOptions();
     const listingMap = new Map(
       options.listings.map((listing) => [listing.id, listing]),
@@ -509,13 +527,48 @@ export class PrismaEmailCenterRepository {
         throw new AuthorizationError(
           "Current administrator verification is required.",
         );
+      if (
+        input.templateRevisionId &&
+        !(await tx.emailTemplateRevision.findFirst({
+          where: {
+            id: input.templateRevisionId,
+            activeForTemplate: {
+              is: { category: "MARKETING", archivedAt: null },
+            },
+          },
+        }))
+      ) {
+        throw new EmailApplicationError(
+          "INVALID_TEMPLATE",
+          "Choose an active published marketing template.",
+          409,
+        );
+      }
+      if (
+        input.selectionMode === "CONTACT_SEGMENT" &&
+        !(
+          await contactAudienceOptions(tx, {
+            category: input.contactCategory!,
+            sourceTag: input.contactSourceTag!,
+          })
+        ).length
+      ) {
+        throw new EmailApplicationError(
+          "INVALID_CONTACT_AUDIENCE",
+          "This contact group no longer exists. Choose another audience.",
+          409,
+        );
+      }
       const created = await tx.emailCampaign.create({
         data: {
           name: input.name,
           subject: input.subject,
           previewText: input.previewText ?? null,
           selectionMode: input.selectionMode,
-          templateRevisionId: input.templateRevisionId,
+          templateRevisionId: input.templateRevisionId ?? null,
+          draftHtml,
+          contactCategory: input.contactCategory ?? null,
+          contactSourceTag: input.contactSourceTag ?? null,
           listingSnapshot: snapshot,
           createdByUserId: input.actorId,
         },
@@ -553,16 +606,27 @@ export class PrismaEmailCenterRepository {
     });
   }
 
-  async updateCampaign(input: {
-    id: string;
-    expectedVersion: number;
-    name: string;
-    subject: string;
-    previewText?: string;
-    actorId: string;
-    actorSessionId: string;
-    requestId?: string;
-  }) {
+  async updateCampaign(
+    input: UpdateCampaignInput & {
+      id: string;
+      actorId: string;
+      actorSessionId: string;
+      requestId?: string;
+    },
+  ) {
+    updateCampaignSchema.parse(
+      Object.fromEntries(
+        Object.entries(input).filter(
+          ([key]) =>
+            !["id", "actorId", "actorSessionId", "requestId"].includes(key),
+        ),
+      ),
+    );
+    const draftHtml = input.draftHtml
+      ? sanitizeEmailHtml(input.draftHtml)
+      : undefined;
+    if (draftHtml)
+      assertRequiredVariables(draftHtml, ["RESEND_UNSUBSCRIBE_URL"]);
     await this.prisma.$transaction(async (tx) => {
       if (
         !(await authorizedAdministratorSession(tx, {
@@ -574,6 +638,32 @@ export class PrismaEmailCenterRepository {
         throw new AuthorizationError(
           "Current administrator verification is required.",
         );
+      const existing = await tx.emailCampaign.findUnique({
+        where: { id: input.id },
+      });
+      if (draftHtml !== undefined && !existing?.draftHtml)
+        throw new EmailApplicationError(
+          "INVALID_CONTENT_MODE",
+          "This campaign uses a published template.",
+          409,
+        );
+      if (input.contactCategory) {
+        if (
+          existing?.selectionMode !== "CONTACT_SEGMENT" ||
+          !(
+            await contactAudienceOptions(tx, {
+              category: input.contactCategory,
+              sourceTag: input.contactSourceTag!,
+            })
+          ).length
+        ) {
+          throw new EmailApplicationError(
+            "INVALID_CONTACT_AUDIENCE",
+            "Choose an existing imported contact group.",
+            409,
+          );
+        }
+      }
       const updated = await tx.emailCampaign.updateMany({
         where: {
           id: input.id,
@@ -584,6 +674,13 @@ export class PrismaEmailCenterRepository {
           name: input.name,
           subject: input.subject,
           previewText: input.previewText ?? null,
+          ...(draftHtml !== undefined ? { draftHtml } : {}),
+          ...(input.contactCategory
+            ? {
+                contactCategory: input.contactCategory,
+                contactSourceTag: input.contactSourceTag!,
+              }
+            : {}),
           version: { increment: 1 },
           testedAt: null,
         },
@@ -607,8 +704,8 @@ export class PrismaEmailCenterRepository {
     });
   }
 
-  getCampaign(id: string) {
-    return this.prisma.emailCampaign.findUnique({
+  async getCampaign(id: string) {
+    const campaign = await this.prisma.emailCampaign.findUnique({
       where: { id },
       include: {
         templateRevision: { include: { template: { select: { name: true } } } },
@@ -617,6 +714,23 @@ export class PrismaEmailCenterRepository {
         },
       },
     });
+    if (!campaign) return null;
+    const contactAudience =
+      campaign.selectionMode === "CONTACT_SEGMENT"
+        ? ((
+            await contactAudienceOptions(this.prisma, {
+              category: campaign.contactCategory!,
+              sourceTag: campaign.contactSourceTag!,
+            })
+          )[0] ?? {
+            category: campaign.contactCategory as "ATTENDEE" | "BUSINESS_OWNER",
+            sourceTag: campaign.contactSourceTag!,
+            total: 0,
+            eligible: 0,
+            suppressed: 0,
+          })
+        : null;
+    return { ...campaign, contactAudience };
   }
 
   listDeliveryHistory() {
@@ -713,6 +827,12 @@ export class PrismaEmailCenterRepository {
           throw new EmailApplicationError(
             "STALE_CAMPAIGN",
             "The campaign changed. Reload and try again.",
+            409,
+          );
+        if (isDraftOnlyCampaign(campaign))
+          throw new EmailApplicationError(
+            "DRAFT_ONLY_CAMPAIGN",
+            "Imported-contact and HTML campaigns are saved drafts. Sending is not enabled for these drafts.",
             409,
           );
         if (!campaign.testedAt)

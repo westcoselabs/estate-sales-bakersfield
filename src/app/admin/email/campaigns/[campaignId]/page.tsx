@@ -1,20 +1,30 @@
 import { notFound } from "next/navigation";
 import { requireAdminPageSession } from "@/modules/auth";
-import { createConfiguredEmailCenter } from "@/modules/email";
+import {
+  createConfiguredEmailCenter,
+  isDraftOnlyCampaign,
+} from "@/modules/email";
 import { parseCampaignListingSnapshot } from "@/modules/email";
 import { CampaignActions } from "./campaign-actions";
+import { CampaignPreview } from "../campaign-preview";
+const audienceCategoryLabel = (category: string) =>
+  category === "ATTENDEE" ? "Estate Sale Attendees" : "Business Owners";
 export default async function CampaignPage({
   params,
 }: {
   params: Promise<{ campaignId: string }>;
 }) {
   const { campaignId } = await params;
-  const campaign = await createConfiguredEmailCenter().getCampaign(
-    await requireAdminPageSession(),
-    campaignId,
-  );
+  const session = await requireAdminPageSession();
+  const center = createConfiguredEmailCenter();
+  const campaign = await center.getCampaign(session, campaignId);
   if (!campaign) notFound();
   const listings = parseCampaignListingSnapshot(campaign.listingSnapshot);
+  const contactAudiences =
+    campaign.selectionMode === "CONTACT_SEGMENT"
+      ? (await center.campaignComposerOptions(session)).contactAudiences
+      : [];
+  const draftOnly = isDraftOnlyCampaign(campaign);
   return (
     <div className="admin-page">
       <header className="admin-page-header">
@@ -32,19 +42,34 @@ export default async function CampaignPage({
       <div className="campaign-detail-grid">
         <section className="admin-panel campaign-summary">
           <p className="eyebrow">Message</p>
-          <h2>{campaign.templateRevision.template.name}</h2>
+          <h2>
+            {campaign.templateRevision?.template.name ??
+              "Branded HTML email draft"}
+          </h2>
           <dl>
             <div>
-              <dt>Template revision</dt>
-              <dd>{campaign.templateRevision.revisionNumber}</dd>
+              <dt>Content</dt>
+              <dd>
+                {campaign.templateRevision
+                  ? `Template revision ${campaign.templateRevision.revisionNumber}`
+                  : "Saved email HTML"}
+              </dd>
             </div>
             <div>
               <dt>Audience</dt>
-              <dd>{campaign.selectionMode.replaceAll("_", " ")}</dd>
+              <dd>
+                {campaign.contactAudience
+                  ? `${campaign.contactAudience.sourceTag} · ${audienceCategoryLabel(campaign.contactAudience.category)}`
+                  : campaign.selectionMode.replaceAll("_", " ")}
+              </dd>
             </div>
             <div>
               <dt>Recipients</dt>
-              <dd>{campaign.recipientCount || "Revalidated at send"}</dd>
+              <dd>
+                {campaign.contactAudience
+                  ? `${campaign.contactAudience.eligible} eligible · ${campaign.contactAudience.suppressed} suppressed or ineligible · ${campaign.contactAudience.total} total`
+                  : campaign.recipientCount || "Revalidated at send"}
+              </dd>
             </div>
             <div>
               <dt>Version</dt>
@@ -68,6 +93,9 @@ export default async function CampaignPage({
         </section>
       </div>
       <CampaignActions
+        key={`${campaign.id}:${campaign.version}`}
+        contactAudiences={contactAudiences}
+        draftOnly={draftOnly}
         campaign={{
           id: campaign.id,
           name: campaign.name,
@@ -76,8 +104,12 @@ export default async function CampaignPage({
           status: campaign.status,
           version: campaign.version,
           testedAt: campaign.testedAt?.toISOString() ?? null,
+          draftHtml: campaign.draftHtml,
+          contactCategory: campaign.contactCategory,
+          contactSourceTag: campaign.contactSourceTag,
         }}
       />
+      {campaign.draftHtml && <CampaignPreview html={campaign.draftHtml} />}
     </div>
   );
 }

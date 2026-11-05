@@ -33,6 +33,28 @@ persisted or logged.
 
 ## Recipient policy
 
+Imported contact groups are available in the campaign composer after applying
+`20261105000200_campaign_contact_drafts`. Choose **Imported contacts**, then the
+source/category pair (for example Simply Decorated / Estate Sale Attendees).
+The saved filter is independent of registered-user audiences. The detail page
+recounts current eligible contacts, excluding unsubscribed/cleaned records,
+missing permission, and matching account restrictions, opt-outs, bounces and
+complaints. This is an audience preview, not a frozen recipient list.
+
+**HTML email draft** lets an administrator paste an existing branded email
+without publishing a template or sending an owner test. HTML is sanitized and
+must include the unsubscribe placeholder. The saved preview runs in a sandboxed
+iframe; remote images load only after selecting Load email images. Draft edits
+retain optimistic version checks and administrator-session authorization.
+
+Imported-contact and standalone HTML campaigns currently remain **DRAFT**.
+Neither owner tests nor queue/send controls are available for these drafts.
+The service, repository, worker and database enforce this boundary; no provider
+segment, contact import, broadcast or durable send job is created by saving.
+Connecting external audiences to dispatch and provider suppression webhooks is
+a separate rollout. Existing published-template campaigns retain their prior
+registered-user dispatch rules below.
+
 Campaign recipients are ordinary active users with verified email addresses
 with recorded marketing consent who have not unsubscribed. Missing consent or
 marketing-preference records are excluded.

@@ -2,8 +2,9 @@
 
 `/admin/contacts` stores external mailing-list contacts separately from registered
 users. Importing never creates accounts, queues jobs, subscribes contacts at a
-provider, or sends email. The existing campaign studio still targets registered
-users; external audiences can be prepared with the subscribed CSV export.
+provider, or sends email. The campaign studio can save imported-contact audience
+selections and branded HTML as drafts. External dispatch is not enabled; the
+subscribed CSV export remains available for provider preparation.
 
 Apply `20261105000100_audience_contacts` before deploying this feature. It only
 adds the contact and import-history tables. Existing account data is unchanged.

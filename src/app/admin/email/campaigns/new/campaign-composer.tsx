@@ -1,7 +1,11 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { ContactAudienceOption } from "@/modules/email";
+import { ContactAudiencePicker, audienceKey } from "../contact-audience-picker";
+import { CampaignPreview } from "../campaign-preview";
 type Options = {
+  contactAudiences: ContactAudienceOption[];
   templates: {
     id: string;
     revisionNumber: number;
@@ -21,15 +25,24 @@ export function CampaignComposer({ options }: { options: Options }) {
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
   const [previewText, setPreviewText] = useState("");
+  const [contentMode, setContentMode] = useState<"template" | "html">(
+    options.templates.length ? "template" : "html",
+  );
+  const [draftHtml, setDraftHtml] = useState("");
+  const [contactAudienceKey, setContactAudienceKey] = useState("");
+  const contactAudience = options.contactAudiences.find(
+    (option) => audienceKey(option) === contactAudienceKey,
+  );
+  const [pending, setPending] = useState(false);
   const [templateRevisionId, setTemplate] = useState(
     options.templates[0]?.id ?? "",
   );
   const [listingIds, setListings] = useState(
     options.listings.slice(0, 3).map((x) => x.id),
   );
-  const [selectionMode, setMode] = useState<"ALL_ELIGIBLE" | "SELECTED_USERS">(
-    "ALL_ELIGIBLE",
-  );
+  const [selectionMode, setMode] = useState<
+    "ALL_ELIGIBLE" | "SELECTED_USERS" | "CONTACT_SEGMENT"
+  >("ALL_ELIGIBLE");
   const [selectedUserIds, setUsers] = useState<string[]>([]);
   const [error, setError] = useState("");
   const previewListings = options.listings.filter((listing) =>
@@ -50,22 +63,37 @@ export function CampaignComposer({ options }: { options: Options }) {
     );
   }
   async function create() {
-    const response = await fetch("/api/admin/email/campaigns", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        subject,
-        previewText: previewText || undefined,
-        templateRevisionId,
-        listingIds,
-        selectionMode,
-        selectedUserIds,
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok) return setError(data.error);
-    router.push(`/admin/email/campaigns/${data.id}`);
+    setPending(true);
+    setError("");
+    try {
+      const response = await fetch("/api/admin/email/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          subject,
+          previewText: previewText || undefined,
+          ...(contentMode === "html" ? { draftHtml } : { templateRevisionId }),
+          listingIds,
+          selectionMode,
+          selectedUserIds:
+            selectionMode === "SELECTED_USERS" ? selectedUserIds : [],
+          ...(selectionMode === "CONTACT_SEGMENT" && contactAudience
+            ? {
+                contactCategory: contactAudience.category,
+                contactSourceTag: contactAudience.sourceTag,
+              }
+            : {}),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) return setError(data.error);
+      router.push(`/admin/email/campaigns/${data.id}`);
+    } catch {
+      setError("The draft could not be saved. Please try again.");
+    } finally {
+      setPending(false);
+    }
   }
   return (
     <div className="campaign-composer-grid">
@@ -99,19 +127,52 @@ export function CampaignComposer({ options }: { options: Options }) {
           />
         </label>
         <label className="ui-field">
-          <span className="ui-field__label">Published template</span>
+          <span className="ui-field__label">Email content</span>
           <select
             className="ui-input"
-            value={templateRevisionId}
-            onChange={(e) => setTemplate(e.target.value)}
+            aria-label="Email content"
+            value={contentMode}
+            onChange={(event) =>
+              setContentMode(event.target.value as "template" | "html")
+            }
           >
-            {options.templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.template.name} · revision {t.revisionNumber}
-              </option>
-            ))}
+            <option value="template" disabled={!options.templates.length}>
+              Published template
+            </option>
+            <option value="html">HTML email draft</option>
           </select>
         </label>
+        {contentMode === "html" ? (
+          <label className="ui-field">
+            <span className="ui-field__label">Email HTML</span>
+            <textarea
+              className="ui-input campaign-html-source"
+              value={draftHtml}
+              onChange={(event) => setDraftHtml(event.target.value)}
+              maxLength={250 * 1024}
+              spellCheck={false}
+            />
+            <small>
+              Paste your branded email HTML, including its unsubscribe
+              placeholder. It will be saved as a draft.
+            </small>
+          </label>
+        ) : (
+          <label className="ui-field">
+            <span className="ui-field__label">Published template</span>
+            <select
+              className="ui-input"
+              value={templateRevisionId}
+              onChange={(e) => setTemplate(e.target.value)}
+            >
+              {options.templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.template.name} · revision {t.revisionNumber}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </section>
       <section className="admin-panel campaign-form">
         <p className="eyebrow">Step 2</p>
@@ -152,12 +213,26 @@ export function CampaignComposer({ options }: { options: Options }) {
           >
             Select users
           </button>
+          <button
+            aria-pressed={selectionMode === "CONTACT_SEGMENT"}
+            onClick={() => setMode("CONTACT_SEGMENT")}
+          >
+            Imported contacts
+          </button>
         </div>
-        <p>
-          Active, verified ordinary users who have not unsubscribed. The owner
-          and restricted accounts are excluded.
-        </p>
-        {selectionMode === "SELECTED_USERS" ? (
+        {selectionMode !== "CONTACT_SEGMENT" && (
+          <p>
+            Active, verified ordinary users who have not unsubscribed. The owner
+            and restricted accounts are excluded.
+          </p>
+        )}
+        {selectionMode === "CONTACT_SEGMENT" ? (
+          <ContactAudiencePicker
+            options={options.contactAudiences}
+            value={contactAudienceKey}
+            onChange={setContactAudienceKey}
+          />
+        ) : selectionMode === "SELECTED_USERS" ? (
           <div className="campaign-choice-list campaign-choice-list--users">
             {options.users.map((u) => (
               <label key={u.id}>
@@ -184,41 +259,66 @@ export function CampaignComposer({ options }: { options: Options }) {
             {error}
           </p>
         ) : null}
-        <button className="ui-button ui-button--primary" onClick={create}>
-          Save campaign draft
+        <p className="campaign-draft-note">
+          Saving creates an unscheduled draft. Imported-contact and HTML drafts
+          cannot send or queue email yet.
+        </p>
+        <button
+          className="ui-button ui-button--primary"
+          disabled={
+            pending ||
+            !name.trim() ||
+            !subject.trim() ||
+            !listingIds.length ||
+            (contentMode === "html"
+              ? !draftHtml.trim()
+              : !templateRevisionId) ||
+            (selectionMode === "CONTACT_SEGMENT" && !contactAudience)
+          }
+          onClick={create}
+        >
+          {pending ? "Saving draft…" : "Save campaign draft"}
         </button>
       </section>
-      <section className="admin-panel campaign-live-preview">
-        <div className="email-pane-heading">
-          <div>
-            <strong>Campaign preview</strong>
-            <small>Inbox-safe content snapshot</small>
+      {contentMode === "html" ? (
+        <CampaignPreview html={draftHtml} />
+      ) : (
+        <section className="admin-panel campaign-live-preview">
+          <div className="email-pane-heading">
+            <div>
+              <strong>Campaign preview</strong>
+              <small>Inbox-safe content snapshot</small>
+            </div>
+            <span className="admin-section-count">
+              {selectionMode === "CONTACT_SEGMENT"
+                ? `${contactAudience?.eligible ?? 0} eligible contacts`
+                : selectionMode === "ALL_ELIGIBLE"
+                  ? `${options.users.length} eligible`
+                  : `${selectedUserIds.length} selected`}
+            </span>
           </div>
-          <span className="admin-section-count">
-            {selectionMode === "ALL_ELIGIBLE"
-              ? `${options.users.length} eligible`
-              : `${selectedUserIds.length} selected`}
-          </span>
-        </div>
-        <div className="campaign-preview-email">
-          <div className="campaign-preview-email__brand">
-            ESTATE SALES <span>BAKERSFIELD</span>
+          <div className="campaign-preview-email">
+            <div className="campaign-preview-email__brand">
+              ESTATE SALES <span>BAKERSFIELD</span>
+            </div>
+            <p className="eyebrow">{previewText || "Recent listings update"}</p>
+            <h2>{subject || "Fresh finds near Bakersfield"}</h2>
+            <p>
+              Hi there, these recently published sales are ready to explore.
+            </p>
+            <div className="campaign-preview-listings">
+              {previewListings.map((listing) => (
+                <article key={listing.id}>
+                  <small>{listing.eventType.replaceAll("_", " ")}</small>
+                  <strong>{listing.title ?? "Untitled sale"}</strong>
+                  <span>{listing.location?.city ?? "Bakersfield"}</span>
+                </article>
+              ))}
+            </div>
+            <a>Unsubscribe</a>
           </div>
-          <p className="eyebrow">{previewText || "Recent listings update"}</p>
-          <h2>{subject || "Fresh finds near Bakersfield"}</h2>
-          <p>Hi there, these recently published sales are ready to explore.</p>
-          <div className="campaign-preview-listings">
-            {previewListings.map((listing) => (
-              <article key={listing.id}>
-                <small>{listing.eventType.replaceAll("_", " ")}</small>
-                <strong>{listing.title ?? "Untitled sale"}</strong>
-                <span>{listing.location?.city ?? "Bakersfield"}</span>
-              </article>
-            ))}
-          </div>
-          <a>Unsubscribe</a>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   );
 }

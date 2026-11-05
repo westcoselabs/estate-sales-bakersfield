@@ -13,6 +13,7 @@ import {
 } from "../application/rendering";
 import { EmailProviderError } from "../domain/errors";
 import type { CampaignListingSnapshot } from "../domain/types";
+import { isDraftOnlyCampaign } from "../domain/types";
 
 export class EmailJobProcessor {
   constructor(
@@ -105,6 +106,11 @@ export class EmailJobProcessor {
   }
 
   async sendCampaign(campaignId: string) {
+    const draft = await this.prisma.emailCampaign.findUnique({
+      where: { id: campaignId },
+      select: { selectionMode: true, draftHtml: true },
+    });
+    if (draft && isDraftOnlyCampaign(draft)) return;
     if (
       this.environment.APP_ENV !== "production" ||
       !this.environment.EMAIL_CAMPAIGNS_ENABLED ||
@@ -143,7 +149,13 @@ export class EmailJobProcessor {
         },
       },
     });
-    if (!campaign || campaign.status !== "PREPARING") return;
+    if (
+      !campaign ||
+      campaign.status !== "PREPARING" ||
+      !campaign.templateRevision ||
+      isDraftOnlyCampaign(campaign)
+    )
+      return;
     const recipients = campaign.recipients.filter(
       ({ user }) =>
         user.role === "USER" &&

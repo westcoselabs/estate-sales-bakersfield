@@ -1,9 +1,15 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { ContactAudienceOption } from "@/modules/email";
+import { ContactAudiencePicker, audienceKey } from "../contact-audience-picker";
 export function CampaignActions({
   campaign,
+  contactAudiences,
+  draftOnly,
 }: {
+  contactAudiences: ContactAudienceOption[];
+  draftOnly: boolean;
   campaign: {
     id: string;
     name: string;
@@ -12,6 +18,9 @@ export function CampaignActions({
     status: string;
     version: number;
     testedAt: string | null;
+    draftHtml: string | null;
+    contactCategory: string | null;
+    contactSourceTag: string | null;
   };
 }) {
   const router = useRouter();
@@ -21,6 +30,18 @@ export function CampaignActions({
   const [name, setName] = useState(campaign.name);
   const [subject, setSubject] = useState(campaign.subject);
   const [previewText, setPreviewText] = useState(campaign.previewText ?? "");
+  const [draftHtml, setDraftHtml] = useState(campaign.draftHtml ?? "");
+  const [selectedAudienceKey, setSelectedAudienceKey] = useState(
+    campaign.contactCategory && campaign.contactSourceTag
+      ? audienceKey({
+          category: campaign.contactCategory,
+          sourceTag: campaign.contactSourceTag,
+        })
+      : "",
+  );
+  const selectedAudience = contactAudiences.find(
+    (option) => audienceKey(option) === selectedAudienceKey,
+  );
   async function run(
     path: string,
     body: unknown,
@@ -56,10 +77,13 @@ export function CampaignActions({
     <section className="admin-panel campaign-send-panel">
       <div>
         <p className="eyebrow">Final review</p>
-        <h2>Test, confirm, then dispatch</h2>
+        <h2>
+          {draftOnly ? "Saved campaign draft" : "Test, confirm, then dispatch"}
+        </h2>
         <p>
-          A fresh audience snapshot is created at send time. Ambiguous provider
-          results are never automatically resent.
+          {draftOnly
+            ? "This draft is not scheduled. Imported-contact and HTML campaign sending is not enabled, so saving here cannot send or queue email."
+            : "A fresh audience snapshot is created at send time. Ambiguous provider results are never automatically resent."}
         </p>
         {campaign.status === "DRAFT" ? (
           <div className="campaign-draft-fields">
@@ -87,8 +111,28 @@ export function CampaignActions({
                 onChange={(event) => setPreviewText(event.target.value)}
               />
             </label>
+            {campaign.contactCategory && (
+              <ContactAudiencePicker
+                options={contactAudiences}
+                value={selectedAudienceKey}
+                onChange={setSelectedAudienceKey}
+              />
+            )}
+            {campaign.draftHtml !== null && (
+              <label className="ui-field">
+                <span className="ui-field__label">Email HTML</span>
+                <textarea
+                  className="ui-input campaign-html-source"
+                  value={draftHtml}
+                  onChange={(event) => setDraftHtml(event.target.value)}
+                  maxLength={250 * 1024}
+                  spellCheck={false}
+                />
+              </label>
+            )}
             <button
               className="ui-button ui-button--secondary"
+              disabled={Boolean(campaign.contactCategory && !selectedAudience)}
               onClick={async () => {
                 setMessage("Saving…");
                 const response = await fetch(
@@ -101,6 +145,13 @@ export function CampaignActions({
                       name,
                       subject,
                       previewText: previewText || undefined,
+                      ...(campaign.draftHtml !== null ? { draftHtml } : {}),
+                      ...(selectedAudience
+                        ? {
+                            contactCategory: selectedAudience.category,
+                            contactSourceTag: selectedAudience.sourceTag,
+                          }
+                        : {}),
                     }),
                   },
                 );
@@ -114,7 +165,7 @@ export function CampaignActions({
           </div>
         ) : null}
       </div>
-      {campaign.status === "DRAFT" ? (
+      {campaign.status === "DRAFT" && !draftOnly ? (
         <div className="campaign-send-panel__controls">
           <button
             className="ui-button ui-button--secondary"

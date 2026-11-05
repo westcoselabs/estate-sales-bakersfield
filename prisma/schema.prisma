@@ -146,6 +146,7 @@ enum EmailCampaignStatus {
 enum EmailCampaignSelectionMode {
   ALL_ELIGIBLE
   SELECTED_USERS
+  CONTACT_SEGMENT
 
   @@map("email_campaign_selection_mode")
 }
@@ -836,7 +837,10 @@ model EmailCampaign {
   previewText             String?                    @map("preview_text") @db.VarChar(200)
   status                  EmailCampaignStatus        @default(DRAFT)
   selectionMode           EmailCampaignSelectionMode @map("selection_mode")
-  templateRevisionId      String                     @map("template_revision_id") @db.Uuid
+  templateRevisionId      String?                    @map("template_revision_id") @db.Uuid
+  draftHtml               String?                    @map("draft_html") @db.Text
+  contactCategory         String?                    @map("contact_category") @db.VarChar(30)
+  contactSourceTag        String?                    @map("contact_source_tag") @db.VarChar(80)
   listingSnapshot         Json                       @map("listing_snapshot")
   createdByUserId         String                     @map("created_by_user_id") @db.Uuid
   providerSegmentId       String?                    @unique @map("provider_segment_id") @db.VarChar(255)
@@ -854,7 +858,7 @@ model EmailCampaign {
   createdAt               DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt               DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  templateRevision EmailTemplateRevision    @relation(fields: [templateRevisionId], references: [id], onDelete: Restrict)
+  templateRevision EmailTemplateRevision?   @relation(fields: [templateRevisionId], references: [id], onDelete: Restrict)
   createdBy        User                     @relation("EmailCampaignCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   recipients       EmailCampaignRecipient[]
 

@@ -7,6 +7,45 @@ export type EmailTemplateKey =
 
 export type EmailTemplateCategory = "TRANSACTIONAL" | "MARKETING";
 
+export type CampaignSelectionMode =
+  "ALL_ELIGIBLE" | "SELECTED_USERS" | "CONTACT_SEGMENT";
+export interface ContactAudienceOption {
+  category: "ATTENDEE" | "BUSINESS_OWNER";
+  sourceTag: string;
+  total: number;
+  eligible: number;
+  suppressed: number;
+}
+export interface CreateCampaignInput {
+  name: string;
+  subject: string;
+  previewText?: string;
+  templateRevisionId?: string;
+  draftHtml?: string;
+  listingIds: string[];
+  selectionMode: CampaignSelectionMode;
+  selectedUserIds: string[];
+  contactCategory?: "ATTENDEE" | "BUSINESS_OWNER";
+  contactSourceTag?: string;
+}
+export interface UpdateCampaignInput {
+  expectedVersion: number;
+  name: string;
+  subject: string;
+  previewText?: string;
+  draftHtml?: string;
+  contactCategory?: "ATTENDEE" | "BUSINESS_OWNER";
+  contactSourceTag?: string;
+}
+export function isDraftOnlyCampaign(campaign: {
+  selectionMode: string;
+  draftHtml?: string | null;
+}) {
+  return (
+    campaign.selectionMode === "CONTACT_SEGMENT" || campaign.draftHtml != null
+  );
+}
+
 export type EmailCampaignStatus =
   | "DRAFT"
   | "PREPARING"
@@ -104,6 +143,7 @@ export interface AdminEmailTemplateRecord {
 }
 
 export interface CampaignComposerOptions {
+  contactAudiences: ContactAudienceOption[];
   templates: {
     id: string;
     revisionNumber: number;
@@ -129,8 +169,12 @@ export interface AdminEmailCampaignRecord {
   subject: string;
   previewText: string | null;
   status: EmailCampaignStatus;
-  selectionMode: "ALL_ELIGIBLE" | "SELECTED_USERS";
-  templateRevisionId: string;
+  selectionMode: CampaignSelectionMode;
+  templateRevisionId: string | null;
+  draftHtml: string | null;
+  contactCategory: string | null;
+  contactSourceTag: string | null;
+  contactAudience: ContactAudienceOption | null;
   listingSnapshot: unknown;
   recipientCount: number;
   deliveredCount: number;
@@ -147,7 +191,7 @@ export interface AdminEmailCampaignRecord {
     subject: string;
     html: string;
     template: { name: string };
-  };
+  } | null;
   recipients: { user: { displayName: string; email: string } }[];
 }
 
@@ -160,7 +204,7 @@ export interface AdminEmailCampaignSummaryRecord {
   version: number;
   sentAt: Date | null;
   createdAt: Date;
-  templateRevision: { template: { name: string } };
+  templateRevision: { template: { name: string } } | null;
 }
 
 export interface EmailDeliveryHistoryRecord {

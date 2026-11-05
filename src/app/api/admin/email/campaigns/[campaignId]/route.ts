@@ -1,17 +1,10 @@
-import { z } from "zod";
-
-import { createConfiguredEmailCenter } from "@/modules/email";
+import {
+  createConfiguredEmailCenter,
+  updateCampaignSchema,
+  type UpdateCampaignInput,
+} from "@/modules/email";
 
 import { adminEmailMutation } from "../../_route";
-
-const schema = z
-  .object({
-    expectedVersion: z.number().int().positive(),
-    name: z.string().trim().min(1).max(100),
-    subject: z.string().trim().min(1).max(200),
-    previewText: z.string().trim().max(200).optional(),
-  })
-  .strict();
 
 export async function PUT(
   request: Request,
@@ -23,11 +16,11 @@ export async function PUT(
     "admin.email.campaigns.update",
     "EMAIL_CAMPAIGN",
     async ({ session, body, requestId }) => {
-      const { previewText, ...input } = schema.parse(body);
+      const input = updateCampaignSchema.parse(body) as UpdateCampaignInput;
       await createConfiguredEmailCenter().updateCampaign(
         session,
         campaignId,
-        { ...input, ...(previewText ? { previewText } : {}) },
+        input,
         requestId,
       );
       return { ok: true };

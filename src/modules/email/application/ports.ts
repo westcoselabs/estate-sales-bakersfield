@@ -5,6 +5,8 @@ import type {
   CampaignComposerOptions,
   EmailDeliveryHistoryRecord,
   EmailProviderMessage,
+  CreateCampaignInput,
+  UpdateCampaignInput,
 } from "../domain/types";
 
 export interface EmailGateway {
@@ -79,28 +81,21 @@ export interface EmailCenterPort {
   }): Promise<void>;
   listCampaigns(): Promise<AdminEmailCampaignSummaryRecord[]>;
   campaignComposerOptions(): Promise<CampaignComposerOptions>;
-  createCampaign(input: {
-    name: string;
-    subject: string;
-    previewText?: string;
-    templateRevisionId: string;
-    listingIds: string[];
-    selectionMode: "ALL_ELIGIBLE" | "SELECTED_USERS";
-    selectedUserIds: string[];
-    actorId: string;
-    actorSessionId: string;
-    requestId?: string;
-  }): Promise<{ id: string }>;
-  updateCampaign(input: {
-    id: string;
-    expectedVersion: number;
-    name: string;
-    subject: string;
-    previewText?: string;
-    actorId: string;
-    actorSessionId: string;
-    requestId?: string;
-  }): Promise<void>;
+  createCampaign(
+    input: CreateCampaignInput & {
+      actorId: string;
+      actorSessionId: string;
+      requestId?: string;
+    },
+  ): Promise<{ id: string }>;
+  updateCampaign(
+    input: UpdateCampaignInput & {
+      id: string;
+      actorId: string;
+      actorSessionId: string;
+      requestId?: string;
+    },
+  ): Promise<void>;
   getCampaign(id: string): Promise<AdminEmailCampaignRecord | null>;
   listDeliveryHistory(): Promise<EmailDeliveryHistoryRecord[]>;
   markCampaignTested(

@@ -12,7 +12,7 @@ export default async function NewCampaignPage() {
           <p className="eyebrow">Email center / Campaigns</p>
           <h1>Create campaign</h1>
           <p>
-            Pair a published template with active listings and a verified
+            Save an email draft with featured listings and your selected
             audience.
           </p>
         </div>
@@ -20,6 +20,7 @@ export default async function NewCampaignPage() {
       <CampaignComposer
         options={{
           templates: options.templates,
+          contactAudiences: options.contactAudiences,
           users: options.users,
           listings: options.listings.map((listing) => ({
             id: listing.id,
