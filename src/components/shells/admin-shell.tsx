@@ -42,6 +42,12 @@ const destinations: ReadonlyArray<{
   { href: "/admin", label: "Overview", segment: null, icon: "home" },
   { href: "/admin/users", label: "Users", segment: "users", icon: "user" },
   {
+    href: "/admin/contacts",
+    label: "Contacts",
+    segment: "contacts",
+    icon: "mail",
+  },
+  {
     href: "/admin/listings",
     label: "Listings",
     segment: "listings",

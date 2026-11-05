@@ -279,6 +279,7 @@ enum ExternalListingStatus {
 }
 
 model User {
+  contactImports AudienceContactImport[]
   id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   displayName       String        @map("display_name") @db.VarChar(100)
   email             String        @db.VarChar(320)
@@ -318,6 +319,39 @@ model User {
   @@index([status])
   @@index([createdAt, id])
   @@map("users")
+}
+
+// Mailing-list contacts are separate from login accounts.
+model AudienceContact {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email              String    @unique @db.VarChar(320)
+  firstName          String    @default("") @map("first_name") @db.VarChar(120)
+  lastName           String    @default("") @map("last_name") @db.VarChar(120)
+  category           String    @db.VarChar(30)
+  status             String    @db.VarChar(30)
+  sourceTags         String[]  @default([]) @map("source_tags")
+  consentConfirmedAt DateTime? @map("consent_confirmed_at") @db.Timestamptz(3)
+  suppressedAt       DateTime? @map("suppressed_at") @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([category, status])
+  @@index([sourceTags], type: Gin)
+  @@map("audience_contacts")
+}
+
+model AudienceContactImport {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  digest             String    @unique @db.Char(64)
+  sourceTag          String    @map("source_tag") @db.VarChar(80)
+  category           String    @db.VarChar(30)
+  summary            Json
+  importedBy         String?   @map("imported_by") @db.Uuid
+  consentConfirmedAt DateTime? @map("consent_confirmed_at") @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  administrator      User?     @relation(fields: [importedBy], references: [id], onDelete: SetNull)
+
+  @@map("audience_contact_imports")
 }
 
 model Session {

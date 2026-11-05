@@ -30,6 +30,15 @@ export default async function AdminEmailPage() {
       </header>
       <div className="email-overview-grid">
         <section className="admin-panel email-overview-card">
+          <p className="eyebrow">Mailing audiences</p>
+          <h2>Contacts</h2>
+          <p>
+            Import attendees and business owners, preserve unsubscribes, and
+            export a filtered audience for future campaigns.
+          </p>
+          <Link href="/admin/contacts">Manage contacts →</Link>
+        </section>
+        <section className="admin-panel email-overview-card">
           <span className="email-overview-card__icon">01</span>
           <p className="eyebrow">Template library</p>
           <h2>

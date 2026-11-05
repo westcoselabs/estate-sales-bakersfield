@@ -14,6 +14,8 @@ export type AdminRateLimitAction =
   | "LISTING_MODERATION"
   | "LISTING_IMPORT"
   | "EMAIL_TEMPLATE"
+  | "CONTACT_IMPORT"
+  | "CONTACT_MANAGEMENT"
   | "EMAIL_CAMPAIGN";
 
 const ADMIN_LIMITS: Readonly<
@@ -26,6 +28,8 @@ const ADMIN_LIMITS: Readonly<
   LISTING_MODERATION: { limit: 20, windowSeconds: 60 * 60 },
   LISTING_IMPORT: { limit: 30, windowSeconds: 60 * 60 },
   EMAIL_TEMPLATE: { limit: 30, windowSeconds: 60 * 60 },
+  CONTACT_IMPORT: { limit: 30, windowSeconds: 60 * 60 },
+  CONTACT_MANAGEMENT: { limit: 60, windowSeconds: 60 * 60 },
   EMAIL_CAMPAIGN: { limit: 10, windowSeconds: 60 * 60 },
 };
 
