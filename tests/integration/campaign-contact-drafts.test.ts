@@ -262,4 +262,92 @@ describe("imported-contact campaign drafts", () => {
       contactAudience: null,
     });
   });
+
+  it("sends only the saved draft to one test address and leaves bulk dispatch untouched", async () => {
+    gateway.send.mockResolvedValueOnce({ id: "preview-provider-id" });
+    const beforeJobs = await prisma.durableJob.count();
+    const { id } = await center.createCampaign(session, input());
+    const preview = {
+      recipient: "preview@example.test",
+      expectedVersion: 1,
+      previewId: randomUUID(),
+    };
+    await expect(
+      center.previewCampaignDraft(session, id, preview),
+    ).resolves.toMatchObject({
+      providerMessageId: "preview-provider-id",
+      recipient: preview.recipient,
+      version: 1,
+    });
+    const message = gateway.send.mock.calls.at(-1)![0];
+    expect(message.to).toBe("preview@example.test");
+    expect(message.subject).toBe("[Test] Explore the photos");
+    expect(message.html).toContain("148 photos");
+    expect(message.html).toContain(
+      'href="https://example.test/unsubscribe?token=sample"',
+    );
+    expect(message.html).not.toContain("{{");
+    expect(message.idempotencyKey).toContain(preview.previewId);
+    expect(
+      await prisma.emailCampaign.findUniqueOrThrow({ where: { id } }),
+    ).toMatchObject({
+      status: "DRAFT",
+      version: 1,
+      testedAt: null,
+      sentAt: null,
+      providerBroadcastId: null,
+      providerSegmentId: null,
+    });
+    expect(
+      await prisma.emailCampaignRecipient.count({ where: { campaignId: id } }),
+    ).toBe(0);
+    expect(await prisma.durableJob.count()).toBe(beforeJobs);
+    expect(gateway.createBroadcast).not.toHaveBeenCalled();
+    expect(gateway.sendBroadcast).not.toHaveBeenCalled();
+  });
+
+  it("rejects unauthorized, multi-recipient and stale previews and reuses the provider key on retry", async () => {
+    const { id } = await center.createCampaign(session, input());
+    const preview = {
+      recipient: "preview@example.test",
+      expectedVersion: 1,
+      previewId: randomUUID(),
+    };
+    gateway.send.mockClear();
+    await expect(
+      center.previewCampaignDraft(null, id, preview),
+    ).rejects.toThrow();
+    await expect(
+      center.previewCampaignDraft(
+        { ...session, principal: { ...session.principal, role: "USER" } },
+        id,
+        preview,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      center.previewCampaignDraft(session, id, {
+        ...preview,
+        recipient: "one@example.test,two@example.test",
+      }),
+    ).rejects.toThrow();
+    await expect(
+      center.previewCampaignDraft(session, id, {
+        ...preview,
+        expectedVersion: 5,
+      }),
+    ).rejects.toMatchObject({ code: "STALE_CAMPAIGN" });
+    expect(gateway.send).not.toHaveBeenCalled();
+    gateway.send.mockRejectedValueOnce(
+      new Error("Ambiguous provider response"),
+    );
+    await expect(
+      center.previewCampaignDraft(session, id, preview),
+    ).rejects.toThrow("Ambiguous provider response");
+    gateway.send.mockResolvedValueOnce({ id: "same-preview-id" });
+    await center.previewCampaignDraft(session, id, preview);
+    expect(gateway.send.mock.calls[0]![0].idempotencyKey).toBe(
+      gateway.send.mock.calls[1]![0].idempotencyKey,
+    );
+    expect((await center.getCampaign(session, id))?.status).toBe("DRAFT");
+  });
 });

@@ -1,6 +1,7 @@
 export { EmailCenterService } from "./application/email-center";
 export {
   createCampaignSchema,
+  campaignPreviewSchema,
   updateCampaignSchema,
 } from "./application/campaign-input";
 export { isDraftOnlyCampaign } from "./domain/types";

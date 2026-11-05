@@ -5,9 +5,11 @@ import {
 } from "@/modules/auth";
 
 import { SYSTEM_EMAIL_DEFAULTS } from "./defaults";
+import { campaignPreviewSchema } from "./campaign-input";
 import type { EmailCenterPort, EmailGateway } from "./ports";
 import {
   assertRequiredVariables,
+  emailContentDigest,
   parseCampaignListingSnapshot,
   renderEmailTemplate,
   renderRecentListingsHtml,
@@ -232,6 +234,55 @@ export class EmailCenterService {
   listDeliveryHistory(session: CurrentSession | null) {
     requireSuperAdminPrincipal(session?.principal ?? null);
     return this.repository.listDeliveryHistory();
+  }
+
+  async previewCampaignDraft(
+    session: CurrentSession | null,
+    id: string,
+    rawInput: { recipient: string; expectedVersion: number; previewId: string },
+  ) {
+    requireSuperAdminPrincipal(session?.principal ?? null);
+    const input = campaignPreviewSchema.parse(rawInput);
+    const campaign = await this.repository.getCampaign(id);
+    if (!campaign)
+      throw new EmailApplicationError(
+        "CAMPAIGN_NOT_FOUND",
+        "Email campaign not found.",
+        404,
+      );
+    if (campaign.status !== "DRAFT" || !campaign.draftHtml)
+      throw new EmailApplicationError(
+        "HTML_DRAFT_REQUIRED",
+        "Only a saved HTML draft can use this preview action.",
+        409,
+      );
+    if (campaign.version !== input.expectedVersion)
+      throw new EmailApplicationError(
+        "STALE_CAMPAIGN",
+        "The campaign changed. Reload before sending a preview.",
+        409,
+      );
+    const savedHtml = sanitizeEmailHtml(campaign.draftHtml);
+    assertRequiredVariables(savedHtml, ["RESEND_UNSUBSCRIBE_URL"]);
+    const previewUrl = `${this.applicationUrl}/unsubscribe?token=sample`;
+    const html = savedHtml
+      .replaceAll("{{{RESEND_UNSUBSCRIBE_URL}}}", previewUrl)
+      .replaceAll("{{RESEND_UNSUBSCRIBE_URL}}", previewUrl);
+    // A direct, single-recipient preview never prepares or tests the campaign
+    // for bulk dispatch. In particular, testedAt and provider broadcast IDs stay null.
+    const result = await this.gateway.send({
+      to: input.recipient,
+      subject: `[Test] ${campaign.subject.replace(/[\r\n]/g, " ")}`,
+      html,
+      text: `Preview of ${campaign.subject}. View the HTML version to review the email design. No attendee campaign has been sent.`,
+      idempotencyKey: `draft-preview-${id}-${campaign.version}-${emailContentDigest(input.recipient, savedHtml).slice(0, 32)}-${input.previewId}`,
+      tags: { type: "campaign-preview", campaign_id: id },
+    });
+    return {
+      providerMessageId: result.id,
+      recipient: input.recipient,
+      version: campaign.version,
+    };
   }
 
   async testCampaign(

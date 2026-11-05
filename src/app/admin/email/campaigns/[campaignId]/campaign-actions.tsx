@@ -82,7 +82,7 @@ export function CampaignActions({
         </h2>
         <p>
           {draftOnly
-            ? "This draft is not scheduled. Imported-contact and HTML campaign sending is not enabled, so saving here cannot send or queue email."
+            ? "This draft is not scheduled. Sending to the attendee audience is not enabled. Use Inbox preview below to test the saved design with one email address."
             : "A fresh audience snapshot is created at send time. Ambiguous provider results are never automatically resent."}
         </p>
         {campaign.status === "DRAFT" ? (

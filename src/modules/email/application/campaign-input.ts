@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+export const campaignPreviewSchema = z
+  .object({
+    recipient: z.email().trim().max(254),
+    expectedVersion: z.number().int().positive(),
+    previewId: z.uuid(),
+  })
+  .strict();
+
 const details = {
   name: z.string().trim().min(1).max(100),
   subject: z.string().trim().min(1).max(200),

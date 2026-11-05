@@ -104,6 +104,17 @@ test("saves a branded campaign draft with an imported attendee audience and no s
       page.getByText("Simply Decorated: photo preview", { exact: true }),
     ).toBeVisible();
     const id = page.url().split("/").at(-1)!;
+    await page
+      .getByRole("textbox", { name: "Test recipient email", exact: true })
+      .fill("preview@example.test");
+    await page
+      .getByRole("button", { name: "Send test email", exact: true })
+      .click();
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: "Test submitted to preview@example.test" }),
+    ).toContainText("Reference: capture-");
     expect(
       await prisma.emailCampaign.findUniqueOrThrow({ where: { id } }),
     ).toMatchObject({
@@ -116,6 +127,11 @@ test("saves a branded campaign draft with an imported attendee audience and no s
       providerBroadcastId: null,
     });
     expect(await prisma.durableJob.count()).toBe(beforeJobs);
+    await expect(
+      page
+        .frameLocator('iframe[title="Campaign email preview"]')
+        .getByRole("heading", { name: "Simply Decorated: nearly 150 photos" }),
+    ).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath("campaign-contact-draft-desktop.png"),
       fullPage: true,

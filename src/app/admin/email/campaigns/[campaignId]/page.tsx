@@ -6,6 +6,7 @@ import {
 } from "@/modules/email";
 import { parseCampaignListingSnapshot } from "@/modules/email";
 import { CampaignActions } from "./campaign-actions";
+import { DraftPreviewTest } from "./draft-preview-test";
 import { CampaignPreview } from "../campaign-preview";
 const audienceCategoryLabel = (category: string) =>
   category === "ATTENDEE" ? "Estate Sale Attendees" : "Business Owners";
@@ -109,6 +110,13 @@ export default async function CampaignPage({
           contactSourceTag: campaign.contactSourceTag,
         }}
       />
+      {campaign.status === "DRAFT" && campaign.draftHtml && (
+        <DraftPreviewTest
+          key={`preview-${campaign.id}-${campaign.version}`}
+          id={campaign.id}
+          version={campaign.version}
+        />
+      )}
       {campaign.draftHtml && <CampaignPreview html={campaign.draftHtml} />}
     </div>
   );

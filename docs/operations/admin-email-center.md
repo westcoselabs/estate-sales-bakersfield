@@ -48,7 +48,12 @@ iframe; remote images load only after selecting Load email images. Draft edits
 retain optimistic version checks and administrator-session authorization.
 
 Imported-contact and standalone HTML campaigns currently remain **DRAFT**.
-Neither owner tests nor queue/send controls are available for these drafts.
+Queue/send controls remain unavailable for these drafts. **Inbox preview** can
+send the saved HTML version to one explicitly entered test address through the
+configured email provider. It is admin/session/origin/rate-limit protected,
+checks the saved version, and uses a provider idempotency key for retries.
+The subject starts with `[Test]`; the unsubscribe URL is a sample placeholder.
+This does not set `testedAt`, change the audience, or unlock bulk dispatch.
 The service, repository, worker and database enforce this boundary; no provider
 segment, contact import, broadcast or durable send job is created by saving.
 Connecting external audiences to dispatch and provider suppression webhooks is
