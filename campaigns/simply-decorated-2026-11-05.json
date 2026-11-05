@@ -1,0 +1,53 @@
+{
+  "name": "Simply Decorated | November 5–7, 2026",
+  "status": "DRAFT_ONLY",
+  "subject": "Estate Sale by Simply Decorated",
+  "preheader": "Take a look before you go. November 5–7, 8 a.m.–1 p.m. Pacific, in Bakersfield.",
+  "partner_name": "Simply Decorated by Riley",
+  "partner_tag": "partner:simply-decorated-by-riley",
+  "audience_type": "attendee",
+  "audience_tags": [
+    "audience:attendee",
+    "partner:simply-decorated-by-riley",
+    "source:mailchimp",
+    "batch:ce3f2d590c"
+  ],
+  "segment_name": "Attendees | Simply Decorated by Riley | ce3f2d590c",
+  "consent_confirmed": true,
+  "consent_confirmation": {
+    "date": "2026-11-05",
+    "source": "User confirmation in campaign preparation chat",
+    "scope": "Simply Decorated subscribers' permission covers promotional emails sent by Estate Sales Bakersfield"
+  },
+  "mailing_address": "9208 Alki Ct, Bakersfield, CA 93312",
+  "from": "",
+  "reply_to": "decoratedbyriley@gmail.com",
+  "listing_url": "https://estatesalesbakersfield.com/estate-sales/beautiful-huge-estate-sale-b13a81b2f116",
+  "browse_url": "https://estatesalesbakersfield.com/search?bounds=-119.17813%2C35.24036%2C-118.96935%2C35.51707",
+  "sale_end": "2026-11-07T13:00:00-08:00",
+  "verified_on": "2026-11-05",
+  "photo_count": 148,
+  "campaign_slug": "simply-decorated-2026-11-05",
+  "content": {
+    "HEADLINE": "Something good is waiting inside.",
+    "INTRO": "An estate sale from Simply Decorated by Riley, full of finds worth a closer look. Preview the photos and plan your visit.",
+    "CTA_LABEL": "Browse all 148 photos",
+    "PHOTO_NOTE": "148 photos. One beautiful Bakersfield estate sale.",
+    "COVER_PHOTO_URL": "https://estatesalesbakersfield.com/media/6c540f28-8f3e-42df-accc-0f246ee0e4e6/cover",
+    "COVER_PHOTO_ALT": "Simply Decorated by Riley estate sale flyer, featuring the home, November 5–7 dates, 8 a.m.–1 p.m. hours, and featured finds. Full details follow below.",
+    "PHOTO_ONE_URL": "https://estatesalesbakersfield.com/media/c1e980ca-490c-4f69-b61e-cdb91fc1ee05/gallery",
+    "PHOTO_ONE_ALT": "Wood dresser and collectibles pictured at the Simply Decorated estate sale",
+    "PHOTO_TWO_URL": "https://estatesalesbakersfield.com/media/635a7985-8b97-4c38-9fa9-66c91f99a472/gallery",
+    "PHOTO_TWO_ALT": "Wood hutch, toys, and household finds pictured at the Simply Decorated estate sale",
+    "SALE_TITLE": "Beautiful Huge Estate Sale!",
+    "SALE_DATES": "November 5–7, 2026",
+    "SALE_HOURS": "8 a.m.–1 p.m. each day · Pacific Time",
+    "SALE_ADDRESS": "1913 Morning Rose Drive",
+    "SALE_CITY": "Bakersfield, CA 93312",
+    "SALE_NOTE": "Cash only.",
+    "DISCOVERY_COPY": "Furniture, vintage pieces, collectibles, and everyday treasures—preview the full gallery on Estate Sales Bakersfield before you go.",
+    "RELATIONSHIP_COPY": "A local sale spotlight from Estate Sales Bakersfield in partnership with Simply Decorated by Riley. The sale is organized by Simply Decorated by Riley."
+  },
+  "audience_category": "Estate Sale Attendees",
+  "source_tag": "Simply Decorated"
+}
