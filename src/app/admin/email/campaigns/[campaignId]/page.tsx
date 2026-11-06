@@ -1,9 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireAdminPageSession } from "@/modules/auth";
-import {
-  createConfiguredEmailCenter,
-  isDraftOnlyCampaign,
-} from "@/modules/email";
+import { createConfiguredEmailCenter } from "@/modules/email";
 import { parseCampaignListingSnapshot } from "@/modules/email";
 import { CampaignActions } from "./campaign-actions";
 import { DraftPreviewTest } from "./draft-preview-test";
@@ -25,7 +22,6 @@ export default async function CampaignPage({
     campaign.selectionMode === "CONTACT_SEGMENT"
       ? (await center.campaignComposerOptions(session)).contactAudiences
       : [];
-  const draftOnly = isDraftOnlyCampaign(campaign);
   return (
     <div className="admin-page">
       <header className="admin-page-header">
@@ -67,15 +63,37 @@ export default async function CampaignPage({
             <div>
               <dt>Recipients</dt>
               <dd>
-                {campaign.contactAudience
-                  ? `${campaign.contactAudience.eligible} eligible · ${campaign.contactAudience.suppressed} suppressed or ineligible · ${campaign.contactAudience.total} total`
-                  : campaign.recipientCount || "Revalidated at send"}
+                {campaign.status !== "DRAFT"
+                  ? campaign.recipientCount
+                  : campaign.contactAudience
+                    ? `${campaign.contactAudience.eligible} eligible · ${campaign.contactAudience.suppressed} suppressed or ineligible · ${campaign.contactAudience.total} total`
+                    : campaign.recipientCount || "Revalidated at send"}
               </dd>
             </div>
             <div>
               <dt>Version</dt>
               <dd>{campaign.version}</dd>
             </div>
+            {campaign.status !== "DRAFT" && (
+              <>
+                <div>
+                  <dt>Delivered</dt>
+                  <dd>{campaign.deliveredCount}</dd>
+                </div>
+                <div>
+                  <dt>Bounced</dt>
+                  <dd>{campaign.bouncedCount}</dd>
+                </div>
+                <div>
+                  <dt>Complaints</dt>
+                  <dd>{campaign.complainedCount}</dd>
+                </div>
+                <div>
+                  <dt>Suppressed by provider</dt>
+                  <dd>{campaign.suppressedCount}</dd>
+                </div>
+              </>
+            )}
           </dl>
         </section>
         <section className="admin-panel campaign-summary">
@@ -96,7 +114,9 @@ export default async function CampaignPage({
       <CampaignActions
         key={`${campaign.id}:${campaign.version}`}
         contactAudiences={contactAudiences}
-        draftOnly={draftOnly}
+        dispatchEnabled={center.isCampaignDispatchEnabled()}
+        audience={campaign.contactAudience}
+        lastErrorCode={campaign.lastErrorCode}
         campaign={{
           id: campaign.id,
           name: campaign.name,

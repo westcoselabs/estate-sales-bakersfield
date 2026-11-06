@@ -63,7 +63,7 @@ export function runConfiguredEmailJobBatch(
       queue: "email",
       workerId: `email-vercel-${randomUUID()}`,
       limit,
-      concurrency: 2,
+      concurrency: 1,
       drain: true,
       deadlineAt,
     },

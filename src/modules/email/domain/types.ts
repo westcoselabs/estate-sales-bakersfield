@@ -37,15 +37,6 @@ export interface UpdateCampaignInput {
   contactCategory?: "ATTENDEE" | "BUSINESS_OWNER";
   contactSourceTag?: string;
 }
-export function isDraftOnlyCampaign(campaign: {
-  selectionMode: string;
-  draftHtml?: string | null;
-}) {
-  return (
-    campaign.selectionMode === "CONTACT_SEGMENT" || campaign.draftHtml != null
-  );
-}
-
 export type EmailCampaignStatus =
   | "DRAFT"
   | "PREPARING"
@@ -164,6 +155,7 @@ export interface CampaignComposerOptions {
 }
 
 export interface AdminEmailCampaignRecord {
+  lastErrorCode: string | null;
   id: string;
   name: string;
   subject: string;

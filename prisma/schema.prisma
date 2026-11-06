@@ -335,6 +335,7 @@ model AudienceContact {
   suppressedAt       DateTime? @map("suppressed_at") @db.Timestamptz(3)
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  campaignRecipients EmailCampaignContactRecipient[]
 
   @@index([category, status])
   @@index([sourceTags], type: Gin)
@@ -861,6 +862,7 @@ model EmailCampaign {
   templateRevision EmailTemplateRevision?   @relation(fields: [templateRevisionId], references: [id], onDelete: Restrict)
   createdBy        User                     @relation("EmailCampaignCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   recipients       EmailCampaignRecipient[]
+  contactRecipients EmailCampaignContactRecipient[]
 
   @@index([status, createdAt])
   @@index([createdByUserId, createdAt])
@@ -878,6 +880,21 @@ model EmailCampaignRecipient {
   @@id([campaignId, userId])
   @@index([userId, createdAt])
   @@map("email_campaign_recipients")
+}
+
+model EmailCampaignContactRecipient {
+  campaignId String @map("campaign_id") @db.Uuid
+  contactId String @map("contact_id") @db.Uuid
+  email String @db.VarChar(320)
+  firstName String @map("first_name") @db.VarChar(120)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  campaign EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact AudienceContact @relation(fields: [contactId], references: [id], onDelete: Restrict)
+
+  @@id([campaignId, contactId])
+  @@unique([campaignId, email])
+  @@index([contactId])
+  @@map("email_campaign_contact_recipients")
 }
 
 model ResendWebhookEvent {

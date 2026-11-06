@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { getPrismaClient } from "@/platform/database/client";
 import { getServerEnvironment } from "@/platform/config/env";
+import { suppressionRecipient } from "@/modules/email";
 import {
   BoundedBodyError,
   readBoundedText,
@@ -175,14 +176,14 @@ export async function POST(request: Request) {
             data: { [counter]: { increment: 1 } },
           });
       }
-      const email =
-        typeof data.email === "string" ? data.email.trim().toLowerCase() : null;
-      const shouldUnsubscribe =
-        type === "email.complained" ||
-        type === "email.bounced" ||
-        type === "email.suppressed" ||
-        (type === "contact.updated" && data.unsubscribed === true);
-      if (email && shouldUnsubscribe) {
+      const email = suppressionRecipient(type, data);
+      if (email) {
+        // Imported contacts are independent of user accounts. Never resubscribe a
+        // contact here, including when provider events arrive out of order.
+        await tx.audienceContact.updateMany({
+          where: { email, status: "SUBSCRIBED" },
+          data: { status: "UNSUBSCRIBED", suppressedAt: occurredAt },
+        });
         const user = await tx.user.findUnique({
           where: { normalizedEmail: email },
           select: { id: true },

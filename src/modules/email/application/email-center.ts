@@ -17,7 +17,6 @@ import {
 } from "./rendering";
 import { EmailApplicationError } from "../domain/errors";
 import {
-  isDraftOnlyCampaign,
   type CreateCampaignInput,
   type UpdateCampaignInput,
 } from "../domain/types";
@@ -29,6 +28,10 @@ export class EmailCenterService {
     private readonly applicationUrl: string,
     private readonly campaignDispatchEnabled: boolean,
   ) {}
+
+  isCampaignDispatchEnabled() {
+    return this.campaignDispatchEnabled;
+  }
 
   listTemplates(session: CurrentSession | null) {
     requireSuperAdminPrincipal(session?.principal ?? null);
@@ -268,8 +271,6 @@ export class EmailCenterService {
     const html = savedHtml
       .replaceAll("{{{RESEND_UNSUBSCRIBE_URL}}}", previewUrl)
       .replaceAll("{{RESEND_UNSUBSCRIBE_URL}}", previewUrl);
-    // A direct, single-recipient preview never prepares or tests the campaign
-    // for bulk dispatch. In particular, testedAt and provider broadcast IDs stay null.
     const result = await this.gateway.send({
       to: input.recipient,
       subject: `[Test] ${campaign.subject.replace(/[\r\n]/g, " ")}`,
@@ -278,6 +279,12 @@ export class EmailCenterService {
       idempotencyKey: `draft-preview-${id}-${campaign.version}-${emailContentDigest(input.recipient, savedHtml).slice(0, 32)}-${input.previewId}`,
       tags: { type: "campaign-preview", campaign_id: id },
     });
+    await this.repository.markCampaignTested(
+      id,
+      session!.principal.id,
+      session!.id,
+      campaign.version,
+    );
     return {
       providerMessageId: result.id,
       recipient: input.recipient,
@@ -298,13 +305,25 @@ export class EmailCenterService {
         "Email campaign not found.",
         404,
       );
-    if (isDraftOnlyCampaign(campaign) || !campaign.templateRevision) {
+    if (campaign.status !== "DRAFT")
       throw new EmailApplicationError(
-        "DRAFT_ONLY_CAMPAIGN",
-        "Imported-contact and HTML campaigns are saved drafts. Sending is not enabled for these drafts.",
+        "STALE_CAMPAIGN",
+        "Only a draft can be tested.",
         409,
       );
+    if (campaign.draftHtml) {
+      return this.previewCampaignDraft(session, id, {
+        recipient: actor.email,
+        expectedVersion: campaign.version,
+        previewId: crypto.randomUUID(),
+      });
     }
+    if (!campaign.templateRevision)
+      throw new EmailApplicationError(
+        "CONTENT_REQUIRED",
+        "Campaign content is missing.",
+        409,
+      );
     const listings = parseCampaignListingSnapshot(campaign.listingSnapshot);
     const rendered = renderEmailTemplate({
       subject: campaign.subject,
@@ -333,6 +352,7 @@ export class EmailCenterService {
       id,
       actor.id,
       session!.id,
+      campaign.version,
       requestId,
     );
   }

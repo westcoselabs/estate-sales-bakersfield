@@ -4,7 +4,6 @@ export {
   campaignPreviewSchema,
   updateCampaignSchema,
 } from "./application/campaign-input";
-export { isDraftOnlyCampaign } from "./domain/types";
 export type {
   CreateCampaignInput,
   UpdateCampaignInput,
@@ -27,3 +26,5 @@ export {
   renderRecentListingsHtml,
   sanitizeEmailHtml,
 } from "./application/rendering";
+
+export { suppressionRecipient } from "./application/webhook-suppression";

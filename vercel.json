@@ -9,6 +9,6 @@
   },
   "crons": [
     { "path": "/api/internal/jobs/run", "schedule": "*/30 * * * *" },
-    { "path": "/api/internal/email-jobs/run", "schedule": "*/30 * * * *" }
+    { "path": "/api/internal/email-jobs/run", "schedule": "* * * * *" }
   ]
 }

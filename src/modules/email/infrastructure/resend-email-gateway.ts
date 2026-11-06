@@ -42,7 +42,16 @@ export class ResendEmailGateway implements EmailGateway {
     return { id: response.data.id };
   }
 
+  private nextRequestAt = 0;
+  private async pace() {
+    const now = Date.now();
+    const delay = Math.max(0, this.nextRequestAt - now);
+    this.nextRequestAt = now + delay + 600;
+    if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+
   async createSegment(name: string) {
+    await this.pace();
     const response = await this.client.segments.create({ name });
     if (response.error || !response.data?.id)
       providerFailure(response.error, "SEGMENT_CREATE_FAILED");
@@ -53,17 +62,19 @@ export class ResendEmailGateway implements EmailGateway {
     segmentId: string;
     rows: readonly { email: string; firstName: string }[];
   }) {
+    await this.pace();
+    const csvCell = (value: string) => `"${value.replaceAll('"', '""')}"`;
     const csv = [
       "email,first_name",
       ...input.rows.map(
-        (row) =>
-          `${JSON.stringify(row.email)},${JSON.stringify(row.firstName)}`,
+        (row) => `${csvCell(row.email)},${csvCell(row.firstName)}`,
       ),
     ].join("\r\n");
     const response = await this.client.contacts.imports.create({
       file: new Blob([csv], { type: "text/csv" }),
       columnMap: { email: "email", firstName: "first_name" },
-      onConflict: "skip",
+      // Omit unsubscribed entirely: never reverse a provider opt-out.
+      onConflict: "upsert",
       segments: [{ id: input.segmentId }],
     });
     if (response.error || !response.data?.id)
@@ -72,11 +83,49 @@ export class ResendEmailGateway implements EmailGateway {
   }
 
   async getContactImportStatus(id: string) {
+    await this.pace();
     const response = await this.client.contacts.imports.get(id);
     if (response.error || !response.data) {
       providerFailure(response.error, "CONTACT_IMPORT_STATUS_FAILED");
     }
     return response.data.status;
+  }
+
+  async listSegmentContacts(segmentId: string) {
+    const contacts: { email: string; unsubscribed: boolean }[] = [];
+    let after: string | undefined;
+    do {
+      await this.pace();
+      const response = await this.client.contacts.list({
+        segmentId,
+        limit: 100,
+        ...(after ? { after } : {}),
+      });
+      if (response.error || !response.data)
+        providerFailure(response.error, "SEGMENT_READ_FAILED");
+      contacts.push(
+        ...response.data.data.map((contact) => ({
+          email: contact.email.toLowerCase(),
+          unsubscribed: contact.unsubscribed,
+        })),
+      );
+      if (!response.data.has_more) return contacts;
+      const lastId = response.data.data.at(-1)?.id;
+      if (!lastId || lastId === after || contacts.length > 10000)
+        throw new EmailProviderError("INVALID_SEGMENT_PAGINATION");
+      after = lastId;
+    } while (after);
+    return contacts;
+  }
+
+  async removeContactFromSegment(segmentId: string, email: string) {
+    await this.pace();
+    const response = await this.client.contacts.segments.remove({
+      email,
+      segmentId,
+    });
+    if (response.error)
+      providerFailure(response.error, "SEGMENT_REMOVE_FAILED");
   }
 
   async createBroadcast(input: {
@@ -87,6 +136,7 @@ export class ResendEmailGateway implements EmailGateway {
     text: string;
     segmentId: string;
   }) {
+    await this.pace();
     const response = await this.client.broadcasts.create({
       from: this.from,
       name: input.name,
@@ -103,9 +153,18 @@ export class ResendEmailGateway implements EmailGateway {
   }
 
   async sendBroadcast(id: string) {
+    await this.pace();
     try {
       const response = await this.client.broadcasts.send(id);
-      if (response.error) providerFailure(response.error, "BROADCAST_REJECTED");
+      if (response.error) {
+        const status = response.error.statusCode;
+        throw new EmailProviderError(
+          "BROADCAST_REJECTED",
+          status === null || status >= 500,
+        );
+      }
+      if (!response.data?.id || response.data.id !== id)
+        throw new EmailProviderError("BROADCAST_RESULT_AMBIGUOUS", true);
     } catch (error) {
       if (error instanceof EmailProviderError) throw error;
       throw new EmailProviderError("BROADCAST_RESULT_AMBIGUOUS", true);

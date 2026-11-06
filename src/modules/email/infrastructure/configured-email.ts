@@ -30,6 +30,12 @@ class UnconfiguredEmailGateway implements EmailGateway {
   getContactImportStatus(): Promise<never> {
     return Promise.reject(this.unavailable());
   }
+  listSegmentContacts(): Promise<never> {
+    return Promise.reject(this.unavailable());
+  }
+  removeContactFromSegment(): Promise<never> {
+    return Promise.reject(this.unavailable());
+  }
   createBroadcast(): Promise<never> {
     return Promise.reject(this.unavailable());
   }

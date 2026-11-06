@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 export function DraftPreviewTest({
   id,
@@ -8,6 +9,7 @@ export function DraftPreviewTest({
   id: string;
   version: number;
 }) {
+  const router = useRouter();
   const [recipient, setRecipient] = useState("");
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
@@ -55,6 +57,7 @@ export function DraftPreviewTest({
               `Test submitted to ${data.recipient}. Reference: ${data.providerMessageId}. The campaign remains a draft.`,
             );
             attempt.current = null;
+            router.refresh();
           } catch {
             setMessage(
               "The result could not be confirmed. Check your inbox before retrying; this page will reuse the same test request.",
@@ -77,6 +80,7 @@ export function DraftPreviewTest({
             onChange={(event) => {
               setRecipient(event.target.value);
               attempt.current = null;
+              router.refresh();
               setMessage("");
             }}
           />

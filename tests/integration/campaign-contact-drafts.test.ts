@@ -17,6 +17,8 @@ const gateway = {
   createSegment: vi.fn(),
   importContacts: vi.fn(),
   getContactImportStatus: vi.fn(),
+  listSegmentContacts: vi.fn(),
+  removeContactFromSegment: vi.fn(),
   createBroadcast: vi.fn(),
   sendBroadcast: vi.fn(),
   updateContactSubscription: vi.fn(),
@@ -130,15 +132,12 @@ describe("imported-contact campaign drafts", () => {
     });
     expect(await prisma.durableJob.count()).toBe(before);
     expect(gateway.send).not.toHaveBeenCalled();
-    await expect(center.testCampaign(session, id)).rejects.toMatchObject({
-      code: "DRAFT_ONLY_CAMPAIGN",
-    });
     await expect(
       center.sendCampaign(session, id, {
         expectedVersion: 1,
         confirmation: "SEND",
       }),
-    ).rejects.toMatchObject({ code: "DRAFT_ONLY_CAMPAIGN" });
+    ).rejects.toMatchObject({ code: "TEST_SEND_REQUIRED" });
     const worker = new EmailJobProcessor(prisma, gateway, {
       APP_ENV: "production",
       EMAIL_CAMPAIGNS_ENABLED: true,
@@ -147,12 +146,6 @@ describe("imported-contact campaign drafts", () => {
     await worker.sendCampaign(id);
     expect(gateway.createBroadcast).not.toHaveBeenCalled();
     expect(gateway.createSegment).not.toHaveBeenCalled();
-    await expect(
-      prisma.emailCampaign.update({
-        where: { id },
-        data: { status: "PREPARING" },
-      }),
-    ).rejects.toThrow();
     expect((await center.getCampaign(session, id))?.status).toBe("DRAFT");
   });
 
@@ -293,7 +286,7 @@ describe("imported-contact campaign drafts", () => {
     ).toMatchObject({
       status: "DRAFT",
       version: 1,
-      testedAt: null,
+      testedAt: expect.any(Date),
       sentAt: null,
       providerBroadcastId: null,
       providerSegmentId: null,
@@ -349,5 +342,138 @@ describe("imported-contact campaign drafts", () => {
       gateway.send.mock.calls[1]![0].idempotencyKey,
     );
     expect((await center.getCampaign(session, id))?.status).toBe("DRAFT");
+  });
+  it("snapshots only eligible attendees, tests the exact version, and queues once", async () => {
+    const tag = `send-${randomUUID()}`;
+    const contacts = await Promise.all(
+      ["SUBSCRIBED", "UNSUBSCRIBED", "CLEANED"].map((status) =>
+        prisma.audienceContact.create({
+          data: {
+            email: `${randomUUID()}@example.test`,
+            category: "ATTENDEE",
+            sourceTags: [tag],
+            status,
+            consentConfirmedAt: new Date(),
+          },
+        }),
+      ),
+    );
+    await prisma.audienceContact.create({
+      data: {
+        email: `${randomUUID()}@example.test`,
+        category: "BUSINESS_OWNER",
+        sourceTags: [tag],
+        status: "SUBSCRIBED",
+        consentConfirmedAt: new Date(),
+      },
+    });
+    const { id } = await center.createCampaign(session, {
+      ...input(),
+      contactSourceTag: tag,
+    });
+    gateway.send.mockResolvedValue({ id: "test-id" });
+    await center.testCampaign(session, id);
+    await center.updateCampaign(session, id, {
+      expectedVersion: 1,
+      name: "Updated",
+      subject: "Updated",
+      draftHtml: html,
+    });
+    await expect(
+      center.sendCampaign(session, id, {
+        expectedVersion: 2,
+        confirmation: "SEND",
+      }),
+    ).rejects.toMatchObject({ code: "TEST_SEND_REQUIRED" });
+    await expect(
+      repository.markCampaignTested(id, session.userId, session.id, 1),
+    ).rejects.toThrow();
+    await center.testCampaign(session, id);
+    await expect(
+      center.sendCampaign(session, id, {
+        expectedVersion: 1,
+        confirmation: "SEND",
+      }),
+    ).rejects.toMatchObject({ code: "STALE_CAMPAIGN" });
+    expect(() =>
+      center.sendCampaign(session, id, {
+        expectedVersion: 2,
+        confirmation: "WRONG",
+      }),
+    ).toThrowError("Type SEND to confirm.");
+    const results = await Promise.allSettled(
+      [1, 2].map(() =>
+        center.sendCampaign(session, id, {
+          expectedVersion: 2,
+          confirmation: "SEND",
+        }),
+      ),
+    );
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      await prisma.emailCampaignContactRecipient.findMany({
+        where: { campaignId: id },
+      }),
+    ).toMatchObject([
+      { contactId: contacts[0]!.id, email: contacts[0]!.email },
+    ]);
+    expect(
+      await prisma.durableJob.count({ where: { deduplicationKey: id } }),
+    ).toBe(1);
+    expect(await center.getCampaign(session, id)).toMatchObject({
+      status: "PREPARING",
+      version: 3,
+      recipientCount: 1,
+    });
+    await expect(
+      prisma.emailCampaignContactRecipient.updateMany({
+        where: { campaignId: id },
+        data: { email: "other@example.test" },
+      }),
+    ).rejects.toThrow();
+
+    const worker = new EmailJobProcessor(prisma, gateway, {
+      APP_ENV: "production",
+      EMAIL_CAMPAIGNS_ENABLED: true,
+      RESEND_RESOURCE_ENV: "production",
+      APP_URL: "https://example.test",
+    } as ServerEnvironment);
+    gateway.createSegment.mockResolvedValue({ id: `segment-${id}` });
+    gateway.importContacts.mockResolvedValue({ id: `import-${id}` });
+    gateway.getContactImportStatus.mockResolvedValue("completed");
+    gateway.listSegmentContacts.mockResolvedValue([
+      { email: contacts[0]!.email, unsubscribed: false },
+    ]);
+    gateway.createBroadcast.mockResolvedValue({ id: `broadcast-${id}` });
+    gateway.sendBroadcast.mockResolvedValue(undefined);
+    await expect(worker.sendCampaign(id)).rejects.toThrow(
+      "CONTACT_IMPORT_PENDING",
+    );
+    await prisma.audienceContact.create({
+      data: {
+        email: `${randomUUID()}@example.test`,
+        category: "ATTENDEE",
+        sourceTags: [tag],
+        status: "SUBSCRIBED",
+        consentConfirmedAt: new Date(),
+      },
+    });
+    await worker.sendCampaign(id);
+    expect(gateway.importContacts.mock.calls.at(-1)![0].rows).toHaveLength(1);
+    expect(gateway.createBroadcast.mock.calls.at(-1)![0].html).toContain(
+      "148 photos",
+    );
+    expect(gateway.createBroadcast.mock.calls.at(-1)![0].html).toContain(
+      "{{{RESEND_UNSUBSCRIBE_URL}}}",
+    );
+    expect(await center.getCampaign(session, id)).toMatchObject({
+      status: "SENT",
+      recipientCount: 1,
+    });
+    const calls = gateway.sendBroadcast.mock.calls.length;
+    await worker.sendCampaign(id);
+    expect(gateway.sendBroadcast).toHaveBeenCalledTimes(calls);
   });
 });

@@ -18,15 +18,10 @@ persisted or logged.
    receipt, and owner-only test sends are checked.
 4. Configure Resend to deliver signed events to `/api/webhooks/resend`, and set
    `RESEND_WEBHOOK_SECRET` to the endpoint signing secret.
-5. Configure both protected cron routes with the checked-in daily Hobby
-   schedules: `/api/internal/jobs/run` at `0 9 * * *` and
-   `/api/internal/email-jobs/run` at `0 10 * * *`. Vercel evaluates these in
-   UTC, may invoke a Hobby cron anywhere in the configured hour, and sends the
-   configured `CRON_SECRET` automatically. Queued receipts and contact sync can
-   therefore wait roughly one day. The worker admits up to 50 jobs with
-   concurrency two and a 20-second admission budget; larger or slower
-   backlogs carry into later runs. See [worker limits](resource-limits-and-workers.md).
-   Campaigns remain disabled during beta.
+5. Configure the protected cron routes from `vercel.json`. Email jobs run every
+   minute; the send endpoint also starts a worker after responding. The email
+   worker runs one job at a time with a 20-second admission budget. Imports are
+   asynchronous and resume on durable retries. Other jobs keep their existing schedule.
 6. In Production only, confirm `RESEND_RESOURCE_ENV=production`, then set
    `EMAIL_CAMPAIGNS_ENABLED=true` and deploy. Preview never dispatches a
    campaign.
@@ -47,18 +42,33 @@ must include the unsubscribe placeholder. The saved preview runs in a sandboxed
 iframe; remote images load only after selecting Load email images. Draft edits
 retain optimistic version checks and administrator-session authorization.
 
-Imported-contact and standalone HTML campaigns currently remain **DRAFT**.
-Queue/send controls remain unavailable for these drafts. **Inbox preview** can
-send the saved HTML version to one explicitly entered test address through the
-configured email provider. It is admin/session/origin/rate-limit protected,
-checks the saved version, and uses a provider idempotency key for retries.
-The subject starts with `[Test]`; the unsubscribe URL is a sample placeholder.
-This does not set `testedAt`, change the audience, or unlock bulk dispatch.
-The service, repository, worker and database enforce this boundary; no provider
-segment, contact import, broadcast or durable send job is created by saving.
-Connecting external audiences to dispatch and provider suppression webhooks is
-a separate rollout. Existing published-template campaigns retain their prior
-registered-user dispatch rules below.
+Apply `20261106000100_contact_campaign_sending` before enabling imported-contact
+sending. It replaces the draft-only constraint with a dedicated, immutable contact
+recipient snapshot table. Saving a draft still creates no provider resources or jobs.
+
+**Inbox preview** sends a saved HTML version to one address. **Send owner test**
+sends to the signed-in administrator. Successful tests mark only that exact version
+as tested; any saved change clears the test. A stale test completion cannot approve
+new content. The preview unsubscribe URL is a sample placeholder.
+
+**Review and send** shows the selected source/category and current eligible count.
+The administrator confirms their password and types `SEND`, then selects **Send
+campaign**. The server checks the version, test, session, feature flag, and audience
+before atomically saving the contact IDs and email addresses and one durable job.
+Later imports cannot join that snapshot. Attendees and business owners stay separate.
+
+The worker rechecks local eligibility, imports with `onConflict: upsert` and no
+subscription field (preserving provider opt-outs), verifies all pages of the campaign
+segment, removes newly excluded recipients, and compares membership before sending.
+Missing or unexpected members prevent dispatch. Consent is checked again after
+provider preparation. Broadcast content uses the saved HTML, preview text, subject,
+and real provider unsubscribe placeholder. The page polls while queued or sending.
+
+A failed preparation is marked `FAILED`. An uncertain send or an interrupted worker
+after the dispatch boundary is marked `NEEDS_REVIEW`. Do not create a replacement
+send until the provider broadcast result is checked. Signed bounce, complaint,
+suppression, and unsubscribe webhooks suppress matching imported contacts as well
+as registered accounts. Provider resubscribe events never override local opt-outs.
 
 Campaign recipients are ordinary active users with verified email addresses
 with recorded marketing consent who have not unsubscribed. Missing consent or

@@ -5,7 +5,7 @@ import { Argon2PasswordHasher } from "@/modules/auth/infrastructure/argon2-passw
 import { requireIsolatedTestDatabase } from "../../scripts/test-database-safety";
 import { createCampaignListing } from "../support/campaign-fixture";
 
-test("saves a branded campaign draft with an imported attendee audience and no send controls", async ({
+test("saves a branded campaign draft with attendee review controls and a versioned inbox test", async ({
   page,
 }, testInfo) => {
   test.setTimeout(120_000);
@@ -84,11 +84,11 @@ test("saves a branded campaign draft with an imported attendee audience and no s
       }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Queue campaign", exact: true }),
-    ).toHaveCount(0);
+      page.getByRole("button", { name: "Review and send", exact: true }),
+    ).toBeDisabled();
     await expect(
       page.getByRole("button", { name: "Send owner test", exact: true }),
-    ).toHaveCount(0);
+    ).toBeVisible();
     await expect(
       page
         .frameLocator('iframe[title="Campaign email preview"]')
@@ -122,7 +122,7 @@ test("saves a branded campaign draft with an imported attendee audience and no s
       selectionMode: "CONTACT_SEGMENT",
       contactCategory: "ATTENDEE",
       contactSourceTag: tag,
-      testedAt: null,
+      testedAt: expect.any(Date),
       sentAt: null,
       providerBroadcastId: null,
     });

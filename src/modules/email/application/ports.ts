@@ -19,6 +19,10 @@ export interface EmailGateway {
   getContactImportStatus(
     id: string,
   ): Promise<"queued" | "in_progress" | "completed" | "failed">;
+  listSegmentContacts(
+    segmentId: string,
+  ): Promise<{ email: string; unsubscribed: boolean }[]>;
+  removeContactFromSegment(segmentId: string, email: string): Promise<void>;
   createBroadcast(input: {
     name: string;
     subject: string;
@@ -102,6 +106,7 @@ export interface EmailCenterPort {
     id: string,
     actorId: string,
     actorSessionId: string,
+    expectedVersion: number,
     requestId?: string,
   ): Promise<void>;
   prepareCampaign(input: {

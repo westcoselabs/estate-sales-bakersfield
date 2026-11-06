@@ -44,6 +44,12 @@ export class LocalCaptureEmailGateway implements EmailGateway {
   getContactImportStatus(): Promise<never> {
     return Promise.reject(this.unsupported());
   }
+  listSegmentContacts(): Promise<never> {
+    return Promise.reject(this.unsupported());
+  }
+  removeContactFromSegment(): Promise<never> {
+    return Promise.reject(this.unsupported());
+  }
   createBroadcast(): Promise<never> {
     return Promise.reject(this.unsupported());
   }

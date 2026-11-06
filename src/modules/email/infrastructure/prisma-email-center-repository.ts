@@ -18,11 +18,13 @@ import {
   updateCampaignSchema,
 } from "../application/campaign-input";
 import {
-  isDraftOnlyCampaign,
   type CreateCampaignInput,
   type UpdateCampaignInput,
 } from "../domain/types";
-import { contactAudienceOptions } from "./contact-audiences";
+import {
+  contactAudienceOptions,
+  eligibleAudienceContacts,
+} from "./contact-audiences";
 
 const templateSelect = {
   id: true,
@@ -762,6 +764,7 @@ export class PrismaEmailCenterRepository {
     id: string,
     actorId: string,
     actorSessionId: string,
+    expectedVersion: number,
     requestId?: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
@@ -776,7 +779,7 @@ export class PrismaEmailCenterRepository {
         );
 
       await tx.emailCampaign.update({
-        where: { id, status: "DRAFT" },
+        where: { id, status: "DRAFT", version: expectedVersion },
         data: { testedAt: new Date() },
       });
       await tx.auditEntry.create({
@@ -829,37 +832,41 @@ export class PrismaEmailCenterRepository {
             "The campaign changed. Reload and try again.",
             409,
           );
-        if (isDraftOnlyCampaign(campaign))
-          throw new EmailApplicationError(
-            "DRAFT_ONLY_CAMPAIGN",
-            "Imported-contact and HTML campaigns are saved drafts. Sending is not enabled for these drafts.",
-            409,
-          );
         if (!campaign.testedAt)
           throw new EmailApplicationError(
             "TEST_SEND_REQUIRED",
             "Send a test before dispatching this campaign.",
             409,
           );
-        const eligible = await tx.user.findMany({
-          where: {
-            role: "USER",
-            status: "ACTIVE",
-            emailVerifiedAt: { not: null },
-            marketingPreference: {
-              is: {
-                consentAt: { not: null },
-                consentVersion: MARKETING_CONSENT_VERSION,
-                consentSource: { not: null },
-                unsubscribedAt: null,
-              },
-            },
-            ...(campaign.selectionMode === "SELECTED_USERS"
-              ? { id: { in: campaign.recipients.map((row) => row.userId) } }
-              : {}),
-          },
-          select: { id: true },
-        });
+        const eligible =
+          campaign.selectionMode === "CONTACT_SEGMENT"
+            ? await eligibleAudienceContacts(tx, {
+                category: campaign.contactCategory!,
+                sourceTag: campaign.contactSourceTag!,
+              })
+            : await tx.user.findMany({
+                where: {
+                  role: "USER",
+                  status: "ACTIVE",
+                  emailVerifiedAt: { not: null },
+                  marketingPreference: {
+                    is: {
+                      consentAt: { not: null },
+                      consentVersion: MARKETING_CONSENT_VERSION,
+                      consentSource: { not: null },
+                      unsubscribedAt: null,
+                    },
+                  },
+                  ...(campaign.selectionMode === "SELECTED_USERS"
+                    ? {
+                        id: {
+                          in: campaign.recipients.map((row) => row.userId),
+                        },
+                      }
+                    : {}),
+                },
+                select: { id: true },
+              });
         if (!eligible.length)
           throw new EmailApplicationError(
             "RECIPIENTS_REQUIRED",
@@ -872,6 +879,18 @@ export class PrismaEmailCenterRepository {
             "Narrow this campaign to 10,000 recipients or fewer.",
             422,
           );
+        if (campaign.selectionMode === "CONTACT_SEGMENT") {
+          await tx.emailCampaignContactRecipient.createMany({
+            data: (
+              eligible as { id: string; email: string; firstName: string }[]
+            ).map((contact) => ({
+              campaignId: campaign.id,
+              contactId: contact.id,
+              email: contact.email,
+              firstName: contact.firstName,
+            })),
+          });
+        }
         if (campaign.selectionMode === "ALL_ELIGIBLE")
           await tx.emailCampaignRecipient.createMany({
             data: eligible.map((user) => ({
@@ -894,7 +913,7 @@ export class PrismaEmailCenterRepository {
             type: "EMAIL_CAMPAIGN_SEND",
             payload: { campaignId: campaign.id },
             deduplicationKey: campaign.id,
-            maxAttempts: 10,
+            maxAttempts: 30,
           },
         });
         await tx.auditEntry.create({
