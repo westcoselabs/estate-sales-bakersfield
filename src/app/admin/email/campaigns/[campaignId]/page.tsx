@@ -63,7 +63,7 @@ export default async function CampaignPage({
             <div>
               <dt>Recipients</dt>
               <dd>
-                {campaign.status !== "DRAFT"
+                {campaign.status !== "DRAFT" && !campaign.canRetryPreparation
                   ? campaign.recipientCount
                   : campaign.contactAudience
                     ? `${campaign.contactAudience.eligible} eligible · ${campaign.contactAudience.suppressed} suppressed or ineligible · ${campaign.contactAudience.total} total`
@@ -117,6 +117,7 @@ export default async function CampaignPage({
         dispatchEnabled={center.isCampaignDispatchEnabled()}
         audience={campaign.contactAudience}
         lastErrorCode={campaign.lastErrorCode}
+        canRetryPreparation={campaign.canRetryPreparation}
         campaign={{
           id: campaign.id,
           name: campaign.name,

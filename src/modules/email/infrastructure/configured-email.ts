@@ -21,6 +21,9 @@ class UnconfiguredEmailGateway implements EmailGateway {
   send(): Promise<never> {
     return Promise.reject(this.unavailable());
   }
+  checkCampaignAccess(): Promise<never> {
+    return Promise.reject(this.unavailable());
+  }
   createSegment(): Promise<never> {
     return Promise.reject(this.unavailable());
   }
@@ -53,7 +56,11 @@ export function createConfiguredEmailGateway(): EmailGateway {
     return new LocalCaptureEmailGateway(env.AUTH_EMAIL_CAPTURE_PATH);
   }
   return env.RESEND_API_KEY && env.RESEND_FROM
-    ? new ResendEmailGateway(env.RESEND_API_KEY, env.RESEND_FROM)
+    ? new ResendEmailGateway(
+        env.RESEND_API_KEY,
+        env.RESEND_FROM,
+        env.RESEND_CAMPAIGN_API_KEY,
+      )
     : new UnconfiguredEmailGateway();
 }
 

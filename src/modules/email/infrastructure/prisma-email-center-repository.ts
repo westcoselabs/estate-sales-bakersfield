@@ -26,6 +26,24 @@ import {
   eligibleAudienceContacts,
 } from "./contact-audiences";
 
+function canRetryPreparation(campaign: {
+  status: string;
+  sentAt: Date | null;
+  providerSegmentId: string | null;
+  providerContactImportId: string | null;
+  providerBroadcastId: string | null;
+  lastErrorCode: string | null;
+}) {
+  return (
+    campaign.status === "FAILED" &&
+    campaign.lastErrorCode === "SEGMENT_CREATE_FAILED" &&
+    !campaign.sentAt &&
+    !campaign.providerSegmentId &&
+    !campaign.providerContactImportId &&
+    !campaign.providerBroadcastId
+  );
+}
+
 const templateSelect = {
   id: true,
   key: true,
@@ -717,7 +735,8 @@ export class PrismaEmailCenterRepository {
       },
     });
     if (!campaign) return null;
-    const contactAudience =
+    const retry = canRetryPreparation(campaign);
+    let contactAudience =
       campaign.selectionMode === "CONTACT_SEGMENT"
         ? ((
             await contactAudienceOptions(this.prisma, {
@@ -732,7 +751,22 @@ export class PrismaEmailCenterRepository {
             suppressed: 0,
           })
         : null;
-    return { ...campaign, contactAudience };
+    if (retry && contactAudience) {
+      const eligible = (
+        await eligibleAudienceContacts(this.prisma, {
+          category: contactAudience.category,
+          sourceTag: contactAudience.sourceTag,
+          campaignId: campaign.id,
+        })
+      ).length;
+      contactAudience = {
+        ...contactAudience,
+        eligible,
+        total: campaign.recipientCount,
+        suppressed: Math.max(0, campaign.recipientCount - eligible),
+      };
+    }
+    return { ...campaign, contactAudience, canRetryPreparation: retry };
   }
 
   listDeliveryHistory() {
@@ -823,8 +857,9 @@ export class PrismaEmailCenterRepository {
             "Email campaign not found.",
             404,
           );
+        const retry = canRetryPreparation(campaign);
         if (
-          campaign.status !== "DRAFT" ||
+          (campaign.status !== "DRAFT" && !retry) ||
           campaign.version !== input.expectedVersion
         )
           throw new EmailApplicationError(
@@ -843,6 +878,7 @@ export class PrismaEmailCenterRepository {
             ? await eligibleAudienceContacts(tx, {
                 category: campaign.contactCategory!,
                 sourceTag: campaign.contactSourceTag!,
+                ...(retry ? { campaignId: campaign.id } : {}),
               })
             : await tx.user.findMany({
                 where: {
@@ -857,7 +893,7 @@ export class PrismaEmailCenterRepository {
                       unsubscribedAt: null,
                     },
                   },
-                  ...(campaign.selectionMode === "SELECTED_USERS"
+                  ...(retry || campaign.selectionMode === "SELECTED_USERS"
                     ? {
                         id: {
                           in: campaign.recipients.map((row) => row.userId),
@@ -879,7 +915,7 @@ export class PrismaEmailCenterRepository {
             "Narrow this campaign to 10,000 recipients or fewer.",
             422,
           );
-        if (campaign.selectionMode === "CONTACT_SEGMENT") {
+        if (!retry && campaign.selectionMode === "CONTACT_SEGMENT") {
           await tx.emailCampaignContactRecipient.createMany({
             data: (
               eligible as { id: string; email: string; firstName: string }[]
@@ -891,7 +927,7 @@ export class PrismaEmailCenterRepository {
             })),
           });
         }
-        if (campaign.selectionMode === "ALL_ELIGIBLE")
+        if (!retry && campaign.selectionMode === "ALL_ELIGIBLE")
           await tx.emailCampaignRecipient.createMany({
             data: eligible.map((user) => ({
               campaignId: campaign.id,
@@ -903,6 +939,7 @@ export class PrismaEmailCenterRepository {
           where: { id: campaign.id },
           data: {
             status: "PREPARING",
+            lastErrorCode: null,
             recipientCount: eligible.length,
             version: { increment: 1 },
           },
@@ -912,14 +949,16 @@ export class PrismaEmailCenterRepository {
             queue: "email",
             type: "EMAIL_CAMPAIGN_SEND",
             payload: { campaignId: campaign.id },
-            deduplicationKey: campaign.id,
+            deduplicationKey: retry
+              ? `${campaign.id}:${campaign.version + 1}`
+              : campaign.id,
             maxAttempts: 30,
           },
         });
         await tx.auditEntry.create({
           data: {
             actorUserId: input.actorId,
-            action: "EMAIL_CAMPAIGN_QUEUED",
+            action: retry ? "EMAIL_CAMPAIGN_REQUEUED" : "EMAIL_CAMPAIGN_QUEUED",
             targetType: "EMAIL_CAMPAIGN",
             targetId: campaign.id,
             requestId: input.requestId ?? null,

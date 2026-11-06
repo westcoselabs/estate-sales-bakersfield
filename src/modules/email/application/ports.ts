@@ -11,6 +11,7 @@ import type {
 
 export interface EmailGateway {
   send(message: EmailProviderMessage): Promise<{ id: string }>;
+  checkCampaignAccess(): Promise<void>;
   createSegment(name: string): Promise<{ id: string }>;
   importContacts(input: {
     segmentId: string;

@@ -138,6 +138,10 @@ export const serverEnvironmentSchema = z
       (value) => (value === "" ? undefined : value),
       z.string().min(1).optional(),
     ),
+    RESEND_CAMPAIGN_API_KEY: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(1).optional(),
+    ),
     RESEND_FROM: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z.string().min(3).max(320).optional(),
@@ -286,6 +290,18 @@ export const serverEnvironmentSchema = z
         message:
           "RESEND_WEBHOOK_SECRET is required when Resend is configured in production",
         path: ["RESEND_WEBHOOK_SECRET"],
+      });
+    }
+
+    if (
+      environment.RESEND_CAMPAIGN_API_KEY &&
+      (environment.APP_ENV !== "production" ||
+        environment.RESEND_RESOURCE_ENV !== "production")
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "RESEND_CAMPAIGN_API_KEY is only supported in Production",
+        path: ["RESEND_CAMPAIGN_API_KEY"],
       });
     }
 

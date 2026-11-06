@@ -155,6 +155,7 @@ export interface CampaignComposerOptions {
 }
 
 export interface AdminEmailCampaignRecord {
+  canRetryPreparation: boolean;
   lastErrorCode: string | null;
   id: string;
   name: string;

@@ -51,6 +51,7 @@ function fixture() {
   };
   const gateway = {
     send: vi.fn(),
+    checkCampaignAccess: vi.fn().mockResolvedValue(undefined),
     createSegment: vi.fn(),
     importContacts: vi.fn(),
     getContactImportStatus: vi.fn(async () => "completed" as const),

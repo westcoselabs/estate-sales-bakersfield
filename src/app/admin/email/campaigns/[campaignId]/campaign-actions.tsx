@@ -9,11 +9,13 @@ export function CampaignActions({
   dispatchEnabled,
   audience,
   lastErrorCode,
+  canRetryPreparation,
 }: {
   contactAudiences: ContactAudienceOption[];
   dispatchEnabled: boolean;
   audience: ContactAudienceOption | null;
   lastErrorCode: string | null;
+  canRetryPreparation: boolean;
   campaign: {
     id: string;
     name: string;
@@ -234,8 +236,15 @@ export function CampaignActions({
           </fieldset>
         ) : null}
       </div>
-      {campaign.status === "DRAFT" ? (
+      {campaign.status === "DRAFT" || canRetryPreparation ? (
         <div className="campaign-send-panel__controls">
+          {canRetryPreparation && (
+            <p role="status">
+              Resend stopped this attempt before creating a segment or sending
+              email. Once the Resend connection is fixed, you can review and
+              retry the original audience.
+            </p>
+          )}
           <p>
             <strong>
               {audience
@@ -251,7 +260,7 @@ export function CampaignActions({
           )}
           <p>
             {campaign.testedAt
-              ? "Current version tested. Review your inbox before sending."
+              ? "This email was tested. Review your inbox before sending."
               : "Send a test of this version before sending to your audience."}
           </p>
           {dirty && (
@@ -263,19 +272,21 @@ export function CampaignActions({
               available.
             </p>
           )}
-          <button
-            className="ui-button ui-button--secondary"
-            disabled={pending || dirty}
-            onClick={() =>
-              run(
-                "test",
-                {},
-                "Test sent to your admin email. Check your inbox before sending.",
-              )
-            }
-          >
-            Send owner test
-          </button>
+          {!canRetryPreparation && (
+            <button
+              className="ui-button ui-button--secondary"
+              disabled={pending || dirty}
+              onClick={() =>
+                run(
+                  "test",
+                  {},
+                  "Test sent to your admin email. Check your inbox before sending.",
+                )
+              }
+            >
+              Send owner test
+            </button>
+          )}
           {!reviewing ? (
             <button
               className="ui-button ui-button--primary"
@@ -285,7 +296,7 @@ export function CampaignActions({
                 setReviewing(true);
               }}
             >
-              Review and send
+              {canRetryPreparation ? "Review and retry" : "Review and send"}
             </button>
           ) : (
             <div className="campaign-draft-fields">

@@ -377,12 +377,14 @@ export class EmailCenterService {
         "Type SEND to confirm.",
         400,
       );
-    return this.repository.prepareCampaign({
-      id,
-      expectedVersion: input.expectedVersion,
-      actorId: recent.principal.id,
-      actorSessionId: recent.id,
-      ...(requestId ? { requestId } : {}),
-    });
+    return this.gateway.checkCampaignAccess().then(() =>
+      this.repository.prepareCampaign({
+        id,
+        expectedVersion: input.expectedVersion,
+        actorId: recent.principal.id,
+        actorSessionId: recent.id,
+        ...(requestId ? { requestId } : {}),
+      }),
+    );
   }
 }

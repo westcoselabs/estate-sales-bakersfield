@@ -35,6 +35,9 @@ export class LocalCaptureEmailGateway implements EmailGateway {
       503,
     );
   }
+  checkCampaignAccess(): Promise<never> {
+    return Promise.reject(this.unsupported());
+  }
   createSegment(): Promise<never> {
     return Promise.reject(this.unsupported());
   }

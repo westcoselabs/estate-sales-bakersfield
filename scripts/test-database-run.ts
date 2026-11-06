@@ -260,6 +260,7 @@ export function testDatabaseEnvironment(
     BLOB_READ_WRITE_TOKEN: undefined,
     BLOB_RESOURCE_ENV: undefined,
     RESEND_API_KEY: undefined,
+    RESEND_CAMPAIGN_API_KEY: undefined,
     RESEND_FROM: undefined,
     RESEND_RESOURCE_ENV: undefined,
     GEOAPIFY_API_KEY: undefined,

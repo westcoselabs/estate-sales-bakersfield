@@ -3,7 +3,7 @@ import "server-only";
 import { Resend } from "resend";
 
 import type { EmailGateway } from "../application/ports";
-import { EmailProviderError } from "../domain/errors";
+import { EmailApplicationError, EmailProviderError } from "../domain/errors";
 import type { EmailProviderMessage } from "../domain/types";
 
 function providerFailure(error: unknown, fallback: string): never {
@@ -15,11 +15,16 @@ function providerFailure(error: unknown, fallback: string): never {
 
 export class ResendEmailGateway implements EmailGateway {
   private readonly client: Resend;
+  private readonly campaignClient: Resend;
   constructor(
     apiKey: string,
     private readonly from: string,
+    campaignApiKey?: string,
   ) {
     this.client = new Resend(apiKey);
+    this.campaignClient = campaignApiKey
+      ? new Resend(campaignApiKey)
+      : this.client;
   }
 
   async send(message: EmailProviderMessage) {
@@ -50,9 +55,33 @@ export class ResendEmailGateway implements EmailGateway {
     if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
   }
 
+  async checkCampaignAccess() {
+    const { data, error } = await this.campaignClient.segments.list({
+      limit: 1,
+    });
+    if (
+      error?.name === "restricted_api_key" ||
+      error?.statusCode === 401 ||
+      error?.statusCode === 403
+    ) {
+      throw new EmailApplicationError(
+        "CAMPAIGN_PROVIDER_ACCESS_DENIED",
+        "Resend denied campaign access. Set a Full access key as RESEND_CAMPAIGN_API_KEY in Production and redeploy.",
+        503,
+      );
+    }
+    if (error || !data) {
+      throw new EmailApplicationError(
+        "CAMPAIGN_PROVIDER_UNAVAILABLE",
+        "Could not check Resend campaign access. Try again before queuing this send.",
+        503,
+      );
+    }
+  }
+
   async createSegment(name: string) {
     await this.pace();
-    const response = await this.client.segments.create({ name });
+    const response = await this.campaignClient.segments.create({ name });
     if (response.error || !response.data?.id)
       providerFailure(response.error, "SEGMENT_CREATE_FAILED");
     return { id: response.data.id };
@@ -70,7 +99,7 @@ export class ResendEmailGateway implements EmailGateway {
         (row) => `${csvCell(row.email)},${csvCell(row.firstName)}`,
       ),
     ].join("\r\n");
-    const response = await this.client.contacts.imports.create({
+    const response = await this.campaignClient.contacts.imports.create({
       file: new Blob([csv], { type: "text/csv" }),
       columnMap: { email: "email", firstName: "first_name" },
       // Omit unsubscribed entirely: never reverse a provider opt-out.
@@ -84,7 +113,7 @@ export class ResendEmailGateway implements EmailGateway {
 
   async getContactImportStatus(id: string) {
     await this.pace();
-    const response = await this.client.contacts.imports.get(id);
+    const response = await this.campaignClient.contacts.imports.get(id);
     if (response.error || !response.data) {
       providerFailure(response.error, "CONTACT_IMPORT_STATUS_FAILED");
     }
@@ -96,7 +125,7 @@ export class ResendEmailGateway implements EmailGateway {
     let after: string | undefined;
     do {
       await this.pace();
-      const response = await this.client.contacts.list({
+      const response = await this.campaignClient.contacts.list({
         segmentId,
         limit: 100,
         ...(after ? { after } : {}),
@@ -120,7 +149,7 @@ export class ResendEmailGateway implements EmailGateway {
 
   async removeContactFromSegment(segmentId: string, email: string) {
     await this.pace();
-    const response = await this.client.contacts.segments.remove({
+    const response = await this.campaignClient.contacts.segments.remove({
       email,
       segmentId,
     });
@@ -137,7 +166,7 @@ export class ResendEmailGateway implements EmailGateway {
     segmentId: string;
   }) {
     await this.pace();
-    const response = await this.client.broadcasts.create({
+    const response = await this.campaignClient.broadcasts.create({
       from: this.from,
       name: input.name,
       subject: input.subject,
@@ -155,7 +184,7 @@ export class ResendEmailGateway implements EmailGateway {
   async sendBroadcast(id: string) {
     await this.pace();
     try {
-      const response = await this.client.broadcasts.send(id);
+      const response = await this.campaignClient.broadcasts.send(id);
       if (response.error) {
         const status = response.error.statusCode;
         throw new EmailProviderError(
@@ -172,7 +201,7 @@ export class ResendEmailGateway implements EmailGateway {
   }
 
   async updateContactSubscription(email: string, subscribed: boolean) {
-    const response = await this.client.contacts.update({
+    const response = await this.campaignClient.contacts.update({
       email,
       unsubscribed: !subscribed,
     });

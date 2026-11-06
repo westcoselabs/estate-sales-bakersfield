@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ResendEmailGateway } from "@/modules/email/infrastructure/resend-email-gateway";
 
 const api = vi.hoisted(() => ({
+  clientKeys: vi.fn(),
+  segments: { list: vi.fn() },
+  emails: { send: vi.fn() },
   contacts: {
     imports: { create: vi.fn(), get: vi.fn() },
     list: vi.fn(),
@@ -11,6 +14,11 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("resend", () => ({
   Resend: class {
+    constructor(key: string) {
+      api.clientKeys(key);
+    }
+    segments = api.segments;
+    emails = api.emails;
     contacts = api.contacts;
     broadcasts = api.broadcasts;
   },
@@ -22,6 +30,41 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("campaign provider contract", () => {
+  it("checks the campaign key with a read-only segment request", async () => {
+    api.segments.list.mockResolvedValue({ data: { data: [] }, error: null });
+    const gateway = new ResendEmailGateway(
+      "sending-key",
+      "sender@example.test",
+      "campaign-key",
+    );
+    await expect(gateway.checkCampaignAccess()).resolves.toBeUndefined();
+    expect(api.clientKeys.mock.calls).toEqual([
+      ["sending-key"],
+      ["campaign-key"],
+    ]);
+    expect(api.segments.list).toHaveBeenCalledWith({ limit: 1 });
+    expect(api.emails.send).not.toHaveBeenCalled();
+  });
+
+  it("explains the sending-only key rejection without exposing the provider payload", async () => {
+    api.segments.list.mockResolvedValue({
+      data: null,
+      error: {
+        name: "restricted_api_key",
+        statusCode: 401,
+        message: "Provider details",
+      },
+    });
+    const gateway = new ResendEmailGateway(
+      "sending-key",
+      "sender@example.test",
+    );
+    await expect(gateway.checkCampaignAccess()).rejects.toMatchObject({
+      code: "CAMPAIGN_PROVIDER_ACCESS_DENIED",
+      message: expect.stringContaining("RESEND_CAMPAIGN_API_KEY"),
+    });
+  });
+
   it("imports existing contacts into the campaign segment without changing subscription status and escapes CSV", async () => {
     api.contacts.imports.create.mockResolvedValue({
       data: { id: "import" },

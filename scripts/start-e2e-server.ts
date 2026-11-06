@@ -54,6 +54,7 @@ async function main(): Promise<void> {
     BLOB_READ_WRITE_TOKEN: "",
     BLOB_RESOURCE_ENV: "",
     RESEND_API_KEY: "",
+    RESEND_CAMPAIGN_API_KEY: "",
     RESEND_FROM: "",
     RESEND_RESOURCE_ENV: "",
     GEOAPIFY_API_KEY: "",

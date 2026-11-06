@@ -3,6 +3,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { CurrentSession } from "@/modules/auth";
 import { EmailCenterService } from "@/modules/email/application/email-center";
 import { PrismaEmailCenterRepository } from "@/modules/email/infrastructure/prisma-email-center-repository";
+import {
+  EmailApplicationError,
+  EmailProviderError,
+} from "@/modules/email/domain/errors";
 import { EmailJobProcessor } from "@/modules/email/infrastructure/email-job-processor";
 import { emailContentDigest } from "@/modules/email/application/rendering";
 import type { ServerEnvironment } from "@/platform/config/env";
@@ -14,6 +18,7 @@ const prisma = createIntegrationClient();
 const repository = new PrismaEmailCenterRepository(prisma);
 const gateway = {
   send: vi.fn(),
+  checkCampaignAccess: vi.fn().mockResolvedValue(undefined),
   createSegment: vi.fn(),
   importContacts: vi.fn(),
   getContactImportStatus: vi.fn(),
@@ -401,6 +406,26 @@ describe("imported-contact campaign drafts", () => {
         confirmation: "WRONG",
       }),
     ).toThrowError("Type SEND to confirm.");
+    gateway.checkCampaignAccess.mockRejectedValueOnce(
+      new EmailApplicationError(
+        "CAMPAIGN_PROVIDER_ACCESS_DENIED",
+        "Restricted",
+        503,
+      ),
+    );
+    await expect(
+      center.sendCampaign(session, id, {
+        expectedVersion: 2,
+        confirmation: "SEND",
+      }),
+    ).rejects.toMatchObject({ code: "CAMPAIGN_PROVIDER_ACCESS_DENIED" });
+    expect(await center.getCampaign(session, id)).toMatchObject({
+      status: "DRAFT",
+      version: 2,
+    });
+    expect(
+      await prisma.durableJob.count({ where: { deduplicationKey: id } }),
+    ).toBe(0);
     const results = await Promise.allSettled(
       [1, 2].map(() =>
         center.sendCampaign(session, id, {
@@ -440,6 +465,39 @@ describe("imported-contact campaign drafts", () => {
       RESEND_RESOURCE_ENV: "production",
       APP_URL: "https://example.test",
     } as ServerEnvironment);
+    gateway.createSegment.mockRejectedValueOnce(
+      new EmailProviderError("SEGMENT_CREATE_FAILED"),
+    );
+    await worker.sendCampaign(id);
+    expect(await center.getCampaign(session, id)).toMatchObject({
+      status: "FAILED",
+      canRetryPreparation: true,
+      version: 3,
+      sentAt: null,
+    });
+    await prisma.audienceContact.create({
+      data: {
+        email: `${randomUUID()}@example.test`,
+        category: "ATTENDEE",
+        sourceTags: [tag],
+        status: "SUBSCRIBED",
+        consentConfirmedAt: new Date(),
+      },
+    });
+    expect(
+      await center.sendCampaign(session, id, {
+        expectedVersion: 3,
+        confirmation: "SEND",
+      }),
+    ).toEqual({ recipientCount: 1 });
+    expect(await center.getCampaign(session, id)).toMatchObject({
+      status: "PREPARING",
+      version: 4,
+      lastErrorCode: null,
+    });
+    expect(
+      await prisma.durableJob.count({ where: { deduplicationKey: `${id}:4` } }),
+    ).toBe(1);
     gateway.createSegment.mockResolvedValue({ id: `segment-${id}` });
     gateway.importContacts.mockResolvedValue({ id: `import-${id}` });
     gateway.getContactImportStatus.mockResolvedValue("completed");
@@ -451,15 +509,6 @@ describe("imported-contact campaign drafts", () => {
     await expect(worker.sendCampaign(id)).rejects.toThrow(
       "CONTACT_IMPORT_PENDING",
     );
-    await prisma.audienceContact.create({
-      data: {
-        email: `${randomUUID()}@example.test`,
-        category: "ATTENDEE",
-        sourceTags: [tag],
-        status: "SUBSCRIBED",
-        consentConfirmedAt: new Date(),
-      },
-    });
     await worker.sendCampaign(id);
     expect(gateway.importContacts.mock.calls.at(-1)![0].rows).toHaveLength(1);
     expect(gateway.createBroadcast.mock.calls.at(-1)![0].html).toContain(

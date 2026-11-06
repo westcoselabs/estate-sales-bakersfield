@@ -22,9 +22,11 @@ persisted or logged.
    minute; the send endpoint also starts a worker after responding. The email
    worker runs one job at a time with a 20-second admission budget. Imports are
    asynchronous and resume on durable retries. Other jobs keep their existing schedule.
-6. In Production only, confirm `RESEND_RESOURCE_ENV=production`, then set
-   `EMAIL_CAMPAIGNS_ENABLED=true` and deploy. Preview never dispatches a
-   campaign.
+6. In Production only, confirm `RESEND_RESOURCE_ENV=production`, then configure
+   a Resend Full access key as the sensitive `RESEND_CAMPAIGN_API_KEY`, set
+   `EMAIL_CAMPAIGNS_ENABLED=true`, and deploy. Keep the sending-only
+   `RESEND_API_KEY` for tests and transactional mail. The server checks
+   segment access before queuing a campaign.
 
 ## Recipient policy
 
